@@ -1,0 +1,58 @@
+<canvas id="stage"></canvas>
+<div id="hud" hidden>
+  <div class="hud-tl">
+    <div class="who"><b id="hLvl">Lv 1</b><span>Delver</span></div>
+    <div class="bar"><i id="hpFill"></i><span id="hpText"></span></div>
+    <div class="bar xp"><i id="xpFill"></i></div>
+    <div class="purse"><span class="g" id="hGold">0 gold</span><span id="hMisc"></span></div>
+    <div class="buffs" id="hBuffs"></div>
+  </div>
+  <div class="hud-tc">
+    <div id="hLoc"></div>
+    <div id="hObj"></div>
+    <div id="bossBar" hidden><div id="bossName"></div><div class="bar boss"><i id="bossFill"></i></div></div>
+  </div>
+  <div class="hud-tr">
+    <canvas id="mini" width="168" height="168"></canvas>
+    <div class="mini-btns"><button class="chip" id="btnMute" type="button">Sound off</button><button class="chip" id="btnMenu" type="button">Menu</button></div>
+  </div>
+  <div id="actionBar"></div>
+  <div id="prompt" hidden></div>
+  <div id="toasts"></div>
+  <div id="labels"></div>
+  <div id="floaters"></div>
+  <div id="banner"></div>
+  <div id="vignette"></div>
+</div>
+<div id="touch" hidden>
+  <div id="stick"><div id="knob"></div></div>
+  <button class="tb" id="tAtk" type="button">Strike</button>
+  <button class="tb" id="tDodge" type="button">Roll</button>
+  <button class="tb" id="tUse" type="button">Use</button>
+  <button class="tb" id="tPot" type="button"></button>
+  <button class="tb" id="tScroll" type="button"></button>
+  <button class="tb" id="tBag" type="button"></button>
+</div>
+<div id="panel" hidden>
+  <div class="card" role="dialog" aria-modal="true" aria-labelledby="pTitle">
+    <header><h2 id="pTitle"></h2><nav id="pTabs"></nav><button class="x" id="pClose" type="button">Close</button></header>
+    <div id="pBody"></div>
+  </div>
+</div>
+<div class="over" id="title">
+  <div class="over-in">
+    <h1 class="logo">Hearthdeep</h1>
+    <p class="tag">A village on the lip of a hole with no bottom. Delve for loot and boss sigils, craft at your bench, and build your shack into a keep.</p>
+    <div class="menu" id="menuBtns"></div>
+    <div class="confirm" id="confirmNew" hidden><span>Start over? Your saved hero will be erased.</span><button class="btn" id="btnWipe" type="button">Erase and start</button><button class="btn ghost" id="btnKeep" type="button">Keep my hero</button></div>
+    <div class="keys" id="keyList"></div>
+  </div>
+</div>
+<div class="over" id="death" hidden>
+  <div class="over-in">
+    <h1 class="logo" style="color:var(--blood-2)">You fell</h1>
+    <p class="tag" id="deathText"></p>
+    <div class="menu"><button class="btn" id="btnRevive" type="button">Wake up in Hearthdeep</button></div>
+  </div>
+</div>
+<pre id="perf" hidden></pre>
