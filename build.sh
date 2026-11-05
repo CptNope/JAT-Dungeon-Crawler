@@ -4,7 +4,7 @@
 #   dist/hearthdeep.html          -> single self-contained file; loads three.js r186 from jsDelivr
 set -e
 cd "$(dirname "$0")"
-{ echo "// Built from src/ by build.sh — edit src/, not this file."; echo "window.startHearthdeep = function (THREE) {"; cat src/1-data.js src/2-world.js src/3-entities.js src/4-game.js src/5-ui.js src/6-main.js; echo "};"; } > game.js
+{ echo "// Built from src/ by build.sh — edit src/, not this file."; echo "window.startHearthdeep = function (THREE) {"; cat src/1-data.js src/2-render.js src/3-world.js src/3b-visuals.js src/4-entities.js src/5-game.js src/6-ui.js src/7-main.js; echo "};"; } > game.js
 loader() {
   cat <<JS
 <script type="module">

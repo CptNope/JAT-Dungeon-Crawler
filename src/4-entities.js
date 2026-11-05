@@ -4,39 +4,7 @@ const P = { x: 0, z: 0, r: 0.38, face: 0, hp: 100, atkT: 0, swingT: 0, swingDur:
 let flow = null, flowT = 0, flowTile = -1;
 let bossRef = null;
 
-// ================= particles & line fx =================
-for (let i = 0; i < 160; i++) {
-  const m = new THREE.Mesh(G.box, new THREE.MeshBasicMaterial({ color: 0xffffff }));
-  m.visible = false; fxGroup.add(m);
-  parts.push({ m, life: 0, vx: 0, vy: 0, vz: 0, max: 1 });
-}
-let partIdx = 0;
-function burst(x, y, z, color, n, spd, size) {
-  for (let i = 0; i < n; i++) {
-    const p = parts[partIdx = (partIdx + 1) % parts.length];
-    p.m.visible = true; p.m.material.color.setHex(color);
-    p.m.position.set(x, y, z);
-    const s = (size || 0.12) * rand(0.6, 1.3); p.m.scale.setScalar(s);
-    const a = rand(0, Math.PI * 2), v = rand(0.3, 1) * (spd || 4);
-    p.vx = Math.sin(a) * v; p.vz = Math.cos(a) * v; p.vy = rand(1, 4);
-    p.life = p.max = rand(0.35, 0.7);
-  }
-}
-function updParts(dt) {
-  for (const p of parts) {
-    if (p.life <= 0) continue;
-    p.life -= dt;
-    if (p.life <= 0) { p.m.visible = false; continue; }
-    p.vy -= 12 * dt;
-    p.m.position.x += p.vx * dt; p.m.position.y = Math.max(0.05, p.m.position.y + p.vy * dt); p.m.position.z += p.vz * dt;
-    p.m.scale.multiplyScalar(1 - dt * 1.5);
-  }
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const l = lines[i]; l.t -= dt;
-    l.o.material.opacity = Math.max(0, l.t / l.max);
-    if (l.t <= 0) { fxGroup.remove(l.o); l.o.geometry.dispose(); l.o.material.dispose(); lines.splice(i, 1); }
-  }
-}
+// ================= line fx (bursts live in the render core) =================
 function zap(ax, az, bx, bz, color) {
   const pts = [];
   const n = 6;
@@ -51,7 +19,7 @@ const _arcGeo = new Map();
 const swings = [];
 for (let i = 0; i < 4; i++) {
   // single-sided: the arc lies flat and is only ever seen from above, so no second back-face pass
-  const o = new THREE.Mesh(G.tile, new THREE.MeshBasicMaterial({ color: 0xfff2c8, transparent: true, opacity: 0, depthWrite: false }));
+  const o = new THREE.Mesh(G.tile, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff2c8).multiplyScalar(2.2), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
   o.visible = false; fxGroup.add(o); swings.push({ o, t: 0 });
 }
 let swingIdx = 0;
@@ -112,7 +80,7 @@ function updOverlays(dt) {
     if (L.ref && L.ref.mesh) { L.x = L.ref.x; L.z = L.ref.z; L.y = L.ref.h * L.ref.scale + 0.55; }
     const far = Math.hypot(L.x - P.x, L.z - P.z) > (L.ref && L.ref.mesh ? 14 : 30);
     const p = project(L.x, L.y, L.z);
-    const show = p.ok && !far && !(L.ref && L.ref.hideLabel);
+    const show = p.ok && !far && !(L.ref && L.ref.hideLabel) && p.y > 110 && p.x > 30 && p.x < window.innerWidth - 30;
     L.el.style.display = show ? '' : 'none';
     if (show) L.el.style.transform = `translate(${p.x}px,${p.y}px) translate(-50%,-100%)`;
   }
@@ -145,7 +113,7 @@ function spawnEnemy(arch, x, z, o = {}) {
   const hpm = Math.pow(1.15, d - 1) * (1 + cyc * 1.5), dm = Math.pow(1.105, d - 1) * (1 + cyc * 0.8);
   const e = {
     id: uid++, arch, ai: A.ai, A, name, x, z, r: A.r, spd: A.spd * rand(0.92, 1.08), hp: A.hp * hpm, dmg: A.dmg * dm, xp: A.xp * (1 + 0.18 * (d - 1)),
-    cd: rand(0.4, 1.4), wind: 0, mesh: cr.g, mats: cr.mats, h: cr.h, scale: 1, arm: A.armor || 0, kx: 0, kz: 0, burnT: 0, burnD: 0, chillT: 0, flashT: 0,
+    cd: rand(0.4, 1.4), wind: 0, mesh: cr.g, mats: cr.mats, u: cr.u, h: cr.h, strikeT: 0, scale: 1, arm: A.armor || 0, kx: 0, kz: 0, burnT: 0, burnD: 0, chillT: 0, flashT: 0,
     awake: false, face: rand(0, 6.28), aff: [], bob: rand(0, 6), losT: 0, los: false, color, minions: 0,
   };
   if (o.champ) {
@@ -165,22 +133,22 @@ function spawnEnemy(arch, x, z, o = {}) {
     e.name = `${pick(LEAD_FIRST)} ${pick(LEAD_TITLE)}`;
     e.mats[0].emissive.setHex(AURAS[e.aura].col).multiplyScalar(0.25);
     const crown = new THREE.Group();
-    for (let k = 0; k < 5; k++) { const sp = mesh(G.cone4, mat(0xf2c56b), 0.12, 0.28, 0.12, Math.sin(k * 1.256) * 0.2, cr.h + 0.12, Math.cos(k * 1.256) * 0.2); crown.add(sp); }
-    crown.add(mesh(G.cyl, mat(0xd6a24a), 0.5, 0.08, 0.5, 0, cr.h, 0));
+    for (let k = 0; k < 5; k++) { const sp = mesh(G.cone4, WMAT.gold || metal(0xe0aa50, 0.3), 0.12, 0.28, 0.12, Math.sin(k * 1.256) * 0.2, cr.h + 0.12, Math.cos(k * 1.256) * 0.2); crown.add(sp); }
+    crown.add(mesh(G.cyl, metal(0xe0aa50, 0.3), 0.5, 0.08, 0.5, 0, cr.h, 0));
     cr.g.add(crown);
-    const ring = new THREE.Mesh(G.ring, new THREE.MeshBasicMaterial({ color: AURAS[e.aura].col, transparent: true, opacity: 0.2, depthWrite: false }));
-    ring.scale.setScalar(7); ring.position.set(x, 0.04, z); world.add(ring); e.auraRing = ring;
+    const ring = new THREE.Mesh(G.ring, new THREE.MeshBasicMaterial({ color: new THREE.Color(AURAS[e.aura].col).multiplyScalar(2), transparent: true, opacity: 0.5, depthWrite: false }));
+    ring.scale.setScalar(2.4); ring.position.set(x, 0.04, z); world.add(ring); e.auraRing = ring;
   }
   if (o.boss) {
     world.remove(cr.g); cr.mats.forEach((m) => m.dispose());
     const bc = makeCreature(B.boss.shape, B.boss.color, 0xffffff);
-    e.mesh = bc.g; e.mats = bc.mats; e.h = bc.h;
+    e.mesh = bc.g; e.mats = bc.mats; e.h = bc.h; e.u = bc.u;
     e.boss = 1; e.name = B.boss.name + (cyc ? ' ' + roman(cyc + 1) : '');
     e.hp = 950 * hpm; e.dmg = 15 * dm; e.xp = 400 * (1 + 0.2 * d); e.scale = 2.4; e.r = 1.25; e.spd = 2.6; e.arm = 0.1;
     e.patterns = B.boss.patterns; e.patT = 2; e.color = B.boss.color;
     e.mats[0].emissive.setHex(B.boss.color).multiplyScalar(0.25);
     const crown = new THREE.Group();
-    for (let k = 0; k < 7; k++) crown.add(mesh(G.cone4, mat(0xf2c56b, 1), 0.1, 0.36, 0.1, Math.sin(k * 0.9) * 0.24, bc.h + 0.16, Math.cos(k * 0.9) * 0.24));
+    for (let k = 0; k < 7; k++) crown.add(mesh(G.cone4, mat(0xf2c56b, 2.5), 0.1, 0.36, 0.1, Math.sin(k * 0.9) * 0.24, bc.h + 0.16, Math.cos(k * 0.9) * 0.24));
     bc.g.add(crown);
   }
   e.maxHp = e.hp;
@@ -296,6 +264,7 @@ function updEnemy(e, dt) {
   else if (e.wind > 0) {
     e.wind -= dt * atkM; faceP();
     if (e.wind <= 0) {
+      e.strikeT = 0.2;
       if (e.ai === 'melee' || e.ai === 'charger') { if (dist < e.A.range * e.scale + P.r + 0.35) hurtPlayer(e.dmg, e); swipeFx(e); }
       else if (e.ai === 'ranged') { enemyFire(e, e.face, { spd: 11, size: 0.16 }); }
       else if (e.ai === 'caster') {
@@ -363,6 +332,15 @@ function updEnemy(e, dt) {
   if (e.wind > 0 && e.ai !== 'ranged') e.mesh.scale.setScalar(e.scale * (1 + 0.08 * Math.sin(e.wind * 30)));
   else e.mesh.scale.setScalar(e.scale);
   for (const c of e.mesh.children) { if (c.userData.float) c.position.y = 1.0 + Math.sin(e.bob) * 0.1; if (c.userData.spin) c.rotation.y += dt * 2; }
+  // limbs: walk cycle from ground speed, arm raised during a wind-up and brought down on the strike
+  const gs = Math.hypot(mx, mz), u = e.u;
+  u.uWalk.value += dt * (2.2 + gs * 2.4) * (gs > 0.1 ? 1 : 0);
+  u.uAmp.value = lerp(u.uAmp.value, gs > 0.1 ? Math.min(0.75, 0.25 + gs * 0.12) : 0, Math.min(1, dt * 8));
+  e.strikeT -= dt;
+  const ranged = e.ai === 'ranged';
+  const tgt = (e.wind > 0 || e.windCharge > 0 || e.fuse > 0 || (e.boss && e.casting)) ? (ranged ? -1.5 : -2.4) : e.strikeT > 0 ? -0.15 : 0;
+  u.uArmR.value = tgt === 0 && Math.abs(u.uArmR.value) < 0.05 ? 0 : lerp(u.uArmR.value, tgt, Math.min(1, dt * (tgt === -0.15 ? 22 : 9)));
+  u.uArmL.value = ranged && (e.wind > 0 || e.strikeT > 0) ? -1.5 : e.arch === 'warden' && e.awake ? -0.9 : 0;
   if (e.bar) {
     e.bar.position.set(e.x, e.h * e.scale + 0.3, e.z); e.bar.quaternion.copy(camera.quaternion);
     const f = clamp(e.hp / e.maxHp, 0, 1); e.bar.userData.fg.scale.x = 0.96 * f; e.bar.userData.fg.position.x = -0.48 * (1 - f);
@@ -478,7 +456,7 @@ function telegraph(x, z, r, T, dmg, o) {
 }
 const _teleMats = new Map();
 function teleMats(col) {
-  if (!_teleMats.has(col)) _teleMats.set(col, [0.12, 0.3, 0.8].map((op) => new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op, depthWrite: false })));
+  if (!_teleMats.has(col)) _teleMats.set(col, [[0.14, 1], [0.32, 1.4], [0.85, 2.6]].map(([op, k]) => new THREE.MeshBasicMaterial({ color: new THREE.Color(col).multiplyScalar(k), transparent: true, opacity: op, depthWrite: false })));
   return _teleMats.get(col);
 }
 function disposeTele(t) { world.remove(t.disc, t.fill, t.ring); }
@@ -499,7 +477,7 @@ function updTeles(dt) {
 
 // ================= projectiles =================
 const _projMat = new Map();
-function projMat(c) { if (!_projMat.has(c)) _projMat.set(c, new THREE.MeshBasicMaterial({ color: c })); return _projMat.get(c); }
+function projMat(c) { if (!_projMat.has(c)) _projMat.set(c, new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(3.2) })); return _projMat.get(c); }
 function spawnProj(o) {
   const m = new THREE.Mesh(G.lsph, projMat(o.col));
   m.scale.set(o.size * 2, o.size * 2, o.size * (o.owner === 'p' && o.size < 0.15 ? 9 : 3));
@@ -640,13 +618,13 @@ function spawnDrop(x, z, data) {
   const tx = x + Math.sin(a) * r, tz = z + Math.cos(a) * r;
   const fx = walkable(tx, tz) ? tx : x, fz = walkable(tx, tz) ? tz : z;
   const g = new THREE.Group();
-  if (data.gold) { for (let k = 0; k < 3; k++) g.add(mesh(G.cyl, mat(0xf2c56b, 1), 0.22, 0.05, 0.22, rand(-0.1, 0.1), k * 0.06, rand(-0.1, 0.1))); }
-  else if (data.mat) { g.add(mesh(G.oct, mat(new THREE.Color(MATS[data.mat].c).getHex(), 1), 0.26, 0.34, 0.26, 0, 0.1, 0)); }
-  else if (data.potion) { g.add(mesh(G.sph, mat(0xe0473b, 1), 0.28, 0.28, 0.28, 0, 0.1, 0), mesh(G.box, mat(0x8a6a4a), 0.08, 0.12, 0.08, 0, 0.3, 0)); }
+  if (data.gold) { for (let k = 0; k < 3; k++) g.add(mesh(G.cyl, metal(0xe8b450, 0.25), 0.22, 0.05, 0.22, rand(-0.1, 0.1), k * 0.06, rand(-0.1, 0.1))); }
+  else if (data.mat) { g.add(mesh(G.oct, mat(new THREE.Color(MATS[data.mat].c).getHex(), 1.8), 0.26, 0.34, 0.26, 0, 0.1, 0)); }
+  else if (data.potion) { g.add(mesh(G.sph, mat(0xe0473b, 2), 0.28, 0.28, 0.28, 0, 0.1, 0), mesh(G.box, mat(0x8a6a4a), 0.08, 0.12, 0.08, 0, 0.3, 0)); }
   else if (data.item) {
     const c = RCOL[data.item.rarity];
-    g.add(mesh(G.box, mat(c, 1), 0.34, 0.34, 0.34, 0, 0.2, 0));
-    if (data.item.rarity >= 2) { const beam = new THREE.Mesh(G.cyl, new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.22, depthWrite: false })); beam.scale.set(0.35, 6, 0.35); beam.position.y = 3; g.add(beam); levelDisp.push(beam.material); }
+    g.add(mesh(G.box, mat(c, 2.4), 0.3, 0.3, 0.3, 0, 0.2, 0)); g.children[0].rotation.set(0.6, 0, 0.6);
+    if (data.item.rarity >= 2) { const beam = new THREE.Mesh(G.cyl, new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(1.5), transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending })); beam.scale.set(0.35, 6, 0.35); beam.position.y = 3; g.add(beam); levelDisp.push(beam.material); }
     if (data.item.rarity >= 3) sfx('rare');
   }
   g.position.set(fx, 0.3, fz);

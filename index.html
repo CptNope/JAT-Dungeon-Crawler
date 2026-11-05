@@ -165,6 +165,14 @@ h3 small{font-family:var(--f-mono);font-size:12px;color:var(--muted);margin-left
 .keys kbd{font:600 11px var(--f-mono);border:1px solid var(--line-2);border-radius:3px;padding:1px 6px;color:var(--fg);white-space:nowrap}
 .confirm{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;font-size:14px;color:var(--muted)}
 
+#crosshair{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:var(--brass-2);box-shadow:0 0 0 2px rgba(0,0,0,.45),0 0 10px rgba(242,197,107,.6)}
+.opts{display:grid;gap:8px;width:min(560px,100%)}
+.opt{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;justify-content:center}
+.opt>span{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);min-width:90px;text-align:right}
+.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:3px;overflow:hidden}
+.seg button{padding:7px 12px;border:0;background:transparent;cursor:pointer;font-weight:500;color:var(--fg)}
+.seg button+button{border-left:1px solid var(--line-2)}
+.seg button.on{background:color-mix(in srgb,var(--brass) 22%,transparent);color:var(--brass-2)}
 /* Touch */
 #touch{position:fixed;inset:0;z-index:3;pointer-events:none}
 #stick{position:absolute;left:calc(22px + env(safe-area-inset-left,0px));bottom:calc(26px + env(safe-area-inset-bottom,0px));width:128px;height:128px;border-radius:50%;border:1px solid var(--line-2);background:rgba(10,10,16,.35);pointer-events:auto;touch-action:none}
@@ -178,6 +186,7 @@ h3 small{font-family:var(--f-mono);font-size:12px;color:var(--muted);margin-left
 #tPot{right:calc(108px + env(safe-area-inset-right,0px));bottom:calc(98px + env(safe-area-inset-bottom,0px));width:52px;height:52px}
 #tScroll{right:calc(166px + env(safe-area-inset-right,0px));bottom:calc(88px + env(safe-area-inset-bottom,0px));width:46px;height:46px}
 #tBag{right:calc(94px + env(safe-area-inset-right,0px));bottom:calc(166px + env(safe-area-inset-bottom,0px));width:46px;height:46px}
+#tView{left:calc(160px + env(safe-area-inset-left,0px));bottom:calc(30px + env(safe-area-inset-bottom,0px));width:46px;height:46px;font-size:10px}
 #tUse.ready{border-color:var(--brass-2);background:rgba(214,162,74,.3)}
 
 @media (max-width:860px){
@@ -214,7 +223,7 @@ h3 small{font-family:var(--f-mono);font-size:12px;color:var(--muted);margin-left
   </div>
   <div class="hud-tr">
     <canvas id="mini" width="168" height="168"></canvas>
-    <div class="mini-btns"><button class="chip" id="btnMute" type="button">Sound off</button><button class="chip" id="btnMenu" type="button">Menu</button></div>
+    <div class="mini-btns"><button class="chip" id="btnView" type="button">View: Overhead</button><button class="chip" id="btnMute" type="button">Sound off</button><button class="chip" id="btnMenu" type="button">Menu</button></div>
   </div>
   <div id="actionBar"></div>
   <div id="prompt" hidden></div>
@@ -223,6 +232,7 @@ h3 small{font-family:var(--f-mono);font-size:12px;color:var(--muted);margin-left
   <div id="floaters"></div>
   <div id="banner"></div>
   <div id="vignette"></div>
+  <div id="crosshair" hidden></div>
 </div>
 <div id="touch" hidden>
   <div id="stick"><div id="knob"></div></div>
@@ -232,6 +242,7 @@ h3 small{font-family:var(--f-mono);font-size:12px;color:var(--muted);margin-left
   <button class="tb" id="tPot" type="button"></button>
   <button class="tb" id="tScroll" type="button"></button>
   <button class="tb" id="tBag" type="button"></button>
+  <button class="tb" id="tView" type="button">View</button>
 </div>
 <div id="panel" hidden>
   <div class="card" role="dialog" aria-modal="true" aria-labelledby="pTitle">
@@ -244,6 +255,7 @@ h3 small{font-family:var(--f-mono);font-size:12px;color:var(--muted);margin-left
     <h1 class="logo">Hearthdeep</h1>
     <p class="tag">A village on the lip of a hole with no bottom. Delve for loot and boss sigils, craft at your bench, and build your shack into a keep.</p>
     <div class="menu" id="menuBtns"></div>
+    <div class="opts" id="opts"></div>
     <div class="confirm" id="confirmNew" hidden><span>Start over? Your saved hero will be erased.</span><button class="btn" id="btnWipe" type="button">Erase and start</button><button class="btn ghost" id="btnKeep" type="button">Keep my hero</button></div>
     <div class="keys" id="keyList"></div>
   </div>

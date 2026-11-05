@@ -1,7 +1,7 @@
 // ================= level loading =================
 let spinners = [];
 function placePlayerMesh() {
-  if (!P.mesh) { const h = makeHero(); P.mesh = h.g; P.hand = h.hand; scene.add(P.mesh); }
+  if (!P.mesh) { const h = makeHero(); P.mesh = h.g; P.hand = h.hand; P.shoulder = h.shoulder; P.u = h.u; scene.add(P.mesh); }
   if (P.wkind !== ST.wk) {
     if (P.weapon) P.hand.remove(P.weapon);
     P.weapon = weaponMesh(ST.wk); P.hand.add(P.weapon); P.wkind = ST.wk;
@@ -9,9 +9,15 @@ function placePlayerMesh() {
   P.mesh.position.set(P.x, 0, P.z);
 }
 function setTownLights() {
-  scene.background = new THREE.Color(0x8fb0c8); scene.fog = new THREE.Fog(0x8fb0c8, 34, 80);
-  hemi.intensity = 2.4; hemi.color.setHex(0xffffff); hemi.groundColor.setHex(0x4a5a3a);
-  sun.intensity = 2.6; torch.intensity = 0;
+  // golden hour: a low warm sun throws long shadows; the sky dome and a gradient environment fill the rest
+  scene.background = new THREE.Color(0xe2c8a0); scene.fog = new THREE.Fog(0xe2c8a0, SET.cam === 'top' ? 40 : 30, SET.cam === 'top' ? 95 : 150);
+  if (!sky.parent) scene.add(sky);
+  hemi.intensity = 1.1; hemi.color.setHex(0xb8d0f0); hemi.groundColor.setHex(0x6a5a3a);
+  sun.intensity = 3.4; sun.color.setHex(0xffd2a0); torch.intensity = 0;
+  for (const l of torchPool) l.intensity = 0;
+  setAmbient('town');
+  sun.castShadow = Q.sunShadow > 0; torch.castShadow = false; // shadow passes only where that light matters
+  Post.grade([0.9, 0.96, 1.1], [1.06, 1.0, 0.9], 1.12, 0.3, 0.75, 1.15);
 }
 function loadTown() {
   clearWorld(); spinners = [];
@@ -40,7 +46,7 @@ function warmLevel() {
     // one of each effect material that otherwise appears only mid-fight
     for (const c of [0xff3b2f, 0xff7a2a]) for (const m of teleMats(c)) warmGroup.add(new THREE.Mesh(G.disc, m));
     for (const c of [0xf0dcb0, 0xa98cff, 0xb48cff]) warmGroup.add(new THREE.Mesh(G.lsph, projMat(c)));
-    warmGroup.add(new THREE.Mesh(G.plane, barBgMat), new THREE.Mesh(G.plane, barFgMat), swings[0].o.clone(), parts[0].m.clone());
+    warmGroup.add(new THREE.Mesh(G.plane, barBgMat), new THREE.Mesh(G.plane, barFgMat), swings[0].o.clone());
     warmGroup.children.forEach((o) => { o.visible = true; o.position.set(P.x, -50, P.z); });
   }
   scene.add(warmGroup);
@@ -97,7 +103,12 @@ function loadDungeon(depth) {
   const B = biomeOf(depth);
   scene.background = new THREE.Color(B.fog); scene.fog = new THREE.Fog(B.fog, 17, 36);
   hemi.intensity = 2.1; hemi.color.setHex(B.amb); hemi.groundColor.setHex(0x14141c);
-  sun.intensity = 0.6; torch.color.setHex(B.torch); torch.intensity = 40;
+  torch.color.setHex(B.torch); torch.intensity = 30; torch.distance = 22;
+  if (sky.parent) scene.remove(sky);
+  sun.castShadow = false; torch.castShadow = Q.torchShadow;
+  hemi.intensity = 2.4; sun.intensity = 0.7; sun.color.setHex(B.amb);
+  setAmbient(B.id);
+  Post.grade([0.88, 0.94, 1.12], [1.08, 1.0, 0.9], 1.06, 0.5, 1.0, 0.9);
   buildDungeonVisuals();
   P.x = LV.start.x; P.z = LV.start.z; P.kx = P.kz = 0;
   populate();
@@ -112,10 +123,16 @@ function loadDungeon(depth) {
 }
 function addChest(x, z) {
   const g = new THREE.Group();
-  g.add(mesh(G.box, mat(0x6a4426), 0.9, 0.5, 0.6, 0, 0.25, 0));
-  const lid = new THREE.Group(); lid.position.set(0, 0.5, -0.3);
-  lid.add(mesh(G.box, mat(0x7a5230), 0.92, 0.22, 0.62, 0, 0.11, 0.3), mesh(G.box, mat(0xd6a24a), 0.94, 0.06, 0.1, 0, 0.12, 0.6));
-  g.add(lid, mesh(G.box, mat(0xd6a24a), 0.96, 0.08, 0.64, 0, 0.3, 0));
+  const W = worldMats();
+  g.add(mesh(G.box, W.door, 0.95, 0.5, 0.62, 0, 0.25, 0));
+  for (const s of [-1, 1]) g.add(mesh(G.box, W.gold, 0.08, 0.52, 0.66, s * 0.3, 0.26, 0));
+  g.add(mesh(G.box, mat(0xffc24a, 3), 0.86, 0.04, 0.5, 0, 0.5, 0));
+  const lid = new THREE.Group(); lid.position.set(0, 0.5, -0.31);
+  { const top = mesh(G.cyl, W.door, 0.3, 0.95, 0.31, 0, 0.02, 0.31); top.rotation.z = Math.PI / 2; top.scale.set(0.62, 0.95, 0.62); lid.add(top); }
+  for (const s of [-1, 1]) { const b = mesh(G.cyl, W.gold, 0.66, 0.08, 0.66, s * 0.3, 0.02, 0.31); b.rotation.z = Math.PI / 2; b.scale.set(0.64, 0.08, 0.64); lid.add(b); }
+  lid.add(mesh(G.box, W.gold, 0.16, 0.18, 0.06, 0, -0.05, 0.63));
+  g.add(lid);
+  g.traverse((o) => { o.castShadow = true; });
   g.position.set(x, 0, z); g.rotation.y = rand(-0.4, 0.4); world.add(g);
   addInteract({ x, z, r: 1.4, kind: 'chest', verb: 'Open chest', act(o) {
     lid.rotation.x = -1.9; o.dead = true; sfx('chest');
@@ -132,11 +149,12 @@ function addChest(x, z) {
 function addNode(x, z, kind) {
   const g = new THREE.Group();
   const c = new THREE.Color(MATS[kind].c).getHex();
-  if (kind === 'herb') for (let k = 0; k < 4; k++) g.add(mesh(G.cone, mat(c), 0.22, rand(0.4, 0.7), 0.22, rand(-0.3, 0.3), 0.25, rand(-0.3, 0.3)));
+  if (kind === 'herb') for (let k = 0; k < 7; k++) { const l = mesh(G.cone, mat(c), 0.16, rand(0.45, 0.8), 0.06, rand(-0.25, 0.25), 0.25, rand(-0.25, 0.25)); l.rotation.set(rand(-0.4, 0.4), rand(0, 6), rand(-0.4, 0.4)); g.add(l); }
   else {
-    g.add(mesh(G.box, mat(0x3a3a40), 0.9, 0.3, 0.8, 0, 0.15, 0));
-    for (let k = 0; k < 3; k++) { const o = mesh(G.oct, mat(c, kind === 'iron' ? 0 : 1), 0.3, 0.5, 0.3, rand(-0.3, 0.3), 0.4, rand(-0.25, 0.25)); o.rotation.z = rand(-0.4, 0.4); g.add(o); }
+    g.add(mesh(G.dodec, mat(0x55525c), 1.0, 0.55, 0.85, 0, 0.18, 0));
+    for (let k = 0; k < 4; k++) { const o = mesh(G.oct, kind === 'iron' ? metal(0x9aa0aa, 0.35) : mat(c, 2.6), 0.24, rand(0.4, 0.62), 0.24, rand(-0.3, 0.3), 0.42, rand(-0.25, 0.25)); o.rotation.set(rand(-0.4, 0.4), rand(0, 6), rand(-0.5, 0.5)); g.add(o); }
   }
+  g.traverse((o) => { o.castShadow = true; });
   g.position.set(x, 0, z); world.add(g);
   addInteract({ x, z, r: 1.3, kind: 'node', mat: kind, verb: `Gather ${MATS[kind].n}`, act(o) {
     o.dead = true; world.remove(g); sfx('coin');
@@ -146,17 +164,20 @@ function addNode(x, z, kind) {
 }
 function addStairs(x, z) {
   const g = new THREE.Group();
-  g.add(mesh(G.box, mat(0x050507, 1), 2.2, 0.04, 2.2, 0, 0.02, 0));
-  for (let k = 0; k < 3; k++) g.add(mesh(G.box, mat(0x2a2a30), 1.6 - k * 0.4, 0.05, 0.4, 0, 0.05, -0.6 + k * 0.45));
-  const ring = mesh(G.ring, mat(0x7fbf6a, 1), 1.5, 1, 1.5, 0, 0.06, 0); g.add(ring);
+  const W = worldMats();
+  g.add(mesh(G.box, mat(0x020203, 1), 2.0, 0.03, 2.0, 0, 0.015, 0));
+  for (let k = 0; k < 4; k++) g.add(mesh(G.box, W.stone, 1.7, 0.06, 0.34, 0, 0.03 - k * 0.001, -0.7 + k * 0.42));
+  for (const [sx, sz, w, d] of [[0, -1.08, 2.4, 0.18], [0, 1.08, 2.4, 0.18], [-1.08, 0, 0.18, 2.4], [1.08, 0, 0.18, 2.4]]) g.add(mesh(G.box, W.stone, w, 0.22, d, sx, 0.11, sz));
+  const ring = mesh(G.ring, mat(0x7fdf6a, 3), 1.45, 1, 1.45, 0, 0.24, 0); g.add(ring);
+  g.add(makeFlames([{ x: -1.08, y: 0.25, z: -1.08 }, { x: 1.08, y: 0.25, z: -1.08 }, { x: -1.08, y: 0.25, z: 1.08 }, { x: 1.08, y: 0.25, z: 1.08 }]));
   g.position.set(x, 0, z); world.add(g);
   addInteract({ x, z, r: 1.6, kind: 'stairs', label: 'Stairs down', ly: 2.2, cls: '', verb: `Descend to depth ${RUN.depth + 1}`, act: () => nextFloor() });
 }
 function addPortalHome(x, z) {
   if (!walkable(x, z)) { x = LV.start.x; z = LV.start.z + 1.5; }
   const g = new THREE.Group();
-  const t = mesh(G.fullTorus, mat(0x6ab0ff, 1), 0.9, 1.2, 0.9, 0, 1.3, 0); g.add(t);
-  const disc = new THREE.Mesh(G.plane, new THREE.MeshBasicMaterial({ color: 0x3a6aff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }));
+  const t = mesh(G.fullTorus, mat(0x6ab0ff, 3.2), 0.9, 1.2, 0.9, 0, 1.3, 0); g.add(t);
+  const disc = new THREE.Mesh(G.plane, new THREE.MeshBasicMaterial({ color: new THREE.Color(0x3a6aff).multiplyScalar(1.6), transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
   disc.scale.set(1.7, 2.3, 1); disc.position.y = 1.3; g.add(disc); levelDisp.push(disc.material);
   g.position.set(x, 0, z); g.userData.spin = 2; world.add(g); spinners.push(g);
   addInteract({ x, z, r: 1.6, kind: 'portal', label: 'Way home', ly: 3, cls: '', verb: 'Return to Hearthdeep', act: () => returnToTown(false) });
@@ -205,7 +226,7 @@ function die() {
   P.dead = true; P.hp = 0;
   const lost = Math.floor(S.gold * 0.25);
   S.gold -= lost; S.deaths++;
-  P.mesh.rotation.z = Math.PI / 2; P.mesh.position.y = 0.3;
+  P.mesh.rotation.z = Math.PI / 2; P.mesh.position.y = 0.3; P.mesh.visible = true; viewmodel.g.visible = false;
   $('#deathText').textContent = `${biomeOf(RUN.depth).name}, depth ${RUN.depth}. You dropped ${fmt(lost)} gold in the dark, but your gear and materials came home with you.`;
   setTimeout(() => { $('#death').hidden = false; $('#btnRevive').focus(); }, 900);
   sfx('die');
@@ -256,6 +277,60 @@ function aimPoint() {
   const t = (0.6 - o.y) / d.y;
   return { x: o.x + d.x * t, z: o.z + d.z * t };
 }
+// ================= camera modes =================
+// top: angled overhead, mouse aims on the ground. third: over-the-shoulder chase camera with wall collision.
+// first: eye-level with a held weapon. In third and first, mouse (pointer lock) or a touch drag turns the view.
+const CAM = { yaw: Math.PI, pitch: 0.28, dist: 4.6, curDist: 4.6, bob: 0 };
+const CAM_NAMES = { top: 'Overhead', third: 'Third person', first: 'First person' };
+function setCamMode(m) {
+  if (!CAM_NAMES[m]) m = 'top';
+  const prev = SET.cam; SET.cam = m; saveSettings();
+  if (prev === 'top' && m !== 'top') { CAM.yaw = Math.PI; CAM.pitch = m === 'first' ? 0.05 : 0.28; }
+  if (m === 'top' && document.pointerLockElement) document.exitPointerLock();
+  updateFov();
+  $('#crosshair').hidden = m === 'top';
+  $('#btnView').textContent = 'View: ' + CAM_NAMES[m];
+  if (LV && LV.type === 'dungeon') layoutWalls();
+  if (LV && LV.type === 'town') scene.fog = new THREE.Fog(0xe2c8a0, m === 'top' ? 40 : 30, m === 'top' ? 95 : 150);
+  snapCamera();
+}
+function cycleCam() { setCamMode(SET.cam === 'top' ? 'third' : SET.cam === 'third' ? 'first' : 'top'); toast('View: ' + CAM_NAMES[SET.cam], 'var(--brass-2)'); }
+function lookBy(dx, dy) {
+  const s = 0.0026 * (SET.sens || 1);
+  CAM.yaw -= dx * s;
+  CAM.pitch = clamp(CAM.pitch + dy * s, SET.cam === 'first' ? -1.2 : -0.35, SET.cam === 'first' ? 1.2 : 1.1);
+}
+const _cv = new THREE.Vector3(), _cq = new THREE.Quaternion(), _ce = new THREE.Euler(0, 0, 0, 'YXZ');
+function camBlocked(x, y, z) {
+  if (y > (LV.type === 'dungeon' ? wallHeight() : 7)) return false;
+  return !walkable(x, z);
+}
+function placeCamera(dt, snap) {
+  const mode = SET.cam;
+  if (mode === 'top') {
+    const k = snap ? 1 : 1 - Math.exp(-dt * 7);
+    camera.position.x = lerp(camera.position.x, P.x + CAM_OFF.x * camZoom, k);
+    camera.position.y = lerp(camera.position.y, CAM_OFF.y * camZoom, k);
+    camera.position.z = lerp(camera.position.z, P.z + CAM_OFF.z * camZoom, k);
+    camera.lookAt(camera.position.x - CAM_OFF.x * camZoom, 0.6, camera.position.z - CAM_OFF.z * camZoom);
+    return;
+  }
+  _ce.set(-CAM.pitch, CAM.yaw + Math.PI, 0); camera.quaternion.setFromEuler(_ce);
+  if (mode === 'first') {
+    CAM.bob += dt * (Math.hypot(P.mx || 0, P.mz || 0) > 0.1 ? 11 : 0);
+    camera.position.set(P.x, 1.58 + Math.sin(CAM.bob) * 0.035, P.z);
+    return;
+  }
+  // third person: pull in when a wall sits between the shoulder and the camera
+  const hx = P.x, hy = 1.65, hz = P.z;
+  _cv.set(0.55, 0.15, 1).applyQuaternion(camera.quaternion);
+  let d = CAM.dist;
+  for (let t = 0.3; t <= CAM.dist; t += 0.2) { if (camBlocked(hx + _cv.x * t, hy + _cv.y * t, hz + _cv.z * t)) { d = Math.max(0.6, t - 0.35); break; } }
+  CAM.curDist = snap ? d : (d < CAM.curDist ? d : lerp(CAM.curDist, d, 1 - Math.exp(-dt * 4)));
+  camera.position.set(hx + _cv.x * CAM.curDist, Math.max(0.4, hy + _cv.y * CAM.curDist), hz + _cv.z * CAM.curDist);
+}
+function snapCamera() { placeCamera(0, true); }
+function updCamera(dt) { placeCamera(dt, false); }
 function updPlayer(dt) {
   if (P.dead) return;
   let ix = 0, iz = 0;
@@ -265,6 +340,10 @@ function updPlayer(dt) {
   if (keys.KeyD || keys.ArrowRight) ix += 1;
   ix += stick.x; iz += stick.y;
   const il = Math.hypot(ix, iz); if (il > 1) { ix /= il; iz /= il; }
+  if (SET.cam !== 'top') { // camera-relative: up on the stick or W walks where the camera looks
+    const fx = Math.sin(CAM.yaw), fz = Math.cos(CAM.yaw), rx = -Math.cos(CAM.yaw), rz = Math.sin(CAM.yaw);
+    const nx = fx * -iz + rx * ix, nz = fz * -iz + rz * ix; ix = nx; iz = nz;
+  }
   P.mx = ix; P.mz = iz;
   P.atkT -= dt; P.swingT -= dt; P.dodgeCd -= dt; P.iframes -= dt; potCd -= dt;
   if (P.frenzyT > 0) { P.frenzyT -= dt; if (P.frenzyT <= 0) P.frenzy = 0; }
@@ -281,41 +360,60 @@ function updPlayer(dt) {
   collide(P);
   // aim
   const wantsAtk = mouseDown || touchAtk || keys.KeyJ;
-  if (touchMode) {
-    let best = null, bd = 9;
-    if (LV.type === 'dungeon') for (const e of enemies) { if (e.dead || !e.awake) continue; const d = Math.hypot(e.x - P.x, e.z - P.z); if (d < bd) { bd = d; best = e; } }
-    if (best && (wantsAtk || il < 0.1)) P.face = Math.atan2(best.x - P.x, best.z - P.z);
-    else if (il > 0.1) P.face = Math.atan2(ix, iz);
+  const moving = il > 0.1 || P.dodgeT > 0;
+  if (SET.cam === 'top') {
+    if (touchMode) {
+      let best = null, bd = 9;
+      if (LV.type === 'dungeon') for (const e of enemies) { if (e.dead || !e.awake) continue; const d = Math.hypot(e.x - P.x, e.z - P.z); if (d < bd) { bd = d; best = e; } }
+      if (best && (wantsAtk || il < 0.1)) P.face = Math.atan2(best.x - P.x, best.z - P.z);
+      else if (il > 0.1) P.face = Math.atan2(ix, iz);
+    } else { const ap = aimPoint(); if (ap) P.face = Math.atan2(ap.x - P.x, ap.z - P.z); }
   } else {
-    const ap = aimPoint();
-    if (ap) P.face = Math.atan2(ap.x - P.x, ap.z - P.z);
+    let want = CAM.yaw;
+    if (SET.cam === 'third' && !wantsAtk && P.atkT <= 0 && moving) want = Math.atan2(ix, iz);
+    if (touchMode && wantsAtk) { // gentle aim assist toward the foe nearest the view centre
+      let best = null, bs = 0.45;
+      for (const e of enemies) { if (e.dead) continue; const d = Math.hypot(e.x - P.x, e.z - P.z); if (d > 9) continue; const a = Math.abs(angDiff(Math.atan2(e.x - P.x, e.z - P.z), CAM.yaw)); if (a < bs) { bs = a; best = e; } }
+      if (best) want = Math.atan2(best.x - P.x, best.z - P.z);
+    }
+    P.face = SET.cam === 'first' || wantsAtk || P.atkT > 0 ? want : P.face + angDiff(want, P.face) * Math.min(1, dt * 12);
   }
   if (wantsAtk) playerAttack();
   if (LV.type === 'dungeon') P.hp = Math.min(ST.maxHp, P.hp + ST.regen * dt);
   else P.hp = ST.maxHp;
-  // visuals
-  const moving = il > 0.1 || P.dodgeT > 0;
-  P.walk += dt * (moving ? 12 : 0);
-  P.mesh.position.set(P.x, moving ? Math.abs(Math.sin(P.walk)) * 0.09 : 0, P.z);
-  P.mesh.rotation.y = P.face;
-  P.mesh.rotation.z = 0;
-  const w = curWeapon();
-  if (P.swingT > 0 && !w.ranged) { const t = 1 - P.swingT / P.swingDur; P.hand.rotation.y = lerp(w.arc / 2, -w.arc / 2, t); P.hand.rotation.x = 0; }
-  else if (P.swingT > 0) { P.hand.rotation.y = 0; P.hand.position.z = 0.1 - 0.15 * (P.swingT / P.swingDur); }
-  else { P.hand.rotation.y = lerp(P.hand.rotation.y, 0.3, Math.min(1, dt * 10)); P.hand.position.z = 0.1; }
-  P.mesh.visible = !(P.iframes > 0 && P.dodgeT <= 0 && Math.floor(P.iframes * 20) % 2 === 0);
-  torch.position.set(P.x, 2.6, P.z + 0.4);
+  animateHero(dt, moving);
+  // the lantern sits above and behind the delver so it lights the way ahead without glaring off their own armour
+  const bk = SET.cam === 'first' ? 0.9 : 0.5, la = SET.cam === 'top' ? Math.PI : P.face;
+  torch.position.set(P.x - Math.sin(la) * bk, SET.cam === 'third' ? 3.0 : 2.6, P.z - Math.cos(la) * bk);
+  if (LV.type === 'dungeon') { sun.position.set(P.x - 6, 20, P.z + 8); sun.target.position.set(P.x, 0, P.z); }
 }
-function snapCamera() {
-  camera.position.set(P.x + CAM_OFF.x * camZoom, CAM_OFF.y * camZoom, P.z + CAM_OFF.z * camZoom);
-  camera.lookAt(P.x, 0.6, P.z);
-}
-function updCamera(dt) {
-  const k = 1 - Math.exp(-dt * 7);
-  camera.position.x = lerp(camera.position.x, P.x + CAM_OFF.x * camZoom, k);
-  camera.position.y = lerp(camera.position.y, CAM_OFF.y * camZoom, k);
-  camera.position.z = lerp(camera.position.z, P.z + CAM_OFF.z * camZoom, k);
-  camera.lookAt(camera.position.x - CAM_OFF.x * camZoom, 0.6, camera.position.z - CAM_OFF.z * camZoom);
+function animateHero(dt, moving) {
+  const w = curWeapon(), u = P.u;
+  u.uWalk.value += dt * (moving ? (P.dodgeT > 0 ? 18 : 10.5) : 0);
+  u.uAmp.value = lerp(u.uAmp.value, moving ? 0.7 : 0, Math.min(1, dt * 10));
+  let armR = 0, armL = 0;
+  if (P.swingT > 0 && !w.ranged) { const t = 1 - P.swingT / P.swingDur; armR = lerp(-2.7, -0.15, 1 - Math.pow(1 - t, 3)); }
+  else if (w.ranged && (P.atkT > -0.25)) { armR = -1.5; if (ST.wk === 'bow') armL = -1.45; }
+  u.uArmR.value = armR; u.uArmL.value = armL;
+  P.shoulder.rotation.x = armAngle(u, true);
+  P.mesh.position.set(P.x, moving ? Math.abs(Math.sin(u.uWalk.value)) * 0.05 : 0, P.z);
+  P.mesh.rotation.y = P.face; P.mesh.rotation.z = 0;
+  const blink = P.iframes > 0 && P.dodgeT <= 0 && Math.floor(P.iframes * 20) % 2 === 0;
+  P.mesh.visible = SET.cam !== 'first' && !blink;
+  // first-person weapon
+  const vm = viewmodel;
+  vm.g.visible = SET.cam === 'first' && !P.dead;
+  if (vm.g.visible) {
+    if (vm.kind !== ST.wk) { while (vm.holder.children.length) vm.holder.remove(vm.holder.children[0]); const wm = weaponMesh(ST.wk); wm.traverse((o) => { o.castShadow = false; }); vm.holder.add(wm); vm.kind = ST.wk; }
+    const sway = Math.sin(u.uWalk.value) * u.uAmp.value;
+    let rx = w.ranged ? 0.12 : 0.95, rz = w.ranged ? 0 : -0.25, py = 0;
+    if (P.swingT > 0 && !w.ranged) { const t = 1 - P.swingT / P.swingDur; const e = 1 - Math.pow(1 - t, 3); rx = lerp(1.7, -0.35, e); rz = lerp(-0.6, 0.5, e); }
+    else if (w.ranged && P.atkT > 0) { py = 0.05 * (P.atkT / w.cd); }
+    vm.g.position.set(0.34 + sway * 0.02, -0.36 + Math.abs(sway) * 0.02 - py, -0.6);
+    vm.g.rotation.set(0, 0, 0);
+    vm.holder.rotation.set(rx, Math.PI, rz);
+    vm.g.children[0].rotation.set(rx * 0.25 - 0.25, 0, 0);
+  }
 }
 function updInteract() {
   let best = null, bd = 1e9;

@@ -14,7 +14,7 @@
   </div>
   <div class="hud-tr">
     <canvas id="mini" width="168" height="168"></canvas>
-    <div class="mini-btns"><button class="chip" id="btnMute" type="button">Sound off</button><button class="chip" id="btnMenu" type="button">Menu</button></div>
+    <div class="mini-btns"><button class="chip" id="btnView" type="button">View: Overhead</button><button class="chip" id="btnMute" type="button">Sound off</button><button class="chip" id="btnMenu" type="button">Menu</button></div>
   </div>
   <div id="actionBar"></div>
   <div id="prompt" hidden></div>
@@ -23,6 +23,7 @@
   <div id="floaters"></div>
   <div id="banner"></div>
   <div id="vignette"></div>
+  <div id="crosshair" hidden></div>
 </div>
 <div id="touch" hidden>
   <div id="stick"><div id="knob"></div></div>
@@ -32,6 +33,7 @@
   <button class="tb" id="tPot" type="button"></button>
   <button class="tb" id="tScroll" type="button"></button>
   <button class="tb" id="tBag" type="button"></button>
+  <button class="tb" id="tView" type="button">View</button>
 </div>
 <div id="panel" hidden>
   <div class="card" role="dialog" aria-modal="true" aria-labelledby="pTitle">
@@ -44,6 +46,7 @@
     <h1 class="logo">Hearthdeep</h1>
     <p class="tag">A village on the lip of a hole with no bottom. Delve for loot and boss sigils, craft at your bench, and build your shack into a keep.</p>
     <div class="menu" id="menuBtns"></div>
+    <div class="opts" id="opts"></div>
     <div class="confirm" id="confirmNew" hidden><span>Start over? Your saved hero will be erased.</span><button class="btn" id="btnWipe" type="button">Erase and start</button><button class="btn ghost" id="btnKeep" type="button">Keep my hero</button></div>
     <div class="keys" id="keyList"></div>
   </div>
