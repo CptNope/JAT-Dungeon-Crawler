@@ -10,6 +10,7 @@
   <div class="hud-tc">
     <div id="hLoc"></div>
     <div id="hObj"></div>
+    <div id="hQuest" hidden></div>
     <div id="bossBar" hidden><div id="bossName"></div><div class="bar boss"><i id="bossFill"></i></div></div>
   </div>
   <div class="hud-tr">
@@ -24,16 +25,23 @@
   <div id="banner"></div>
   <div id="vignette"></div>
   <div id="crosshair" hidden></div>
+  <div id="lockMark" hidden></div>
 </div>
 <div id="touch" hidden>
   <div id="stick"><div id="knob"></div></div>
   <button class="tb" id="tAtk" type="button">Strike</button>
   <button class="tb" id="tDodge" type="button">Roll</button>
+  <button class="tb sk" id="tS1" type="button" aria-label="Whirlwind"></button>
+  <button class="tb sk" id="tS2" type="button" aria-label="Shadow Dash"></button>
+  <button class="tb sk" id="tS3" type="button" aria-label="Ember Nova"></button>
   <button class="tb" id="tUse" type="button">Use</button>
-  <button class="tb" id="tPot" type="button"></button>
-  <button class="tb" id="tScroll" type="button"></button>
-  <button class="tb" id="tBag" type="button"></button>
-  <button class="tb" id="tView" type="button">View</button>
+  <div class="util">
+    <button class="tb" id="tPot" type="button" aria-label="Drink a draught"></button>
+    <button class="tb" id="tScroll" type="button" aria-label="Read a portal scroll"></button>
+    <button class="tb" id="tLock" type="button" aria-label="Lock on"></button>
+    <button class="tb" id="tView" type="button">View</button>
+    <button class="tb" id="tBag" type="button" aria-label="Bag"></button>
+  </div>
 </div>
 <div id="panel" hidden>
   <div class="card" role="dialog" aria-modal="true" aria-labelledby="pTitle">

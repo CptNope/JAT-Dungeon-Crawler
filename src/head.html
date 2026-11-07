@@ -172,6 +172,15 @@ h3 small{font-family:var(--f-mono);font-size:12px;color:var(--muted);margin-left
 .seg button{padding:7px 12px;border:0;background:transparent;cursor:pointer;font-weight:500;color:var(--fg)}
 .seg button+button{border-left:1px solid var(--line-2)}
 .seg button.on{background:color-mix(in srgb,var(--brass) 22%,transparent);color:var(--brass-2)}
+#hQuest{margin-top:2px;padding:3px 10px;font-size:13px;color:var(--brass-2);background:var(--glass);border:1px solid color-mix(in srgb,var(--brass) 45%,transparent);border-radius:3px;text-shadow:0 1px 2px #000;max-width:100%}
+#hQuest.done{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 60%,transparent)}
+#lockMark{position:absolute;left:0;top:0;width:16px;height:16px;border:2px solid #ff8a5a;box-shadow:0 0 8px rgba(255,122,74,.7)}
+.slot.skill{border-color:color-mix(in srgb,var(--brass) 55%,var(--line-2))}
+.slot.locked{opacity:.45}
+.slot .n{text-shadow:0 1px 2px #000}
+.sk-ic{display:grid;place-items:center;width:44px;height:44px;border:1px solid var(--line-2);border-radius:50%;color:var(--brass-2)}
+.sk-ic svg{width:24px;height:24px}
+.fl.xp{font-size:12px}
 /* Touch */
 #touch{position:fixed;inset:0;z-index:3;pointer-events:none}
 #stick{position:absolute;left:calc(22px + env(safe-area-inset-left,0px));bottom:calc(26px + env(safe-area-inset-bottom,0px));width:128px;height:128px;border-radius:50%;border:1px solid var(--line-2);background:rgba(10,10,16,.35);pointer-events:auto;touch-action:none}
@@ -179,13 +188,21 @@ h3 small{font-family:var(--f-mono);font-size:12px;color:var(--muted);margin-left
 .tb{position:absolute;pointer-events:auto;touch-action:none;border-radius:50%;border:1px solid var(--line-2);background:rgba(10,10,16,.5);display:grid;place-items:center;font:700 11px var(--f-body);letter-spacing:.05em;text-transform:uppercase;padding:0}
 .tb svg{width:24px;height:24px}
 .tb b{position:absolute;top:-4px;right:-2px;font:600 11px var(--f-mono);color:var(--brass-2)}
-#tAtk{right:calc(24px + env(safe-area-inset-right,0px));bottom:calc(34px + env(safe-area-inset-bottom,0px));width:88px;height:88px;border-color:var(--brass)}
-#tDodge{right:calc(124px + env(safe-area-inset-right,0px));bottom:calc(24px + env(safe-area-inset-bottom,0px));width:58px;height:58px}
-#tUse{right:calc(30px + env(safe-area-inset-right,0px));bottom:calc(134px + env(safe-area-inset-bottom,0px));width:58px;height:58px}
-#tPot{right:calc(108px + env(safe-area-inset-right,0px));bottom:calc(98px + env(safe-area-inset-bottom,0px));width:52px;height:52px}
-#tScroll{right:calc(166px + env(safe-area-inset-right,0px));bottom:calc(88px + env(safe-area-inset-bottom,0px));width:46px;height:46px}
-#tBag{right:calc(94px + env(safe-area-inset-right,0px));bottom:calc(166px + env(safe-area-inset-bottom,0px));width:46px;height:46px}
-#tView{left:calc(160px + env(safe-area-inset-left,0px));bottom:calc(30px + env(safe-area-inset-bottom,0px));width:46px;height:46px;font-size:10px}
+/* combat cluster around Strike (bottom right); utility column above the stick (bottom left) */
+#tAtk{right:calc(22px + env(safe-area-inset-right,0px));bottom:calc(30px + env(safe-area-inset-bottom,0px));width:86px;height:86px;border-color:var(--brass)}
+#tDodge{right:calc(128px + env(safe-area-inset-right,0px));bottom:calc(22px + env(safe-area-inset-bottom,0px));width:56px;height:56px}
+#tS1{right:calc(132px + env(safe-area-inset-right,0px));bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+#tS2{right:calc(92px + env(safe-area-inset-right,0px));bottom:calc(152px + env(safe-area-inset-bottom,0px))}
+#tS3{right:calc(24px + env(safe-area-inset-right,0px));bottom:calc(128px + env(safe-area-inset-bottom,0px))}
+.tb.sk{width:52px;height:52px;border-color:color-mix(in srgb,var(--brass) 70%,var(--line-2))}
+.tb.sk::before{content:"";position:absolute;inset:0;border-radius:50%;background:conic-gradient(rgba(0,0,0,.65) calc(var(--cd,0)*360deg),transparent 0)}
+.tb.sk i{position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);font:600 10px var(--f-mono);font-style:normal;color:var(--fg);text-shadow:0 1px 2px #000;white-space:nowrap}
+.tb.locked{opacity:.4}
+#tUse{right:calc(24px + env(safe-area-inset-right,0px));bottom:calc(194px + env(safe-area-inset-bottom,0px));width:58px;height:58px}
+.util{position:absolute;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(168px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column-reverse;gap:8px;pointer-events:none}
+.util .tb{position:relative;width:46px;height:46px;font-size:10px}
+#tLock.on{border-color:#ff7a4a;background:rgba(255,122,74,.25)}
+@media (orientation:landscape) and (max-height:560px){.util{flex-direction:row;bottom:calc(14px + env(safe-area-inset-bottom,0px));left:calc(160px + env(safe-area-inset-left,0px))}}
 #tUse.ready{border-color:var(--brass-2);background:rgba(214,162,74,.3)}
 
 @media (max-width:860px){
@@ -194,6 +211,9 @@ h3 small{font-family:var(--f-mono);font-size:12px;color:var(--muted);margin-left
   .two{grid-template-columns:minmax(0,1fr)}
 }
 @media (max-width:640px){
+  #toasts .toast:nth-child(n+4){display:none}
+  #hQuest{font-size:11px}
+  .mini-btns .chip{padding:4px 6px;font-size:10px}
   #mini{width:104px;height:104px}
   .hud-tc{top:calc(166px + env(safe-area-inset-top,0px));width:calc(100% - 32px)}
   #hLoc{font-size:17px}

@@ -18,6 +18,10 @@ const IC = {
   scroll: '<path d="M7 4h10a2 2 0 0 1 2 2v12H9a2 2 0 0 1-2-2zM7 4a2 2 0 0 0-2 2v2h2m10 12a2 2 0 0 0 2-2v-2"/><path d="M10 9h6M10 12h6"/>',
   dodge: '<path d="M4 12h12m-4-5 5 5-5 5"/><path d="M4 7h4M4 17h4"/>',
   bag: '<path d="M5 9h14l-1 11H6z"/><path d="M9 9V7a3 3 0 0 1 6 0v2"/>',
+  whirl: '<path d="M12 4a8 8 0 1 1-7.4 5"/><path d="M12 8a4 4 0 1 1-3.7 2.5"/><path d="M3 5l1.6 4 4-1.4"/>',
+  dash: '<path d="M4 12h9m-3-5 5 5-5 5"/><path d="M15 6l5 6-5 6"/><path d="M3 7h3M3 17h3"/>',
+  nova: '<circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.8 2.8M16.2 16.2 19 19M5 19l2.8-2.8M16.2 7.8 19 5"/>',
+  lock: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
 };
 const svg = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">${IC[k] || ''}</svg>`;
 const itemIcon = (it) => svg(it.slot === 'weapon' ? it.kind : it.slot);
@@ -37,6 +41,7 @@ function banner(t, sub) { const b = $('#banner'); b.innerHTML = `${esc(t)}<small
 const SLOTS_BAR = [
   { id: 'atk', key: 'LMB', icon: () => (ST ? ST.wk : 'sword'), act: () => {}, title: 'Attack: hold the left mouse button or J' },
   { id: 'dodge', key: 'Space', icon: () => 'dodge', act: () => tryDodge(), title: 'Roll: Space, Shift or right mouse' },
+  ...SKILLS.map((k, i) => ({ id: 'sk' + i, key: k.key, icon: () => k.id, act: () => useSkill(i), title: `${k.n}: ${k.d} Unlocks at level ${k.lvl}. ${k.cd}s cooldown.`, skill: i })),
   { id: 'pot', key: 'Q', icon: () => 'potion', act: () => usePotion(false), title: 'Healing Draught' },
   { id: 'gpot', key: 'R', icon: () => 'gpotion', act: () => usePotion(true), title: 'Greater Draught' },
   { id: 'scroll', key: 'T', icon: () => 'scroll', act: () => useScroll(), title: 'Portal Scroll' },
@@ -44,7 +49,9 @@ const SLOTS_BAR = [
 ];
 function buildActionBar() {
   const bar = $('#actionBar');
-  bar.innerHTML = SLOTS_BAR.map((s) => `<button class="slot" type="button" data-slot="${s.id}" title="${esc(s.title)}"><span class="k">${s.key}</span><span class="ic">${svg(s.icon())}</span><span class="n"></span><span class="cd"></span></button>`).join('');
+  bar.innerHTML = SLOTS_BAR.map((s) => `<button class="slot${s.skill !== undefined ? ' skill' : ''}" type="button" data-slot="${s.id}" title="${esc(s.title)}"><span class="k">${s.key}</span><span class="ic">${svg(s.icon())}</span><span class="n"></span><span class="cd"></span></button>`).join('');
+  SKILLS.forEach((k, i) => { const b = $('#tS' + (i + 1)); if (b) b.innerHTML = svg(k.id) + '<i></i>'; });
+  const tl = $('#tLock'); if (tl) tl.innerHTML = svg('lock');
   bar.querySelectorAll('.slot').forEach((b) => b.addEventListener('click', () => { const s = SLOTS_BAR.find((q) => q.id === b.dataset.slot); s.act(); }));
 }
 let lastWk = '';
@@ -79,6 +86,19 @@ function hud() {
   set('atk', null, P.atkT > 0 ? P.atkT / (curWeapon().cd) : 0);
   set('dodge', null, P.dodgeCd > 0 ? P.dodgeCd / 0.85 : 0);
   set('pot', S.potions, 0); set('gpot', S.gpotions, 0); set('scroll', S.scrolls, 0); set('bag', null, 0);
+  SKILLS.forEach((k, i) => {
+    const locked = S.level < k.lvl, cd = skillCd[i] / k.cd;
+    set('sk' + i, locked ? 'Lv' + k.lvl : null, locked ? 0 : cd);
+    const b = document.querySelector(`[data-slot="sk${i}"]`); if (b) b.classList.toggle('locked', locked);
+    const t = $('#tS' + (i + 1));
+    if (t) { t.classList.toggle('locked', locked); t.style.setProperty('--cd', locked ? 0 : clamp(cd, 0, 1)); t.querySelector('i').textContent = locked ? 'Lv' + k.lvl : skillCd[i] > 0 ? Math.ceil(skillCd[i]) : ''; }
+  });
+  $('#tLock').classList.toggle('on', !!lockT);
+  // quest tracker
+  const q = S.quest, qe = $('#hQuest');
+  if (q) { qe.hidden = false; qe.textContent = q.done ? `Elder Maren: ${q.desc}, done. Return to town.` : `Elder Maren: ${q.desc}${q.n > 1 ? ` (${q.have}/${q.n})` : ''}`; qe.classList.toggle('done', q.done); }
+  else qe.hidden = true;
+  updElderLabel();
   $('#tPot').innerHTML = svg('potion') + `<b>${S.potions + S.gpotions}</b>`;
   $('#tScroll').innerHTML = svg('scroll') + `<b>${S.scrolls}</b>`;
   $('#tBag').innerHTML = svg('bag');
@@ -89,7 +109,9 @@ const Panel = { kind: null, tab: null, sel: null, forge: {}, elix: {} };
 function isPaused() { return !started || Panel.kind !== null || !$('#title').hidden || !$('#death').hidden; }
 function openPanel(kind, tab) {
   Panel.kind = kind; Panel.sel = null;
-  Panel.tab = tab || { bag: 'gear', home: 'home', smith: 'buy', trader: 'buy', alch: 'buy', delve: 'delve' }[kind];
+  Panel.tab = tab || { bag: 'gear', home: 'home', smith: 'buy', trader: 'buy', alch: 'buy', delve: 'delve', elder: 'tasks' }[kind];
+  if (kind === 'elder' && !S.quest && !S.questOffers) S.questOffers = makeQuestOffers();
+  Panel.abandon = false;
   if ((kind === 'smith') && !S.shop) restock();
   $('#panel').hidden = false; mouseDown = false; touchAtk = false;
   renderPanel();
@@ -207,6 +229,12 @@ function renderPanel() {
       else body = purseRow() + `<div class="inv"><section><h3>Bag<small>${S.inv.length}/${BAG_CAP}</small></h3>${cellsHtml(S.inv, 'inv', BAG_CAP)}</section><section><h3>Stash<small>${S.stash.length}/${stashCap()}</small></h3>${cellsHtml(S.stash, 'stash', stashCap())}<p class="hint">A bigger house holds more.</p></section><section class="detail">${detailFor(it, 'stash')}</section></div>`;
       break;
     }
+    case 'elder': {
+      title = 'Elder Maren'; sub = `Keeper of the well · tasks done: ${S.questsDone || 0}`;
+      tabs = [['tasks', 'Tasks'], ['skills', 'Skills']];
+      body = p.tab === 'skills' ? skillsHtml() : elderHtml();
+      break;
+    }
     case 'delve': {
       title = 'The Delve'; sub = `Deepest reached: ${S.best || 'none yet'} · Bosses slain: ${S.bossKills}`;
       tabs = [['delve', 'Descend']];
@@ -217,6 +245,22 @@ function renderPanel() {
   $('#pTitle').innerHTML = `${esc(title)}<small>${esc(sub)}</small>`;
   $('#pTabs').innerHTML = tabs.length > 1 ? tabs.map(([k, n]) => `<button class="tab${p.tab === k ? ' on' : ''}" type="button" data-act="tab" data-tab="${k}">${n}</button>`).join('') : '';
   $('#pBody').innerHTML = body;
+}
+function rewardChips(q) { return `<div class="costs"><span class="cost">${fmt(q.gold)} gold</span><span class="cost">${q.ess} Arcane Essence</span><span class="cost">Experience</span>${q.item ? '<span class="cost r2">A Rare or better item</span>' : ''}</div>`; }
+function elderHtml() {
+  const q = S.quest;
+  if (q) {
+    const prog = q.n > 1 ? `${q.have} of ${q.n}` : q.done ? 'Done' : 'Not yet';
+    return `<p class="hint" style="margin:0 0 12px">${q.done ? '"Well done. The village owes you."' : '"The deep does not wait. Neither should you."'}</p>
+      <div class="rows"><div class="row"><div><div class="t">${esc(q.desc)}<small>${prog}</small></div><div class="d">Reward</div>${rewardChips(q)}</div>
+      ${q.done ? '<button class="btn" type="button" data-act="qClaim">Claim reward</button>' : Panel.abandon ? '<div class="acts"><button class="btn" type="button" data-act="qAbandonYes">Give up this task</button><button class="btn ghost" type="button" data-act="qAbandonNo">Keep it</button></div>' : '<button class="btn ghost" type="button" data-act="qAbandon">Give up…</button>'}</div></div>`;
+  }
+  const offers = S.questOffers || [];
+  return `<p class="hint" style="margin:0 0 12px">"Three things need doing below. Take one. I will have new work each time you come home."</p>
+    <div class="rows">${offers.map((o, i) => `<div class="row"><div><div class="t">${esc(o.desc)}</div><div class="d">Reward</div>${rewardChips(o)}</div><button class="btn" type="button" data-act="qTake" data-i="${i}">Take this task</button></div>`).join('')}</div>`;
+}
+function skillsHtml() {
+  return `<p class="hint" style="margin:0 0 12px">Skills unlock as you level. Keys 1, 2 and 3, or the skill buttons on a touch screen.</p><div class="rows">${SKILLS.map((k) => `<div class="row${S.level < k.lvl ? ' locked' : ''}"><div><div class="t">${k.n}<small>${S.level < k.lvl ? 'unlocks at level ' + k.lvl : 'key ' + k.key + ' · ' + k.cd + 's cooldown'}</small></div><div class="d">${k.d}</div></div><span class="sk-ic">${svg(k.id)}</span></div>`).join('')}</div>`;
 }
 function sellHtml(it) {
   const junk = S.inv.filter((q) => q.rarity <= 1);
@@ -322,6 +366,11 @@ function doAct(d) {
     case 'upItem': if (it) { const c = upCost(it); if (it.up < benchCap() && hasCost(c)) { payCost(c); it.up++; it.value = Math.round(it.value * 1.15); toast(`${it.name} is now +${it.up}`, `var(--r${it.rarity})`); afterGear(); sfx('craft'); } } break;
     case 'reroll': if (it && it.rarity) { const c = rerollCost(it); if (hasCost(c)) { payCost(c); rollAffixes(it); if (it.rarity < 4) nameItem(it); toast(`New affixes on ${it.name}`, `var(--r${it.rarity})`); afterGear(); sfx('craft'); } } break;
     case 'elix': Panel.elix[d.k] = !Panel.elix[d.k]; break;
+    case 'qTake': if (!S.quest && S.questOffers) { S.quest = S.questOffers[+d.i]; S.questOffers = null; toast(`New task: ${S.quest.desc}`, 'var(--brass-2)'); sfx('buy'); } break;
+    case 'qClaim': claimQuest(); break;
+    case 'qAbandon': Panel.abandon = true; break;
+    case 'qAbandonNo': Panel.abandon = false; break;
+    case 'qAbandonYes': S.quest = null; Panel.abandon = false; S.questOffers = makeQuestOffers(); break;
     case 'delve': { const el = Object.keys(Panel.elix).filter((k) => Panel.elix[k]); Panel.elix = {}; startDelve(+d.d, el); return; }
   }
   renderPanel(); hud(); save();

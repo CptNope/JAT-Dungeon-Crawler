@@ -30,9 +30,12 @@ function loadTown() {
   addInteract({ x: 32.5, z: 10.6, r: 1.7, label: 'Bramble & Vial', ly: 4.6, verb: 'Browse the apothecary', act: () => openPanel('alch') });
   addInteract({ x: 34.5, z: 20.4, r: 1.7, label: 'Copper Lantern', ly: 4.6, verb: 'Trade goods', act: () => openPanel('trader') });
   addInteract({ x: 22, z: 31.4, r: 2.2, label: 'The Delve', ly: 5.2, verb: 'Descend', act: () => openPanel('delve') });
+  elderLabel = addInteract({ x: 24.5, z: 18.2, r: 1.8, label: 'Elder Maren', ly: 2.4, verb: 'Talk to Elder Maren', act: () => openPanel('elder') });
   P.x = LV.start.x; P.z = LV.start.z; P.dead = false; P.kx = P.kz = 0;
   ST = calcStats(); P.hp = ST.maxHp;
   placePlayerMesh(); resetMini(); snapCamera();
+  releaseLock(); setMusic('town');
+  P.u.uRim.value.setRGB(0.05, 0.06, 0.08);
   warmLevel();
 }
 // threejs-performance, "Shader compile stalls": build every program the new level needs
@@ -90,6 +93,8 @@ function populate() {
     }
     const er = L.exitRoom;
     addStairs(er.x + er.w / 2, er.y + er.h / 2);
+    placeSpecialRooms(vault);
+    placeTraps();
   }
   if (d % 5 === 1) addPortalHome(L.start.x + 2.2, L.start.z);
   // starting room gets a herb or ore sometimes
@@ -98,20 +103,23 @@ function populate() {
 function loadDungeon(depth) {
   clearWorld(); spinners = [];
   bossRef = null; $('#bossBar').hidden = true;
-  LV = genDungeon(depth); RUN.depth = depth; RUN.phoenixUsed = false;
+  LV = genDungeon(depth); RUN.depth = depth; RUN.phoenixUsed = false; RUN.shrine = null; RUN.ambush = null;
+  releaseLock();
   S.best = Math.max(S.best, depth);
   const B = biomeOf(depth);
   scene.background = new THREE.Color(B.fog); scene.fog = new THREE.Fog(B.fog, 17, 36);
   hemi.intensity = 2.1; hemi.color.setHex(B.amb); hemi.groundColor.setHex(0x14141c);
   torch.color.setHex(B.torch); torch.intensity = 30; torch.distance = 22;
   if (sky.parent) scene.remove(sky);
-  sun.castShadow = false; torch.castShadow = Q.torchShadow;
+  sun.castShadow = false; torch.castShadow = Q.torchShadow && SET.cam !== 'top';
   hemi.intensity = 2.4; sun.intensity = 0.7; sun.color.setHex(B.amb);
   setAmbient(B.id);
   Post.grade([0.88, 0.94, 1.12], [1.08, 1.0, 0.9], 1.06, 0.5, 1.0, 0.9);
   buildDungeonVisuals();
   P.x = LV.start.x; P.z = LV.start.z; P.kx = P.kz = 0;
   populate();
+  lightForView(); setMusic('dng:' + B.id); questEvent('depth', depth);
+  P.u.uRim.value.set(B.torch).multiplyScalar(0.12);
   const before = ST ? ST.maxHp : 0;
   ST = calcStats();
   if (RUN.fresh) { P.hp = ST.maxHp; RUN.fresh = false; } else P.hp = Math.min(ST.maxHp, P.hp + (ST.maxHp - before > 0 ? ST.maxHp - before : 0));
@@ -121,7 +129,7 @@ function loadDungeon(depth) {
   banner(`Depth ${depth}`, B.name + (cycleOf(depth) ? ` · Cycle ${cycleOf(depth) + 1}` : ''));
   save();
 }
-function addChest(x, z) {
+function addChest(x, z, rich) {
   const g = new THREE.Group();
   const W = worldMats();
   g.add(mesh(G.box, W.door, 0.95, 0.5, 0.62, 0, 0.25, 0));
@@ -134,12 +142,14 @@ function addChest(x, z) {
   g.add(lid);
   g.traverse((o) => { o.castShadow = true; });
   g.position.set(x, 0, z); g.rotation.y = rand(-0.4, 0.4); world.add(g);
-  addInteract({ x, z, r: 1.4, kind: 'chest', verb: 'Open chest', act(o) {
+  if (rich) { g.scale.setScalar(1.25); g.add(makeFlames([{ x: -0.55, y: 0.6, z: 0.3 }, { x: 0.55, y: 0.6, z: 0.3 }])); }
+  addInteract({ x, z, r: 1.4, kind: 'chest', verb: rich ? 'Open the altar hoard' : 'Open chest', act(o) {
     lid.rotation.x = -1.9; o.dead = true; sfx('chest');
     const d = RUN.depth, mf = ST.mf;
     spawnDrop(x, z, { gold: Math.round(randi(8, 18) * Math.pow(1.09, d) * (1 + ST.gold / 100)) });
     const n = randi(1, 2);
-    for (let k = 0; k < n; k++) spawnDrop(x, z, { item: genItem(d, { mf: mf + 30, min: chance(0.35) ? 1 : 0 }) });
+    for (let k = 0; k < n + (rich ? 1 : 0); k++) spawnDrop(x, z, { item: genItem(d + (rich ? 1 : 0), { mf: mf + (rich ? 120 : 30), min: rich ? 2 : chance(0.35) ? 1 : 0 }) });
+    if (rich) { spawnDrop(x, z, { gold: Math.round(randi(30, 50) * Math.pow(1.09, d)) }); spawnDrop(x, z, { mat: 'essence', n: randi(2, 4) }); }
     spawnDrop(x, z, { mat: pick(biomeOf(d).mats), n: randi(1, 3) });
     if (chance(0.4)) spawnDrop(x, z, { mat: pick(['iron', 'herb', 'essence']), n: randi(1, 2) });
     if (chance(0.3)) spawnDrop(x, z, { potion: 1 });
@@ -175,11 +185,12 @@ function addStairs(x, z) {
 }
 function addPortalHome(x, z) {
   if (!walkable(x, z)) { x = LV.start.x; z = LV.start.z + 1.5; }
-  const g = new THREE.Group();
-  const t = mesh(G.fullTorus, mat(0x6ab0ff, 3.2), 0.9, 1.2, 0.9, 0, 1.3, 0); g.add(t);
-  const disc = new THREE.Mesh(G.plane, new THREE.MeshBasicMaterial({ color: new THREE.Color(0x3a6aff).multiplyScalar(1.6), transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
-  disc.scale.set(1.7, 2.3, 1); disc.position.y = 1.3; g.add(disc); levelDisp.push(disc.material);
-  g.position.set(x, 0, z); g.userData.spin = 2; world.add(g); spinners.push(g);
+  const g = new THREE.Group(), W = worldMats();
+  g.add(mesh(G.fullTorus, mat(0x6ab0ff, 3.4), 0.92, 1.25, 0.92, 0, 1.32, 0));
+  const disc = new THREE.Mesh(G_PORTAL, PORTAL_MAT); disc.scale.set(0.88, 1.2, 1); disc.position.y = 1.32; g.add(disc);
+  for (const s of [-1, 1]) g.add(mesh(G.box, W.stone, 0.34, 0.5, 0.34, s * 0.95, 0.25, 0));
+  g.add(makeFlames([{ x: -0.95, y: 0.55, z: 0 }, { x: 0.95, y: 0.55, z: 0 }], portalFlameMat()));
+  g.position.set(x, 0, z); world.add(g); facers.push(g);
   addInteract({ x, z, r: 1.6, kind: 'portal', label: 'Way home', ly: 3, cls: '', verb: 'Return to Hearthdeep', act: () => returnToTown(false) });
 }
 function nextFloor() {
@@ -188,6 +199,7 @@ function nextFloor() {
   loadDungeon(d);
 }
 function bossDefeated(e) {
+  setMusic('dng:' + biomeOf(RUN.depth).id); questEvent('boss', RUN.depth);
   S.bossKills++; S.slain.push({ n: e.name, c: e.color });
   const wp = RUN.depth + 1;
   if (!S.waypoints.includes(wp)) S.waypoints.push(wp);
@@ -215,7 +227,7 @@ function returnToTown(died) {
   const gl = S.home.garden;
   let grew = '';
   if (gl) { addMat('herb', [0, 2, 4, 7][gl]); if (gl >= 2) addMat('essence', gl - 1); if (gl >= 3) addMat('spore', 2); grew = 'Your garden yielded fresh Bitterleaf.'; }
-  S.shop = null;
+  S.shop = null; S.questOffers = null;
   RUN = null;
   loadTown();
   if (!died && summary) toast(summary, 'var(--brass-2)', true);
@@ -227,6 +239,7 @@ function die() {
   const lost = Math.floor(S.gold * 0.25);
   S.gold -= lost; S.deaths++;
   P.mesh.rotation.z = Math.PI / 2; P.mesh.position.y = 0.3; P.mesh.visible = true; viewmodel.g.visible = false;
+  releaseLock(); setMusic(null); shake(0.6);
   $('#deathText').textContent = `${biomeOf(RUN.depth).name}, depth ${RUN.depth}. You dropped ${fmt(lost)} gold in the dark, but your gear and materials came home with you.`;
   setTimeout(() => { $('#death').hidden = false; $('#btnRevive').focus(); }, 900);
   sfx('die');
@@ -280,7 +293,7 @@ function aimPoint() {
 // ================= camera modes =================
 // top: angled overhead, mouse aims on the ground. third: over-the-shoulder chase camera with wall collision.
 // first: eye-level with a held weapon. In third and first, mouse (pointer lock) or a touch drag turns the view.
-const CAM = { yaw: Math.PI, pitch: 0.28, dist: 4.6, curDist: 4.6, bob: 0 };
+const CAM = { yaw: Math.PI, pitch: 0.28, dist: 4.6, curDist: 4.6, bob: 0, tight: 0 };
 const CAM_NAMES = { top: 'Overhead', third: 'Third person', first: 'First person' };
 function setCamMode(m) {
   if (!CAM_NAMES[m]) m = 'top';
@@ -289,8 +302,8 @@ function setCamMode(m) {
   if (m === 'top' && document.pointerLockElement) document.exitPointerLock();
   updateFov();
   $('#crosshair').hidden = m === 'top';
-  $('#btnView').textContent = 'View: ' + CAM_NAMES[m];
-  if (LV && LV.type === 'dungeon') layoutWalls();
+  $('#btnView').textContent = window.innerWidth < 640 ? 'View' : 'View: ' + CAM_NAMES[m];
+  if (LV && LV.type === 'dungeon') { layoutWalls(); lightForView(); }
   if (LV && LV.type === 'town') scene.fog = new THREE.Fog(0xe2c8a0, m === 'top' ? 40 : 30, m === 'top' ? 95 : 150);
   snapCamera();
 }
@@ -305,8 +318,10 @@ function camBlocked(x, y, z) {
   if (y > (LV.type === 'dungeon' ? wallHeight() : 7)) return false;
   return !walkable(x, z);
 }
+const camProbe = { x: 0, z: 0, r: 0.3 };
 function placeCamera(dt, snap) {
   const mode = SET.cam;
+  camera.position.sub(shakeOff); shakeOff.set(0, 0, 0);
   if (mode === 'top') {
     const k = snap ? 1 : 1 - Math.exp(-dt * 7);
     camera.position.x = lerp(camera.position.x, P.x + CAM_OFF.x * camZoom, k);
@@ -315,22 +330,54 @@ function placeCamera(dt, snap) {
     camera.lookAt(camera.position.x - CAM_OFF.x * camZoom, 0.6, camera.position.z - CAM_OFF.z * camZoom);
     return;
   }
+  if (lockT && lockT.mesh) { // lock-on swings the view onto the target and keeps it framed
+    const k = snap ? 1 : 1 - Math.exp(-dt * 8), dist = Math.hypot(lockT.x - P.x, lockT.z - P.z);
+    CAM.yaw += angDiff(Math.atan2(lockT.x - P.x, lockT.z - P.z), CAM.yaw) * k;
+    const tp = mode === 'first' ? Math.atan2(1.58 - lockT.h * lockT.scale * 0.6, Math.max(0.5, dist)) : clamp(0.42 - dist * 0.02, 0.18, 0.42);
+    CAM.pitch = lerp(CAM.pitch, tp, k * 0.6);
+  }
   _ce.set(-CAM.pitch, CAM.yaw + Math.PI, 0); camera.quaternion.setFromEuler(_ce);
   if (mode === 'first') {
     CAM.bob += dt * (Math.hypot(P.mx || 0, P.mz || 0) > 0.1 ? 11 : 0);
     camera.position.set(P.x, 1.58 + Math.sin(CAM.bob) * 0.035, P.z);
     return;
   }
-  // third person: pull in when a wall sits between the shoulder and the camera
-  const hx = P.x, hy = 1.65, hz = P.z;
+  // third person: follow a little behind the delver, pull in when a wall sits between shoulder and camera
+  const fk = snap ? 1 : 1 - Math.exp(-dt * 14);
+  CAM.fx = snap || CAM.fx === undefined ? P.x : lerp(CAM.fx, P.x, fk); CAM.fz = snap || CAM.fz === undefined ? P.z : lerp(CAM.fz, P.z, fk);
+  const hx = CAM.fx, hy = 1.65, hz = CAM.fz;
   _cv.set(0.55, 0.15, 1).applyQuaternion(camera.quaternion);
   let d = CAM.dist;
   for (let t = 0.3; t <= CAM.dist; t += 0.2) { if (camBlocked(hx + _cv.x * t, hy + _cv.y * t, hz + _cv.z * t)) { d = Math.max(0.6, t - 0.35); break; } }
   CAM.curDist = snap ? d : (d < CAM.curDist ? d : lerp(CAM.curDist, d, 1 - Math.exp(-dt * 4)));
-  camera.position.set(hx + _cv.x * CAM.curDist, Math.max(0.4, hy + _cv.y * CAM.curDist), hz + _cv.z * CAM.curDist);
+  // when a wall shoves the lens in, rise up over the shoulder so the delver doesn't fill the frame
+  const tight = clamp(1 - (CAM.curDist - 0.6) / 2.2, 0, 1);
+  camera.position.set(hx + _cv.x * CAM.curDist, Math.max(0.4, hy + _cv.y * CAM.curDist + tight * 0.75), hz + _cv.z * CAM.curDist);
+  CAM.tight = tight;
+  if (camera.position.y < (LV.type === 'dungeon' ? wallHeight() : 7)) { // keep the lens out of the stonework
+    camProbe.x = camera.position.x; camProbe.z = camera.position.z; collide(camProbe);
+    camera.position.x = camProbe.x; camera.position.z = camProbe.z;
+  }
 }
 function snapCamera() { placeCamera(0, true); }
-function updCamera(dt) { placeCamera(dt, false); }
+function updCamera(dt) {
+  placeCamera(dt, false);
+  const want = SET.cam !== 'top' && (P.dodgeT > 0 || P.dashT > 0) ? 8 : 0;
+  const nk = lerp(fovKick, want, 1 - Math.exp(-dt * (want ? 18 : 6)));
+  if (Math.abs(nk - fovKick) > 0.01 || (fovKick && !want && nk < 0.02)) { fovKick = nk < 0.02 && !want ? 0 : nk; camera.fov = camBaseFov + fovKick; camera.updateProjectionMatrix(); }
+  applyShake(dt);
+}
+// lighting follows the view: overhead needs a high, wide lantern; close views a low, near one
+function lightForView() {
+  if (!LV || LV.type !== 'dungeon') return;
+  const top = SET.cam === 'top';
+  torch.intensity = top ? 85 : 30; torch.distance = top ? 32 : 22;
+  hemi.intensity = top ? 3.0 : 2.4;
+  // overhead, the lantern is high and its shadows barely show, while its six-sided shadow pass is the costliest
+  // thing in the frame; contact shadows carry the overhead look instead. Toggling it rebuilds shaders, so warm them.
+  const cast = Q.torchShadow && !top;
+  if (torch.castShadow !== cast) { torch.castShadow = cast; warmLevel(); }
+}
 function updPlayer(dt) {
   if (P.dead) return;
   let ix = 0, iz = 0;
@@ -343,6 +390,8 @@ function updPlayer(dt) {
   if (SET.cam !== 'top') { // camera-relative: up on the stick or W walks where the camera looks
     const fx = Math.sin(CAM.yaw), fz = Math.cos(CAM.yaw), rx = -Math.cos(CAM.yaw), rz = Math.sin(CAM.yaw);
     const nx = fx * -iz + rx * ix, nz = fz * -iz + rz * ix; ix = nx; iz = nz;
+    // on touch, the chase camera drifts round behind you as you run (unless you are steering it or locked on)
+    if (touchMode && SET.cam === 'third' && !lockT && lookTouch === null && il > 0.25 && stick.y < 0.35) CAM.yaw += angDiff(Math.atan2(ix, iz), CAM.yaw) * Math.min(1, dt * 1.4);
   }
   P.mx = ix; P.mz = iz;
   P.atkT -= dt; P.swingT -= dt; P.dodgeCd -= dt; P.iframes -= dt; potCd -= dt;
@@ -351,17 +400,23 @@ function updPlayer(dt) {
   if (P.burnT > 0) { P.burnT -= dt; P.hp -= P.burnD * dt; if (P.hp <= 0 && LV.type === 'dungeon') { P.hp = 0.01; hurtPlayer(9999, null); } }
   const spd = 5.3 * (1 + ST.move / 100) * (P.chillT > 0 ? 0.6 : 1);
   let vx = ix * spd, vz = iz * spd;
-  if (P.dodgeT > 0) {
+  if (P.dashT > 0) { P.dashT -= dt; vx = Math.sin(P.dashDir) * 30; vz = Math.cos(P.dashDir) * 30; dashHits(); }
+  else if (P.dodgeT > 0) {
     P.dodgeT -= dt; vx = Math.sin(P.dodgeDir) * 15; vz = Math.cos(P.dodgeDir) * 15;
     if (ST.powers.ghost && LV.type === 'dungeon') { P.ghostT -= dt; if (P.ghostT <= 0) { P.ghostT = 0.07; telegraph(P.x, P.z, 1.3, 0.35, ST.dmg * 0.45, { player: true, col: 0x9fd4ff }); } }
   }
   P.kx = (P.kx || 0) * Math.pow(0.002, dt); P.kz = (P.kz || 0) * Math.pow(0.002, dt);
   P.x += (vx + P.kx) * dt; P.z += (vz + P.kz) * dt;
   collide(P);
+  if (P.pend) { P.pend.t -= dt; if (P.pend.t <= 0) { const f = P.pend.fin; P.pend = null; resolveMelee(f); } }
+  updSkills(dt);
   // aim
   const wantsAtk = mouseDown || touchAtk || keys.KeyJ;
-  const moving = il > 0.1 || P.dodgeT > 0;
-  if (SET.cam === 'top') {
+  const moving = il > 0.1 || P.dodgeT > 0 || P.dashT > 0;
+  const la = lockAngle();
+  if (la !== null && P.spinT <= 0) P.face = SET.cam === 'top' ? la : P.face + angDiff(la, P.face) * Math.min(1, dt * 16);
+  else if (P.spinT > 0) { /* spinning */ }
+  else if (SET.cam === 'top') {
     if (touchMode) {
       let best = null, bd = 9;
       if (LV.type === 'dungeon') for (const e of enemies) { if (e.dead || !e.awake) continue; const d = Math.hypot(e.x - P.x, e.z - P.z); if (d < bd) { bd = d; best = e; } }
@@ -383,35 +438,49 @@ function updPlayer(dt) {
   else P.hp = ST.maxHp;
   animateHero(dt, moving);
   // the lantern sits above and behind the delver so it lights the way ahead without glaring off their own armour
-  const bk = SET.cam === 'first' ? 0.9 : 0.5, la = SET.cam === 'top' ? Math.PI : P.face;
-  torch.position.set(P.x - Math.sin(la) * bk, SET.cam === 'third' ? 3.0 : 2.6, P.z - Math.cos(la) * bk);
+  const bk = SET.cam === 'first' ? 0.9 : 0.5, ta = SET.cam === 'top' ? Math.PI : P.face;
+  torch.position.set(P.x - Math.sin(ta) * bk, SET.cam === 'top' ? 5.2 : SET.cam === 'third' ? 3.0 : 2.6, P.z - Math.cos(ta) * bk);
   if (LV.type === 'dungeon') { sun.position.set(P.x - 6, 20, P.z + 8); sun.target.position.set(P.x, 0, P.z); }
 }
 function animateHero(dt, moving) {
   const w = curWeapon(), u = P.u;
   u.uWalk.value += dt * (moving ? (P.dodgeT > 0 ? 18 : 10.5) : 0);
   u.uAmp.value = lerp(u.uAmp.value, moving ? 0.7 : 0, Math.min(1, dt * 10));
-  let armR = 0, armL = 0;
-  if (P.swingT > 0 && !w.ranged) { const t = 1 - P.swingT / P.swingDur; armR = lerp(-2.7, -0.15, 1 - Math.pow(1 - t, 3)); }
-  else if (w.ranged && (P.atkT > -0.25)) { armR = -1.5; if (ST.wk === 'bow') armL = -1.45; }
-  u.uArmR.value = armR; u.uArmL.value = armL;
-  P.shoulder.rotation.x = armAngle(u, true);
+  let armR = null, armL = 0, armY = 0, handX = 0.5, twist = 0;
+  if (P.spinT > 0) { armR = -1.5; armY = 1.45; handX = 1.4; }
+  else if (P.dashT > 0) { armR = -1.35; armY = -0.9; handX = 1.4; }
+  else if (P.swingT > 0 && !w.ranged) {
+    const t = 1 - P.swingT / P.swingDur, e = 1 - Math.pow(1 - t, 3), dir = P.combo % 2 ? -1 : 1;
+    if (ST.wk === 'hammer' || (P.fin && ST.wk !== 'spear')) { armR = lerp(-3.0, -0.55, e); handX = 1.15; } // overhead smash
+    else if (ST.wk === 'spear') { armR = lerp(-1.15, -1.55, e); handX = 1.45; } // thrust
+    else { const half = Math.min(1.5, w.arc / 2 + 0.3); armR = -1.45; armY = dir * lerp(half, -half, e); handX = 1.38; twist = armY * 0.3; }
+  } else if (w.ranged && (P.atkT > -0.25)) { armR = -1.5; if (ST.wk === 'bow') armL = -1.45; }
+  // between attacks the arm eases back to rest instead of snapping
+  const k = Math.min(1, dt * 16);
+  P.aR = armR !== null ? armR : lerp(P.aR || 0, 0, k); P.aY = armR !== null ? armY : lerp(P.aY || 0, 0, k); P.hX = armR !== null ? handX : lerp(P.hX || 0.5, 0.5, k);
+  u.uArmR.value = Math.abs(P.aR) < 0.01 ? 0 : P.aR; u.uArmL.value = armL; u.uArmRY.value = P.aY;
+  P.shoulder.rotation.x = armAngle(u, true); P.shoulder.rotation.y = P.aY; P.hand.rotation.x = P.hX;
   P.mesh.position.set(P.x, moving ? Math.abs(Math.sin(u.uWalk.value)) * 0.05 : 0, P.z);
-  P.mesh.rotation.y = P.face; P.mesh.rotation.z = 0;
+  if (P.spinT > 0) P.spinRot = (P.spinRot || 0) + dt * 17; else P.spinRot = 0;
+  P.mesh.rotation.y = P.face + twist + P.spinRot; P.mesh.rotation.z = 0;
   const blink = P.iframes > 0 && P.dodgeT <= 0 && Math.floor(P.iframes * 20) % 2 === 0;
-  P.mesh.visible = SET.cam !== 'first' && !blink;
+  P.mesh.visible = SET.cam !== 'first' && !blink && !(SET.cam === 'third' && CAM.tight > 0.85);
   // first-person weapon
   const vm = viewmodel;
   vm.g.visible = SET.cam === 'first' && !P.dead;
   if (vm.g.visible) {
     if (vm.kind !== ST.wk) { while (vm.holder.children.length) vm.holder.remove(vm.holder.children[0]); const wm = weaponMesh(ST.wk); wm.traverse((o) => { o.castShadow = false; }); vm.holder.add(wm); vm.kind = ST.wk; }
     const sway = Math.sin(u.uWalk.value) * u.uAmp.value;
-    let rx = w.ranged ? 0.12 : 0.95, rz = w.ranged ? 0 : -0.25, py = 0;
-    if (P.swingT > 0 && !w.ranged) { const t = 1 - P.swingT / P.swingDur; const e = 1 - Math.pow(1 - t, 3); rx = lerp(1.7, -0.35, e); rz = lerp(-0.6, 0.5, e); }
-    else if (w.ranged && P.atkT > 0) { py = 0.05 * (P.atkT / w.cd); }
-    vm.g.position.set(0.34 + sway * 0.02, -0.36 + Math.abs(sway) * 0.02 - py, -0.6);
+    let rx = w.ranged ? 0.12 : 0.95, ry = Math.PI, rz = w.ranged ? 0 : -0.25, py = 0, px = 0;
+    if ((P.swingT > 0 && !w.ranged) || P.spinT > 0) {
+      const t = P.spinT > 0 ? (elapsed * 3) % 1 : 1 - P.swingT / P.swingDur, e = 1 - Math.pow(1 - t, 3), dir = P.combo % 2 ? -1 : 1;
+      if (ST.wk === 'hammer' || P.fin) { rx = lerp(1.9, -0.4, e); rz = 0; } // overhead
+      else if (ST.wk === 'spear') { rx = 0.1; px = 0; py = -0.08 * Math.sin(e * Math.PI); }
+      else { rx = 0.28; ry = Math.PI + dir * lerp(-1.0, 1.0, e); rz = dir * 0.5; px = dir * lerp(0.1, -0.5, e); } // sweep across the view
+    } else if (w.ranged && P.atkT > 0) { py = 0.05 * (P.atkT / w.cd); }
+    vm.g.position.set(0.34 + px + sway * 0.02, -0.36 + Math.abs(sway) * 0.02 - py, -0.6);
     vm.g.rotation.set(0, 0, 0);
-    vm.holder.rotation.set(rx, Math.PI, rz);
+    vm.holder.rotation.set(rx, ry, rz);
     vm.g.children[0].rotation.set(rx * 0.25 - 0.25, 0, 0);
   }
 }
@@ -480,47 +549,6 @@ function drawMini() {
   }
   mctx.save(); mctx.translate(ox + P.x * sc, oz + P.z * sc); mctx.rotate(-P.face + Math.PI);
   mctx.fillStyle = '#f2c56b'; mctx.beginPath(); mctx.moveTo(0, -5); mctx.lineTo(4, 4); mctx.lineTo(-4, 4); mctx.closePath(); mctx.fill(); mctx.restore();
-}
-
-// ================= audio =================
-let AC = null, muted = true, lastHit = 0;
-function sfx(t) {
-  if (muted) return;
-  try {
-    if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
-    const now = AC.currentTime;
-    const tone = (f1, f2, dur, type, vol, delay) => {
-      const o = AC.createOscillator(), g = AC.createGain(); o.type = type || 'square';
-      const t0 = now + (delay || 0);
-      o.frequency.setValueAtTime(f1, t0); o.frequency.exponentialRampToValueAtTime(Math.max(20, f2), t0 + dur);
-      g.gain.setValueAtTime(vol || 0.05, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-      o.connect(g).connect(AC.destination); o.start(t0); o.stop(t0 + dur + 0.02);
-    };
-    const noise = (dur, vol, f) => {
-      const b = AC.createBuffer(1, Math.floor(AC.sampleRate * dur), AC.sampleRate), d = b.getChannelData(0);
-      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
-      const s = AC.createBufferSource(); s.buffer = b; const fl = AC.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = f || 1800;
-      const g = AC.createGain(); g.gain.value = vol || 0.08; s.connect(fl).connect(g).connect(AC.destination); s.start();
-    };
-    switch (t) {
-      case 'hit': if (now - lastHit < 0.04) return; lastHit = now; noise(0.07, 0.09, 1400); tone(180, 90, 0.06, 'square', 0.03); break;
-      case 'swing': noise(0.09, 0.05, 3200); break;
-      case 'shoot': tone(700, 300, 0.08, 'triangle', 0.04); break;
-      case 'hurt': tone(220, 80, 0.18, 'sawtooth', 0.06); break;
-      case 'coin': tone(1200, 1800, 0.07, 'square', 0.025); break;
-      case 'rare': tone(660, 660, 0.12, 'triangle', 0.05); tone(990, 990, 0.2, 'triangle', 0.05, 0.1); break;
-      case 'level': [523, 659, 784, 1046].forEach((f, i) => tone(f, f, 0.18, 'triangle', 0.05, i * 0.08)); break;
-      case 'dodge': noise(0.12, 0.05, 900); break;
-      case 'drink': tone(300, 600, 0.2, 'sine', 0.06); break;
-      case 'boom': noise(0.35, 0.18, 600); tone(90, 40, 0.3, 'sawtooth', 0.06); break;
-      case 'boss': tone(110, 55, 0.9, 'sawtooth', 0.07); tone(165, 82, 0.9, 'sawtooth', 0.04); break;
-      case 'chest': tone(400, 800, 0.15, 'triangle', 0.05); break;
-      case 'portal': tone(300, 900, 0.4, 'sine', 0.05); break;
-      case 'die': tone(300, 50, 1.2, 'sawtooth', 0.07); break;
-      case 'buy': tone(900, 1300, 0.09, 'square', 0.03); tone(1300, 1300, 0.09, 'square', 0.03, 0.08); break;
-      case 'craft': noise(0.1, 0.08, 2400); tone(500, 500, 0.1, 'square', 0.03, 0.06); break;
-    }
-  } catch (err) { /* audio unavailable */ }
 }
 
 // ================= persistence =================

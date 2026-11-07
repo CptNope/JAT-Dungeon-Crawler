@@ -1,6 +1,6 @@
 // ================= settings =================
 const SET_KEY = 'hearthdeep.settings.v1';
-const SET = (() => { const d = { cam: 'top', q: 'high', sens: 1 }; try { return Object.assign(d, JSON.parse(localStorage.getItem(SET_KEY) || '{}')); } catch (err) { return d; } })();
+const SET = (() => { const d = { cam: 'top', q: 'high', sens: 1, music: true, shake: true }; try { return Object.assign(d, JSON.parse(localStorage.getItem(SET_KEY) || '{}')); } catch (err) { return d; } })();
 function saveSettings() { try { localStorage.setItem(SET_KEY, JSON.stringify(SET)); } catch (err) { /* storage unavailable */ } }
 
 // ================= renderer, scene, camera =================
@@ -141,9 +141,11 @@ function resize() {
   updateFov();
   Post.setup();
 }
+let camBaseFov = 45, fovKick = 0;
 function updateFov() {
   const portrait = window.innerWidth < window.innerHeight;
-  camera.fov = SET.cam === 'first' ? (portrait ? 80 : 72) : SET.cam === 'third' ? (portrait ? 72 : 62) : (portrait ? 60 : 45);
+  camBaseFov = SET.cam === 'first' ? (portrait ? 80 : 72) : SET.cam === 'third' ? (portrait ? 72 : 62) : (portrait ? 60 : 45);
+  camera.fov = camBaseFov + fovKick;
   camera.near = SET.cam === 'first' ? 0.05 : 0.1;
   camera.updateProjectionMatrix();
 }
@@ -407,14 +409,20 @@ function worldMat(tex, color, kind, scale, o = {}) {
 }
 // Creature and hero materials: arms, legs and capes swing in the vertex shader, driven by per-entity
 // uniforms, so a whole creature stays one merged geometry per material (two or three draw calls).
+function limbU() { return { uWalk: { value: 0 }, uAmp: { value: 0 }, uArmR: { value: 0 }, uArmL: { value: 0 }, uArmRY: { value: 0 }, uRim: { value: new THREE.Color(0, 0, 0) } }; }
 function limbMat(color, o = {}, u) {
   const m = new THREE.MeshStandardMaterial({ color, roughness: o.rough ?? 0.72, metalness: o.metal ?? 0.05 });
   if (o.map) { m.map = o.map; }
-  u = u || { uWalk: { value: 0 }, uAmp: { value: 0 }, uArmR: { value: 0 }, uArmL: { value: 0 } };
+  if (o.nmap) { m.normalMap = o.nmap; m.normalScale.set(o.ns ?? 0.7, o.ns ?? 0.7); }
+  u = u || limbU();
   m.userData.u = u;
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
-    sh.vertexShader = 'attribute float aLimb;\nattribute vec3 aPivot;\nuniform float uWalk, uAmp, uArmR, uArmL;\n' + sh.vertexShader
+    // rim light: a fresnel glow on silhouettes keeps characters readable against dark rooms
+    sh.fragmentShader = 'uniform vec3 uRim;\n' + sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      float hdF = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
+      totalEmissiveRadiance += uRim * hdF * hdF * hdF * 2.2;`);
+    sh.vertexShader = 'attribute float aLimb;\nattribute vec3 aPivot;\nuniform float uWalk, uAmp, uArmR, uArmL, uArmRY;\n' + sh.vertexShader
       .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
         float hdA = 0.0; float hdS0 = sin(uWalk);
         if (aLimb > 0.5) {
@@ -425,11 +433,15 @@ function limbMat(color, o = {}, u) {
           else hdA = 0.12 + uAmp * 0.55 + sin(uWalk * 0.5) * 0.06;
         }
         float hdC = cos(hdA), hdSn = sin(hdA);
-        objectNormal = vec3(objectNormal.x, objectNormal.y * hdC - objectNormal.z * hdSn, objectNormal.y * hdSn + objectNormal.z * hdC);`)
+        // the weapon arm can also swing sideways (yaw after pitch, matching an Euler 'YXZ' on the CPU)
+        float hdY = (aLimb > 3.5 && aLimb < 4.5) ? uArmRY : 0.0; float hdYC = cos(hdY), hdYS = sin(hdY);
+        objectNormal = vec3(objectNormal.x, objectNormal.y * hdC - objectNormal.z * hdSn, objectNormal.y * hdSn + objectNormal.z * hdC);
+        objectNormal = vec3(objectNormal.x * hdYC + objectNormal.z * hdYS, objectNormal.y, -objectNormal.x * hdYS + objectNormal.z * hdYC);`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
-        if (aLimb > 0.5) { vec3 hdP = transformed - aPivot; transformed = aPivot + vec3(hdP.x, hdP.y * hdC - hdP.z * hdSn, hdP.y * hdSn + hdP.z * hdC); }`);
+        if (aLimb > 0.5) { vec3 hdP = transformed - aPivot; hdP = vec3(hdP.x, hdP.y * hdC - hdP.z * hdSn, hdP.y * hdSn + hdP.z * hdC);
+          transformed = aPivot + vec3(hdP.x * hdYC + hdP.z * hdYS, hdP.y, -hdP.x * hdYS + hdP.z * hdYC); }`);
   };
-  m.customProgramCacheKey = () => 'hd-limb' + (o.map ? '-m' : '');
+  m.customProgramCacheKey = () => 'hd-limb' + (o.map ? '-m' : '') + (o.nmap ? '-n' : '');
   return m;
 }
 // the same arm angle on the CPU, for weapons held in an animated hand
@@ -566,11 +578,12 @@ const flameMat = new THREE.ShaderMaterial({
       vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_PointSize = (0.34 * (1.0 - t * 0.85)) * uScale / -mv.z; gl_Position = projectionMatrix * mv; }`,
   fragmentShader: 'uniform sampler2D tSoft; uniform vec3 uCol; varying float vT; void main(){ float a = texture2D(tSoft, gl_PointCoord).a * (1.0 - vT); vec3 c = mix(vec3(4.0, 3.2, 1.8), uCol * 2.5, smoothstep(0.0, 0.5, vT)); gl_FragColor = vec4(c * a, a);\n#include <tonemapping_fragment>\n#include <colorspace_fragment>\n}',
 });
-function makeFlames(list) { // list of {x,y,z}
+function makeFlames(list, fm) { // list of {x,y,z}; fm: a flame material other than the biome's torch flame
+  fm = fm || flameMat; if (!FLAME_MATS.includes(fm)) FLAME_MATS.push(fm);
   const per = 7, g = new THREE.BufferGeometry(), pos = new Float32Array(list.length * per * 3), seed = new Float32Array(list.length * per);
   list.forEach((f, i) => { for (let k = 0; k < per; k++) { const j = i * per + k; pos[j * 3] = f.x; pos[j * 3 + 1] = f.y; pos[j * 3 + 2] = f.z; seed[j] = Math.random(); } });
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
-  const p = new THREE.Points(g, flameMat); p.frustumCulled = false; levelDisp.push(g);
+  const p = new THREE.Points(g, fm); p.frustumCulled = false; levelDisp.push(g);
   return p;
 }
 // Contact shadows: one instanced quad under every character on screen

@@ -2,6 +2,7 @@
 // Templates are built once per kind from tagged parts (limb 1-2 legs, 3-4 arms, 5 cape), merged per
 // material role, and shared; each creature gets its own two materials so it can flash, tint and walk.
 const ROLE_BODY = new THREE.MeshStandardMaterial(), ROLE_DARK = new THREE.MeshStandardMaterial(), ROLE_EYE = new THREE.MeshBasicMaterial(), ROLE_GLOW = new THREE.MeshBasicMaterial();
+const BONE = new THREE.MeshStandardMaterial({ color: 0xe6dcc2, roughness: 0.55 }), SOCKET = new THREE.MeshBasicMaterial({ color: 0x050407 });
 const creatureCache = new Map();
 function makeCreature(kind, color, eyeCol, opts = {}) {
   if (!creatureCache.has(kind)) {
@@ -13,18 +14,19 @@ function makeCreature(kind, color, eyeCol, opts = {}) {
   }
   const T = creatureCache.get(kind);
   const g = new THREE.Group();
-  const u = { uWalk: { value: rand(0, 6) }, uAmp: { value: 0 }, uArmR: { value: 0 }, uArmL: { value: 0 } };
-  const body = limbMat(color, { rough: opts.rough ?? 0.7, metal: opts.metal ?? 0.05 }, u);
-  const dark = limbMat(new THREE.Color(color).multiplyScalar(0.45).getHex(), { rough: 0.55, metal: 0.35 }, u);
+  const u = limbU(); u.uWalk.value = rand(0, 6);
+  // body takes a light grain map (brightened to compensate) and both take a bump map, so surfaces read as hide, cloth and iron
+  const body = limbMat(new THREE.Color(color).multiplyScalar(1.22).getHex(), { rough: opts.rough ?? 0.7, metal: opts.metal ?? 0.05, map: TEX.plaster.map, nmap: TEX.plaster.normal, ns: 0.9 }, u);
+  const dark = limbMat(new THREE.Color(color).multiplyScalar(0.45).getHex(), { rough: 0.5, metal: 0.4, nmap: TEX.brick.normal, ns: 0.35 }, u);
   const eye = mat(eyeCol || 0xffe08a, 3);
   const map = new Map([[ROLE_BODY, body], [ROLE_DARK, dark], [ROLE_EYE, eye], [ROLE_GLOW, mat(eyeCol || 0xb48cff, 3)]]);
-  for (const p of T.parts) { const m = new THREE.Mesh(p.geometry, map.get(p.material) || p.material); m.castShadow = true; g.add(m); }
+  for (const p of T.parts) { const m = new THREE.Mesh(p.geometry, map.get(p.material) || p.material); m.castShadow = p.material === ROLE_BODY || p.material === ROLE_DARK; g.add(m); } // only the bulk casts shadows
   for (const l of T.live) { const o = new THREE.Mesh(l.geo, map.get(ROLE_GLOW)); o.position.copy(l.pos); o.scale.copy(l.scale); o.rotation.copy(l.rot); o.userData = { ...l.ud }; delete o.userData.live; g.add(o); }
   return { g, mats: [body, dark], h: T.h, u };
 }
 function buildCreatureTemplate(kind) {
   const g = new THREE.Group();
-  const B = ROLE_BODY, D = ROLE_DARK, E = ROLE_EYE;
+  const B = ROLE_BODY, D = ROLE_DARK, E = ROLE_EYE, W = BONE, K = ROLE_DARK; // sockets share the dark material: one less draw call per creature
   const P = (geo, m, sx, sy, sz, x, y, z, limb, pv, rot) => {
     const o = mesh(geo, m, sx, sy, sz, x, y, z);
     if (rot) o.rotation.set(rot[0], rot[1], rot[2]);
@@ -51,10 +53,14 @@ function buildCreatureTemplate(kind) {
       P(G.box, D, 0.56, 0.18, 0.36, 0, 1.08, 0);
       P(G.sph, B, 0.42, 0.44, 0.42, 0, 1.38, 0);
       P(G.box, D, 0.26, 0.1, 0.2, 0, 1.22, 0.07);
+      for (let k = 0; k < 3; k++) P(G.box, D, 0.44, 0.035, 0.03, 0, 0.8 + k * 0.1, 0.165);
+      P(G.box, W, 0.22, 0.08, 0.12, 0, 1.2, 0.17);
+      P(G.box, K, 0.1, 0.07, 0.02, -0.09, 1.4, 0.205); P(G.box, K, 0.1, 0.07, 0.02, 0.09, 1.4, 0.205);
+      P(G.sph, D, 0.3, 0.2, 0.34, -0.36, 1.18, 0); P(G.box, W, 0.1, 0.08, 0.04, 0, 0.6, 0.17);
       arms(0.14, 0.46, 0.37, 1.1, B, D);
       P(G.box, D, 0.06, 0.06, 0.8, 0.37, 0.62, 0.42, 4, [0.37, 1.1, 0]);
       P(G.box, D, 0.24, 0.05, 0.06, 0.37, 0.62, 0.06, 4, [0.37, 1.1, 0]);
-      h = 1.65; ey = 1.4; ez = 0.19;
+      h = 1.65; ey = 1.4; ez = 0.21; es = 0.06;
       break;
     case 'brute':
       legs(0.3, 0.52, 0.32, 0.24, 0.55);
@@ -63,7 +69,9 @@ function buildCreatureTemplate(kind) {
       P(G.sph, D, 0.5, 0.5, 0.5, -0.58, 1.26, 0); P(G.sph, D, 0.5, 0.5, 0.5, 0.58, 1.26, 0);
       P(G.sph, B, 0.42, 0.4, 0.42, 0, 1.36, 0.24);
       P(G.cone4, D, 0.1, 0.26, 0.1, -0.16, 1.58, 0.22, 0, 0, [0, 0, 0.5]); P(G.cone4, D, 0.1, 0.26, 0.1, 0.16, 1.58, 0.22, 0, 0, [0, 0, -0.5]);
-      for (const s of [-1, 1]) { const L = s < 0 ? 3 : 4; P(G.box, B, 0.26, 0.78, 0.28, s * 0.7, 0.84, 0.06, L, [s * 0.7, 1.22, 0.06]); P(G.sph, D, 0.34, 0.32, 0.34, s * 0.7, 0.4, 0.1, L, [s * 0.7, 1.22, 0.06]); }
+      P(G.cone, W, 0.07, 0.2, 0.07, -0.1, 1.28, 0.42, 0, 0, [0.3, 0, 0]); P(G.cone, W, 0.07, 0.2, 0.07, 0.1, 1.28, 0.42, 0, 0, [0.3, 0, 0]);
+      P(G.box, D, 1.04, 0.14, 0.7, 0, 0.66, 0.02); P(G.box, W, 0.16, 0.16, 0.06, 0, 0.66, 0.38);
+      for (const s of [-1, 1]) { const L = s < 0 ? 3 : 4; P(G.box, B, 0.26, 0.78, 0.28, s * 0.7, 0.84, 0.06, L, [s * 0.7, 1.22, 0.06]); P(G.sph, D, 0.34, 0.32, 0.34, s * 0.7, 0.4, 0.1, L, [s * 0.7, 1.22, 0.06]); for (let k = -1; k <= 1; k++) P(G.cone4, D, 0.06, 0.14, 0.06, s * 0.7 + k * 0.09, 0.42, 0.28, L, [s * 0.7, 1.22, 0.06], [1.5, 0, 0]); }
       h = 1.75; ey = 1.4; ez = 0.42; es = 0.09; ex = 0.1;
       break;
     case 'archer':
@@ -73,6 +81,9 @@ function buildCreatureTemplate(kind) {
       P(G.cone, D, 0.48, 0.5, 0.48, 0, 1.48, -0.03);
       P(G.box, D, 0.5, 0.36, 0.08, 0, 0.98, -0.16);
       P(G.cyl, D, 0.1, 0.55, 0.1, -0.1, 1.0, -0.22, 0, 0, [0, 0, 0.3]);
+      for (let k = 0; k < 3; k++) P(G.box, W, 0.03, 0.12, 0.06, -0.18 + k * 0.04, 1.32, -0.24, 0, 0, [0, 0, 0.3]);
+      P(G.sph, K, 0.28, 0.22, 0.06, 0, 1.3, 0.15);
+      P(G.box, D, 0.38, 0.06, 0.28, 0, 0.66, 0); P(G.box, W, 0.07, 0.07, 0.04, 0, 0.66, 0.14);
       arms(0.11, 0.44, 0.29, 1.08, B, D);
       { const b = P(G.torus, D, 0.75, 0.75, 0.75, -0.29, 0.62, 0.16, 3, [-0.29, 1.08, 0]); b.rotation.set(0, Math.PI / 2, Math.PI / 2); }
       h = 1.65; ey = 1.31; ez = 0.15; es = 0.06; ex = 0.07;
@@ -82,9 +93,12 @@ function buildCreatureTemplate(kind) {
       P(G.box, D, 0.5, 0.08, 0.42, 0, 0.82, 0);
       P(G.sph, B, 0.34, 0.36, 0.34, 0, 1.27, 0);
       P(G.cone, D, 0.48, 0.62, 0.48, 0, 1.6, -0.02, 0, 0, [-0.15, 0, 0]);
-      for (const s of [-1, 1]) { const L = s < 0 ? 3 : 4; P(G.taper, B, 0.17, 0.44, 0.17, s * 0.3, 0.92, 0, L, [s * 0.3, 1.13, 0]); P(G.sph, D, 0.11, 0.11, 0.11, s * 0.3, 0.68, 0.02, L, [s * 0.3, 1.13, 0]); }
+      P(G.sph, K, 0.26, 0.24, 0.08, 0, 1.28, 0.13);
+      P(G.cyl, D, 0.84, 0.06, 0.84, 0, 0.06, 0); P(G.cyl, D, 0.5, 0.1, 0.5, 0, 1.08, 0);
+      for (let k = 0; k < 3; k++) P(G.box, D, 0.05, 0.05, 0.02, 0, 0.5 + k * 0.14, 0.27 - k * 0.04);
+      for (const s of [-1, 1]) { const L = s < 0 ? 3 : 4; P(G.taper, B, 0.17, 0.44, 0.17, s * 0.3, 0.92, 0, L, [s * 0.3, 1.13, 0]); P(G.cyl, D, 0.2, 0.06, 0.2, s * 0.3, 0.72, 0, L, [s * 0.3, 1.13, 0]); P(G.sph, D, 0.11, 0.11, 0.11, s * 0.3, 0.66, 0.02, L, [s * 0.3, 1.13, 0]); }
       const orb = P(G.sph, ROLE_GLOW, 0.24, 0.24, 0.24, 0.42, 1.05, 0.34); orb.userData.float = 1;
-      h = 1.8; ey = 1.29; ez = 0.15; es = 0.06; ex = 0.07;
+      h = 1.8; ey = 1.29; ez = 0.17; es = 0.05; ex = 0.07;
       break;
     }
     case 'skitter':
@@ -92,12 +106,16 @@ function buildCreatureTemplate(kind) {
       P(G.sph, B, 0.38, 0.34, 0.36, 0, 0.5, 0.44);
       P(G.cone4, D, 0.06, 0.18, 0.06, -0.08, 0.38, 0.62, 0, 0, [1.4, 0, 0]); P(G.cone4, D, 0.06, 0.18, 0.06, 0.08, 0.38, 0.62, 0, 0, [1.4, 0, 0]);
       for (let k = 0; k < 6; k++) { const s = k < 3 ? -1 : 1, z = ((k % 3) - 1) * 0.24, L = (k + (k < 3 ? 0 : 1)) % 2 ? 1 : 2; P(G.box, D, 0.48, 0.05, 0.05, s * 0.4, 0.26, z, L, [s * 0.2, 0.34, z], [0, 0, s * 0.5]); }
+      for (const s of [-1, 1]) P(G.box, D, 0.5, 0.03, 0.42, s * 0.5, 0.62, -0.05, s < 0 ? 3 : 4, [s * 0.25, 0.6, -0.05], [0, 0, s * -0.35]);
+      P(G.cone4, W, 0.04, 0.1, 0.04, -0.05, 0.38, 0.6, 0, 0, [3.0, 0, 0]); P(G.cone4, W, 0.04, 0.1, 0.04, 0.05, 0.38, 0.6, 0, 0, [3.0, 0, 0]);
       h = 0.85; ey = 0.56; ez = 0.58; es = 0.07; ex = 0.09;
       break;
     case 'bomber':
       P(G.sph, B, 1.08, 0.98, 1.08, 0, 0.66, 0);
       P(G.sph, D, 0.38, 0.32, 0.38, 0, 1.16, 0.18);
       for (let k = 0; k < 6; k++) P(G.sph, mat(0xffc24a, 3.5), 0.13, 0.13, 0.13, Math.sin(k * 1.7) * 0.5, 0.45 + (k % 3) * 0.2, Math.cos(k * 1.7) * 0.5);
+      P(G.cyl, D, 1.1, 0.08, 1.1, 0, 0.66, 0); for (let k = 0; k < 8; k++) P(G.box, W, 0.03, 0.14, 0.03, Math.sin(k * 0.785) * 0.55, 0.66, Math.cos(k * 0.785) * 0.55);
+      P(G.cyl, D, 0.08, 0.3, 0.08, 0, 1.3, 0); P(G.sph, mat(0xffd06a, 4), 0.1, 0.1, 0.1, 0, 1.47, 0);
       for (const s of [-1, 1]) { P(G.box, D, 0.2, 0.3, 0.22, s * 0.26, 0.15, 0, s < 0 ? 1 : 2, [s * 0.26, 0.3, 0]); P(G.box, D, 0.12, 0.3, 0.12, s * 0.52, 0.72, 0.05, s < 0 ? 3 : 4, [s * 0.52, 0.86, 0.05]); }
       h = 1.35; ey = 1.18; ez = 0.34;
       break;
@@ -106,6 +124,9 @@ function buildCreatureTemplate(kind) {
       P(G.sph, D, 0.32, 0.32, 0.32, -0.3, 1.32, 0); P(G.sph, D, 0.32, 0.32, 0.32, 0.3, 1.32, 0);
       P(G.sph, B, 0.38, 0.4, 0.38, 0, 1.57, 0);
       P(G.cone, D, 0.52, 0.66, 0.52, 0, 1.86, -0.04, 0, 0, [-0.12, 0, 0]);
+      P(G.sph, K, 0.28, 0.26, 0.08, 0, 1.56, 0.15);
+      for (let k = 0; k < 5; k++) P(G.cone4, W, 0.06, 0.26, 0.06, Math.sin(-0.9 + k * 0.45) * 0.36, 1.46, Math.cos(-0.9 + k * 0.45) * 0.36 - 0.12, 0, 0, [-0.5, 0, 0]);
+      P(G.cyl, D, 0.66, 0.08, 0.66, 0, 0.98, 0); for (let k = 0; k < 4; k++) P(G.box, ROLE_GLOW, 0.06, 0.06, 0.02, -0.18 + k * 0.12, 0.98, 0.33);
       for (const s of [-1, 1]) P(G.taper, B, 0.16, 0.5, 0.16, s * 0.4, 1.1, 0.02, s < 0 ? 3 : 4, [s * 0.4, 1.34, 0.02]);
       P(G.cyl, D, 0.06, 2.0, 0.06, 0.46, 1.0, 0.16, 4, [0.4, 1.34, 0.02]);
       const gem = P(G.oct, ROLE_GLOW, 0.26, 0.36, 0.26, 0.46, 2.08, 0.16); gem.userData.spin = 1;
@@ -119,6 +140,9 @@ function buildCreatureTemplate(kind) {
       P(G.box, B, 0.42, 0.46, 0.42, 0, 1.5, 0);
       P(G.box, D, 0.44, 0.06, 0.1, 0, 1.52, 0.2);
       P(G.cone4, D, 0.12, 0.36, 0.3, 0, 1.86, -0.02);
+      for (let k = 0; k < 5; k++) P(G.box, ROLE_GLOW, 0.06, 0.08, 0.1, 0, 1.78 + k * 0.03, -0.1 - k * 0.07);
+      P(G.oct, W, 0.18, 0.24, 0.06, 0, 1.0, 0.26);
+      for (const s of [-1, 1]) for (let k = 0; k < 2; k++) P(G.sph, W, 0.05, 0.05, 0.05, s * 0.3, 0.8 + k * 0.28, 0.255);
       P(G.box, B, 0.18, 0.48, 0.2, -0.5, 0.94, 0, 3, [-0.5, 1.18, 0]);
       P(G.box, D, 0.08, 0.84, 0.64, -0.64, 0.88, 0.22, 3, [-0.5, 1.18, 0]);
       P(G.box, B, 0.18, 0.48, 0.2, 0.5, 0.94, 0, 4, [0.5, 1.18, 0]);
@@ -161,9 +185,9 @@ function weaponMesh(kind) { // points along +z from the grip at the origin
 
 // ================= the delver =================
 function makeHero() {
-  const u = { uWalk: { value: 0 }, uAmp: { value: 0 }, uArmR: { value: 0 }, uArmL: { value: 0 } };
-  const steel = limbMat(0x9aa4b2, { metal: 0.75, rough: 0.58 }, u), cloth = limbMat(0x2f6f73, { rough: 0.85 }, u), skin = limbMat(0xe2b48f, { rough: 0.6 }, u);
-  const leather = limbMat(0x5a3a26, { rough: 0.75 }, u), hair = limbMat(0x2e2018, { rough: 0.9 }, u), gold = limbMat(0xe0aa50, { metal: 1, rough: 0.3 }, u);
+  const u = limbU();
+  const steel = limbMat(0x9aa4b2, { metal: 0.75, rough: 0.55, nmap: TEX.plaster.normal, ns: 0.4 }, u), cloth = limbMat(0x3a8288, { rough: 0.9, map: TEX.plaster.map, nmap: TEX.wood.normal, ns: 0.5 }, u), skin = limbMat(0xe2b48f, { rough: 0.6 }, u);
+  const leather = limbMat(0x6a4630, { rough: 0.75, map: TEX.plaster.map, nmap: TEX.plaster.normal, ns: 0.8 }, u), hair = limbMat(0x2e2018, { rough: 0.9, nmap: TEX.wood.normal, ns: 0.8 }, u), gold = limbMat(0xe0aa50, { metal: 1, rough: 0.35 }, u);
   const g = new THREE.Group();
   const P = (geo, m, sx, sy, sz, x, y, z, limb, pv) => { const o = mesh(geo, m, sx, sy, sz, x, y, z); if (limb) { o.userData.limb = limb; o.userData.pivot = new THREE.Vector3(...pv); } g.add(o); return o; };
   for (const s of [-1, 1]) { const L = s < 0 ? 1 : 2, pv = [s * 0.13, 0.56, 0]; P(G.box, cloth, 0.17, 0.32, 0.19, s * 0.13, 0.4, 0, L, pv); P(G.box, leather, 0.19, 0.26, 0.21, s * 0.13, 0.13, 0.01, L, pv); P(G.box, leather, 0.2, 0.06, 0.28, s * 0.13, 0.03, 0.05, L, pv); }
@@ -181,8 +205,8 @@ function makeHero() {
   const parts = bakeByMaterial(g);
   const out = new THREE.Group();
   for (const p of parts) { const m = new THREE.Mesh(p.geometry, p.material); m.castShadow = true; out.add(m); }
-  const shoulder = new THREE.Group(); shoulder.position.set(0.36, 1.1, 0); out.add(shoulder);
-  const hand = new THREE.Group(); hand.position.set(0, -0.5, 0.03); shoulder.add(hand);
+  const shoulder = new THREE.Group(); shoulder.rotation.order = 'YXZ'; shoulder.position.set(0.36, 1.1, 0); out.add(shoulder);
+  const hand = new THREE.Group(); hand.position.set(0, -0.5, 0.03); hand.rotation.x = 0.5; shoulder.add(hand);
   return { g: out, hand, shoulder, u };
 }
 // first-person viewmodel: gauntlet and weapon held in front of the camera
@@ -194,7 +218,7 @@ const viewmodel = (() => {
   arm.add(mesh(G.box, new THREE.MeshStandardMaterial({ color: 0x2f6f73, roughness: 0.85 }), 0.13, 0.13, 0.2, 0, -0.05, 0.48));
   arm.add(mesh(G.sph, W.leather, 0.12, 0.12, 0.12, 0, 0, 0.02));
   g.add(arm);
-  const holder = new THREE.Group(); g.add(holder);
+  const holder = new THREE.Group(); holder.scale.setScalar(0.72); g.add(holder);
   g.visible = false;
   camera.add(g);
   return { g, holder, kind: '' };

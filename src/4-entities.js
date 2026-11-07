@@ -61,7 +61,7 @@ function floatNum(x, y, z, text, cls) {
     f = { el, t: 0 }; floaters.push(f);
   }
   f.el.className = 'fl ' + (cls || ''); f.el.textContent = text; f.el.style.display = '';
-  f.x = x + rand(-0.3, 0.3); f.y = y; f.z = z; f.t = f.max = cls === 'crit' ? 1 : 0.8;
+  f.x = x + rand(-0.3, 0.3); f.y = y; f.z = z; f.t = f.max = cls === 'crit' ? 1 : 0.8; f.big = cls === 'crit';
 }
 function project(x, y, z) {
   _v.set(x, y, z).project(camera);
@@ -72,8 +72,8 @@ function updOverlays(dt) {
     if (f.t <= 0) continue;
     f.t -= dt; f.y += dt * 1.6;
     if (f.t <= 0) { f.el.style.display = 'none'; continue; }
-    const p = project(f.x, f.y, f.z);
-    f.el.style.transform = `translate(${p.x}px,${p.y}px) translate(-50%,-50%)`;
+    const p = project(f.x, f.y, f.z), age = f.max - f.t, pop = 1 + Math.max(0, 1 - age / 0.12) * (f.big ? 0.9 : 0.55);
+    f.el.style.transform = `translate(${p.x}px,${p.y}px) translate(-50%,-50%) scale(${pop.toFixed(3)})`;
     f.el.style.opacity = Math.min(1, f.t / f.max * 2);
   }
   for (const L of labelEls) {
@@ -153,6 +153,8 @@ function spawnEnemy(arch, x, z, o = {}) {
   }
   e.maxHp = e.hp;
   e.mesh.scale.setScalar(e.scale);
+  e.mesh.rotation.order = 'YXZ'; // flinch and topple tilt around the creature's own axis
+  e.u.uRim.value.set(e.boss ? e.color : e.leader ? AURAS[e.aura].col : e.champ ? EAFF[e.aff[0]].col : B.torch).multiplyScalar(e.boss ? 0.5 : e.leader ? 0.5 : e.champ ? 0.42 : 0.2);
   e.mesh.position.set(x, 0, z);
   world.add(e.mesh);
   if (e.leader) e.label = addLabel(e.name, x, 3, z, 'lead', e);
@@ -163,7 +165,7 @@ function spawnEnemy(arch, x, z, o = {}) {
 function wake(e) {
   if (e.awake) return;
   e.awake = true;
-  if (e.boss && !bossRef) { bossRef = e; $('#bossBar').hidden = false; $('#bossName').textContent = e.name; banner(e.name, biomeOf(RUN.depth).name); sfx('boss'); }
+  if (e.boss && !bossRef) { bossRef = e; $('#bossBar').hidden = false; $('#bossName').textContent = e.name; banner(e.name, biomeOf(RUN.depth).name); sfx('boss'); setMusic('boss'); shake(0.35); }
   // wake the rest of the pack
   for (const o of enemies) if (!o.awake && !o.boss && Math.hypot(o.x - e.x, o.z - e.z) < 7) { o.awake = true; }
 }
@@ -329,8 +331,12 @@ function updEnemy(e, dt) {
   const windGlow = e.wind > 0 || e.windCharge > 0;
   if (e.flashT > 0 || windGlow) { e.flashT -= dt; e.mats[0].emissive.setHex(windGlow && !(e.flashT > 0) ? 0x663322 : 0xffffff).multiplyScalar(windGlow ? 0.5 : 0.8); }
   else if (!(e.fuse > 0)) e.mats[0].emissive.setHex(e.leader ? AURAS[e.aura].col : e.champ ? EAFF[e.aff[0]].col : e.boss ? e.color : 0x000000).multiplyScalar(e.leader ? 0.25 : e.champ ? 0.35 : e.boss ? 0.25 : 0);
+  // flinch: lean back and squash for a moment after a hit
+  e.hitT = Math.max(0, (e.hitT || 0) - dt);
+  const fk = e.hitT / 0.16;
+  e.mesh.rotation.x = -0.38 * fk * (e.boss ? 0.3 : 1);
   if (e.wind > 0 && e.ai !== 'ranged') e.mesh.scale.setScalar(e.scale * (1 + 0.08 * Math.sin(e.wind * 30)));
-  else e.mesh.scale.setScalar(e.scale);
+  else e.mesh.scale.set(e.scale * (1 + 0.1 * fk), e.scale * (1 - 0.13 * fk), e.scale * (1 + 0.1 * fk));
   for (const c of e.mesh.children) { if (c.userData.float) c.position.y = 1.0 + Math.sin(e.bob) * 0.1; if (c.userData.spin) c.rotation.y += dt * 2; }
   // limbs: walk cycle from ground speed, arm raised during a wind-up and brought down on the strike
   const gs = Math.hypot(mx, mz), u = e.u;
@@ -343,6 +349,7 @@ function updEnemy(e, dt) {
   u.uArmL.value = ranged && (e.wind > 0 || e.strikeT > 0) ? -1.5 : e.arch === 'warden' && e.awake ? -0.9 : 0;
   if (e.bar) {
     e.bar.position.set(e.x, e.h * e.scale + 0.3, e.z); e.bar.quaternion.copy(camera.quaternion);
+    if (SET.cam !== 'top') e.bar.scale.setScalar(clamp(e.bar.position.distanceTo(camera.position) / 9, 0.3, 1)); else if (e.bar.scale.x !== 1) e.bar.scale.setScalar(1);
     const f = clamp(e.hp / e.maxHp, 0, 1); e.bar.userData.fg.scale.x = 0.96 * f; e.bar.userData.fg.position.x = -0.48 * (1 - f);
   }
 }
@@ -351,7 +358,8 @@ function explodeEnemy(e) {
   if (e.tele) { disposeTele(e.tele); teles.splice(teles.indexOf(e.tele), 1); e.tele = null; }
   burst(e.x, 0.6, e.z, 0xff9a3a, 22, 7, 0.2); sfx('boom');
   if (Math.hypot(P.x - e.x, P.z - e.z) < 2.4 + P.r) hurtPlayer(e.dmg, e);
-  e.hp = 0; killEnemy(e, true);
+  e.hp = 0; e.exploded = true; killEnemy(e, true);
+  shake(0.3);
 }
 function separate() {
   for (let i = 0; i < enemies.length; i++) {
@@ -516,28 +524,41 @@ function rollDmg() {
 }
 function curWeapon() { return WEAPONS[ST.wk]; }
 function playerAttack() {
-  if (P.atkT > 0 || P.dodgeT > 0 || P.dead) return;
+  if (P.atkT > 0 || P.dodgeT > 0 || P.dashT > 0 || P.spinT > 0 || P.dead) return;
   const w = curWeapon();
   const fr = 1 + (ST.aspd + P.frenzy * 4) / 100;
-  P.atkT = w.cd / fr; P.swingDur = P.swingT = Math.min(0.2, P.atkT * 0.85);
-  sfx(w.ranged ? 'shoot' : 'swing');
+  // three-hit string: swings alternate direction, the third is a heavier finisher
+  P.combo = elapsed - (P.lastAtk || -9) < w.cd / fr + 0.45 ? ((P.combo || 0) + 1) % 3 : 0;
+  P.lastAtk = elapsed; P.fin = !w.ranged && P.combo === 2;
+  P.atkT = w.cd / fr * (P.fin ? 1.25 : 1); P.swingDur = P.swingT = Math.min(P.fin ? 0.26 : 0.2, P.atkT * 0.85);
+  sfx(w.ranged ? 'shoot' : P.fin || ST.wk === 'hammer' || ST.wk === 'axe' ? 'heavy' : 'swing');
   const a = P.face;
-  if (LV.type === 'town') { if (!w.ranged) swingFx(a, w); else spawnProj({ x: P.x, z: P.z, a, spd: w.pspd, owner: 'p', size: w.size, col: w.col, pierce: w.pierce, life: 0.8 }); return; }
   if (w.ranged) {
     const n = ST.powers.split ? 3 : 1;
-    for (let k = 0; k < n; k++) spawnProj({ x: P.x + Math.sin(a) * 0.5, z: P.z + Math.cos(a) * 0.5, a: a + (k - (n - 1) / 2) * 0.18, spd: w.pspd, owner: 'p', size: w.size, col: w.col, pierce: w.pierce, mult: k === 0 ? 1 : 0.6 });
+    for (let k = 0; k < n; k++) spawnProj({ x: P.x + Math.sin(a) * 0.5, z: P.z + Math.cos(a) * 0.5, a: a + (k - (n - 1) / 2) * 0.18, spd: w.pspd, owner: 'p', size: w.size, col: w.col, pierce: w.pierce, mult: k === 0 ? 1 : 0.6, life: LV.type === 'town' ? 0.8 : undefined });
   } else {
-    swingFx(a, w);
-    for (const e of enemies) {
-      if (e.dead) continue;
-      const dx = e.x - P.x, dz = e.z - P.z, d = Math.hypot(dx, dz);
-      if (d > w.range + e.r) continue;
-      if (Math.abs(angDiff(Math.atan2(dx, dz), a)) > w.arc / 2 + 0.15 && d > e.r + 0.4) continue;
-      const { d: dmg, crit } = rollDmg();
-      damageEnemy(e, dmg, crit, w.kb, dx / (d || 1), dz / (d || 1), true);
-    }
-    if (ST.powers.split) for (const k of [-1, 1]) spawnProj({ x: P.x, z: P.z, a: a + k * 0.3, spd: 14, owner: 'p', size: 0.2, col: 0x9fe8ff, pierce: 1, mult: 0.5, life: 0.7 });
+    if (SET.cam === 'top') swingFx(a, w);
+    P.pend = { t: P.swingDur * 0.42, fin: P.fin }; // the blow lands mid-swing, not on the button press
   }
+}
+function resolveMelee(fin) {
+  const w = curWeapon(), a = P.face;
+  let hits = 0, crits = 0;
+  for (const e of enemies) {
+    if (e.dead) continue;
+    const dx = e.x - P.x, dz = e.z - P.z, d = Math.hypot(dx, dz);
+    if (d > w.range * (fin ? 1.12 : 1) + e.r) continue;
+    if (Math.abs(angDiff(Math.atan2(dx, dz), a)) > w.arc / 2 + 0.15 + (fin ? 0.25 : 0) && d > e.r + 0.4) continue;
+    const r = rollDmg();
+    damageEnemy(e, r.d * (fin ? 1.35 : 1), r.crit, w.kb * (fin ? 1.6 : 1), dx / (d || 1), dz / (d || 1), true);
+    hits++; if (r.crit) crits++;
+  }
+  if (hits) {
+    addHitStop(crits ? 0.075 : fin ? 0.07 : ST.wk === 'hammer' ? 0.065 : 0.045);
+    shake((fin ? 0.32 : 0.18) + Math.min(0.2, hits * 0.04) + (crits ? 0.08 : 0));
+    if (crits) sfx('crit');
+  }
+  if (ST.powers.split) for (const k of [-1, 1]) spawnProj({ x: P.x, z: P.z, a: a + k * 0.3, spd: 14, owner: 'p', size: 0.2, col: 0x9fe8ff, pierce: 1, mult: 0.5, life: 0.7 });
 }
 function damageEnemy(e, d, crit, kb, nx, nz, proc, kind) {
   if (e.dead) return;
@@ -545,7 +566,10 @@ function damageEnemy(e, d, crit, kb, nx, nz, proc, kind) {
   let m = 1 - e.arm;
   if (e.auraOn === 'ward') m *= 0.6;
   d *= m;
-  e.hp -= d; e.flashT = 0.1;
+  e.hp -= d; e.flashT = 0.1; e.hitT = 0.16;
+  if (nx || nz) { e.lastNx = nx; e.lastNz = nz; }
+  // heavy blows and crits stagger ordinary foes out of a wind-up
+  if (proc && e.wind > 0 && !e.boss && !e.leader && (crit || kb >= 4.5)) { e.wind = 0; e.cd = Math.max(e.cd, 0.6); floatNum(e.x, e.h * e.scale + 0.6, e.z, 'Staggered', 'xp'); }
   floatNum(e.x, e.h * e.scale + 0.2, e.z, fmt(Math.max(1, d)), crit ? 'crit' : kind === 'burn' ? 'xp' : '');
   if (kb && !e.boss) { const k = kb * (e.arch === 'brute' || e.arch === 'warden' ? 0.4 : 1) * (e.leader ? 0.5 : 1); e.kx += nx * k * 2.2; e.kz += nz * k * 2.2; }
   ensureBar(e);
@@ -570,7 +594,11 @@ function killEnemy(e, noLoot) {
   e.dead = true;
   burst(e.x, 0.8, e.z, e.color, e.boss ? 40 : 12, e.boss ? 9 : 5, e.boss ? 0.28 : 0.15);
   if (e.owner) e.owner.minions = Math.max(0, (e.owner.minions || 1) - 1);
-  disposeEnemy(e);
+  if (e.exploded) disposeEnemy(e); else addCorpse(e);
+  if (e === lockT) updLock();
+  addHitStop(e.boss ? 0.4 : e.leader ? 0.12 : 0.05); shake(e.boss ? 0.9 : e.leader ? 0.35 : 0.08);
+  sfx(e.boss || e.leader ? 'bigkill' : 'kill');
+  questEvent('kill', e);
   gainXP(e.xp);
   S.kills++;
   if (!noLoot || e.explode) dropLoot(e);
@@ -586,6 +614,7 @@ function hurtPlayer(d, src) {
   const red = ST.armor / (ST.armor + 40 + 9 * RUN.depth);
   d *= 1 - red;
   P.hp -= d; P.hurtT = 0.2;
+  shake(clamp(d / ST.maxHp * 2.2, 0.18, 0.55)); addHitStop(0.04);
   floatNum(P.x, 2, P.z, '-' + fmt(d), 'hurt');
   const v = $('#vignette'); v.classList.add('hit'); setTimeout(() => v.classList.remove('hit'), 90);
   sfx('hurt');
@@ -665,7 +694,7 @@ function updDrops(dt) {
 }
 function pickup(dt) {
   if (dt.gold) { S.gold += dt.gold; RUN && (RUN.gold += dt.gold); floatNum(P.x, 1.8, P.z, '+' + dt.gold + 'g', 'crit'); sfx('coin'); }
-  else if (dt.mat) { addMat(dt.mat, dt.n); toast(`+${dt.n} ${MATS[dt.mat].n}`, MATS[dt.mat].c); sfx('coin'); }
+  else if (dt.mat) { addMat(dt.mat, dt.n); toast(`+${dt.n} ${MATS[dt.mat].n}`, MATS[dt.mat].c); sfx('coin'); questEvent('mat', dt.mat, dt.n); }
   else if (dt.potion) { S.potions++; toast('+1 Healing Draught', 'var(--blood-2)'); sfx('coin'); }
   else if (dt.item) { S.inv.push(dt.item); toast(dt.item.name, `var(--r${dt.item.rarity})`); sfx('coin'); if (RUN) RUN.items++; }
 }

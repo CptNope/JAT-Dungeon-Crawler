@@ -42,7 +42,7 @@ const BIOMES = [
   { id: 'crypt', name: 'Sunken Crypt', floor: 0x3d3a47, floor2: 0x34323e, wall: 0x5c5768, torch: 0xffb46a, fog: 0x0c0b12, amb: 0x77709a, bolt: 0xb48cff, eye: 0xffe08a, mats: ['bone', 'dust'], deco: 'bones',
     enemies: { grunt: ['Risen Skeleton', 0xd8d2c0], brute: ['Grave Ghoul', 0x7d8b6a], archer: ['Bone Archer', 0xcfc6ae], caster: ['Crypt Acolyte', 0x7e5fb5], skitter: ['Carrion Bat', 0x5b4b5a], bomber: ['Corpse Bloat', 0x8a9a5b], summoner: ['Necromancer', 0x5a3d7a], warden: ['Tomb Warden', 0x8f8c96] },
     boss: { name: 'The Bone Regent', shape: 'summoner', color: 0xe8dfc4, patterns: ['ring', 'summon', 'slam', 'fan'] } },
-  { id: 'fungal', name: 'Fungal Hollows', floor: 0x2f3a2c, floor2: 0x293326, wall: 0x4b5a3e, torch: 0xc6ff7a, fog: 0x0a110b, amb: 0x6a9a6a, bolt: 0xc6e85a, eye: 0xd6ff6a, mats: ['spore', 'chitin'], deco: 'shrooms',
+  { id: 'fungal', name: 'Fungal Hollows', floor: 0x2f3a2c, floor2: 0x293326, wall: 0x4b5a3e, torch: 0xe2ecaa, fog: 0x0a110b, amb: 0x7a957c, bolt: 0xc6e85a, eye: 0xd6ff6a, mats: ['spore', 'chitin'], deco: 'shrooms',
     enemies: { grunt: ['Sporeling', 0xb59a6a], brute: ['Mycelid Brute', 0x8a6a8a], archer: ['Spore Spitter', 0xa8b85a], caster: ['Shroom Shaman', 0xc46a5a], skitter: ['Cave Mite', 0x6a7a4a], bomber: ['Puffball', 0xd6c48a], summoner: ['Spore Mother', 0x9a5a8a], warden: ['Chitin Guard', 0x5a7a5a] },
     boss: { name: 'Mother Mycelia', shape: 'bomber', color: 0xc46a8a, patterns: ['spiral', 'summon', 'meteor', 'ring'] } },
   { id: 'magma', name: 'Magma Forge', floor: 0x3a2622, floor2: 0x2f201d, wall: 0x5a332b, torch: 0xff7a2a, fog: 0x140806, amb: 0x9a5a44, bolt: 0xff8a3a, eye: 0xffd24a, mats: ['ember', 'obsidian'], deco: 'cracks',
@@ -241,6 +241,7 @@ function newSave() {
     mats: { herb: 2, iron: 2 }, home: { house: 0, bench: 0, garden: 0, trophy: 0 },
     bossKills: 0, slain: [], best: 0, kills: 0, deaths: 0, waypoints: [1], shop: null,
     elixirs: { might: 0, stone: 0, swift: 0 }, rested: false, runs: 0,
+    quest: null, questOffers: null, questsDone: 0,
   };
   return s;
 }
@@ -271,6 +272,12 @@ function calcStats() {
     if (RUN.buffs.stone) s.armor = s.armor * 1.4 + 10;
     if (RUN.buffs.swift) { s.move += 15; s.aspd += 15; }
     if (RUN.rested) s.maxHp *= 1 + (6 + 4 * S.home.house) / 100;
+    const sh = RUN.shrine; // floor-long blessing from a shrine
+    if (sh === 'fury') s.dmg *= 1.3;
+    else if (sh === 'stone') s.armor = s.armor * 1.5 + 8;
+    else if (sh === 'fortune') { s.mf += 60; s.gold += 50; }
+    else if (sh === 'haste') { s.move += 20; s.aspd += 20; }
+    else if (sh === 'life') s.regen += (100 + (S.level - 1) * 14) * 0.02;
   }
   s.maxHp = Math.round(s.maxHp);
   s.crit = Math.min(75, s.crit);

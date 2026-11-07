@@ -14,6 +14,8 @@ function clearWorld() {
   levelDisp = [];
   world = new THREE.Group(); scene.add(world);
   burstSys.life.fill(0);
+  clearCorpses(); facers.length = 0; releaseLock();
+  for (const R of rings) R.o.visible = false;
   for (const l of torchPool) l.intensity = 0;
   FLAME_MATS.length = 1;
 }
@@ -81,6 +83,7 @@ function worldMats() {
   WM.decoStd = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 });
   WM.decoIce = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.12, metalness: 0.1, emissive: 0x2a4a6a, emissiveIntensity: 0.6 });
   WM.glow = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  WM.banner = new THREE.MeshStandardMaterial({ color: 0x8a3030, roughness: 0.95, map: TEX.wood.map, normalMap: TEX.plaster.normal });
   WM.torchCore = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc070).multiplyScalar(5) });
   return WM;
 }
@@ -142,6 +145,18 @@ function buildDungeonVisuals() {
     }
   }
   if (rocks.length) instanced(G.dodec, W.rock, rocks, { keep: true, cast: true });
+  // clutter in room corners; corner tiles only, and only where no corridor opens, so paths stay clear
+  const barrels = [], hoops = [], crates = [];
+  for (const r of L.rooms.slice(1)) for (const [ci, cj, oi, oj] of [[r.x, r.y, -1, -1], [r.x + r.w - 1, r.y, 1, -1], [r.x, r.y + r.h - 1, -1, 1], [r.x + r.w - 1, r.y + r.h - 1, 1, 1]]) {
+    if (!chance(0.32) || L.g[cj * L.w + ci] !== 1) continue;
+    if (!solid(ci + oi, cj) || !solid(ci, cj + oj) || !solid(ci + oi, cj + oj)) continue;
+    const x = ci + 0.5, z = cj + 0.5;
+    if (chance(0.55)) { barrels.push({ x, y: 0.42, z, sx: 0.62, sy: 0.84, sz: 0.62, ry: rand(0, 6), c: grey(rand(0.85, 1.1)) }); for (const y of [0.15, 0.7]) hoops.push({ x, y, z, sx: 0.66, sy: 0.06, sz: 0.66 }); }
+    else { const s = rand(0.6, 0.78); crates.push({ x, y: s / 2, z, sx: s, sy: s, sz: s, ry: rand(-0.3, 0.3), c: grey(rand(0.85, 1.1)) }); if (chance(0.5)) crates.push({ x: x + rand(-0.1, 0.1), y: s + 0.2, z: z + rand(-0.1, 0.1), sx: 0.4, sy: 0.4, sz: 0.4, ry: rand(0, 6), c: grey(rand(0.85, 1.1)) }); }
+    L.g[cj * L.w + ci] = 2;
+  }
+  if (barrels.length) { instanced(G.cyl, W.timber, barrels, { keep: true, cast: true }); instanced(G.cyl, W.iron, hoops, { keep: true }); }
+  if (crates.length) instanced(G.box, W.door, crates, { keep: true, cast: true });
   if (deco.length) instanced(B.deco === 'ice' ? G.oct : G.box, B.deco === 'ice' ? W.decoIce : W.decoStd, deco, { keep: true, cast: true });
   if (glow.length) instanced(B.deco === 'shrooms' ? G.sph : B.deco === 'shards' ? G.oct : G.box, W.glow, glow, { keep: true, receive: false });
   makeEnv(tint(B.amb, 0.6), tint(B.fog, 2.5), 0x050508, B.torch);
@@ -171,6 +186,22 @@ function layoutWalls() {
     s.y = th + 0.35;
   }
   if (brackets.length) { objs.push(instanced(G.box, W.iron, brackets, { keep: true })); objs.push(instanced(G.sph, W.torchCore, cores, { keep: true, receive: false })); const f = makeFlames(flames); world.add(f); objs.push(f); }
+  // banners hang on the walls between torches, in the biome's colour with a brass rod
+  if (!L.bannerSpots) L.bannerSpots = L.torchSpots.filter(() => chance(0.5)).map((s) => ({ ...s, off: chance(0.5) ? 1 : -1 }));
+  const cloth = [], rods = [], bh = tall ? 1.6 : 0.75, by = tall ? 2.1 : 0.62;
+  for (const s of L.bannerSpots) {
+    const along = s.ox ? [0, s.off] : [s.off, 0]; // slide sideways along the wall, away from the torch
+    const x = s.x + along[0] * 0.9 - s.ox * 0.06, z = s.z + along[1] * 0.9 - s.oz * 0.06;
+    const ry = s.ox ? Math.PI / 2 : 0;
+    const wx = Math.floor(x - Math.sign(s.ox) * 0.5), wz = Math.floor(z - Math.sign(s.oz) * 0.5);
+    if (!solid(wx, wz) || solid(Math.floor(x + Math.sign(s.ox) * 0.5), Math.floor(z + Math.sign(s.oz) * 0.5))) continue; // wall behind, floor in front
+    cloth.push({ x, y: by, z, sx: 0.62, sy: bh, sz: 0.03, ry });
+    rods.push({ x, y: by + bh / 2 + 0.04, z, sx: 0.8, sy: 0.05, sz: 0.05, ry });
+  }
+  if (cloth.length) {
+    WM.banner.color.set(B.torch).multiplyScalar(0.55).lerp(new THREE.Color(B.wall), 0.4);
+    objs.push(instanced(G.box, WM.banner, cloth, { keep: true })); objs.push(instanced(G.box, W.gold, rods, { keep: true }));
+  }
   flameMat.uniforms.uCol.value.set(B.torch);
   L.wallObjs = objs;
   scene.fog = new THREE.Fog(B.fog, ...(SET.cam === 'top' ? [17, 38] : SET.cam === 'third' ? [7, 26] : [5, 22]));
