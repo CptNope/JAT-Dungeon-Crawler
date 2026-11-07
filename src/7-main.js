@@ -5,7 +5,7 @@ window.addEventListener('keydown', (ev) => {
   if (!$('#title').hidden) { if (ev.code === 'Escape' && started) resume(); return; }
   if (!$('#death').hidden) return;
   if (Panel.kind) {
-    if (ev.code === 'Escape' || (ev.code === 'KeyI' && Panel.kind === 'bag') || (ev.code === 'KeyB' && Panel.kind === 'bag')) { ev.preventDefault(); closePanel(); }
+    if (ev.code === 'Escape' || ((ev.code === 'KeyI' || ev.code === 'KeyB' || ev.code === 'KeyK') && Panel.kind === 'bag') || (ev.code === 'KeyC' && Panel.kind === 'codex')) { ev.preventDefault(); closePanel(); }
     return;
   }
   if (GAME_KEYS.has(ev.code)) ev.preventDefault();
@@ -19,6 +19,8 @@ window.addEventListener('keydown', (ev) => {
     case 'KeyR': usePotion(true); break;
     case 'KeyT': useScroll(); break;
     case 'KeyI': case 'KeyB': openPanel('bag'); break;
+    case 'KeyK': case 'KeyN': openPanel('bag', 'talents'); break;
+    case 'KeyC': openPanel('codex'); break;
     case 'Tab': cycleLock(); break;
     case 'KeyX': releaseLock(); break;
     case 'Digit1': useSkill(0); break;
@@ -86,16 +88,24 @@ function setTouchMode(on) {
 
 // ================= title, menu, death =================
 let started = false;
+let titleSlots = false, eraseSlot = -1;
+function slotLine(i) {
+  const s = peekSlot(i); if (!s) return null;
+  return `${s.cls ? CLASSES[s.cls].n : 'Delver'}, level ${s.level} · deepest ${s.best || 0}${s.time ? ' · ' + fmtTime(s.time) : ''}`;
+}
 function showTitle() {
-  const has = !!loadSave() || started;
-  $('#menuBtns').innerHTML = (started ? '<button class="btn" type="button" id="mResume">Resume</button>' : has ? `<button class="btn" type="button" id="mCont">Continue · Level ${S.level}, deepest ${S.best || 0}</button>` : '<button class="btn" type="button" id="mNew">Begin</button>')
-    + (has ? '<button class="btn ghost" type="button" id="mNew2">New hero</button>' : '')
-    + `<button class="btn ghost" type="button" id="mSound">${muted ? 'Sound off' : 'Sound on'}</button>`;
+  if (started && !titleSlots) {
+    $('#menuBtns').innerHTML = '<button class="btn" type="button" id="mResume">Resume</button><button class="btn ghost" type="button" id="mCodex">Codex</button><button class="btn ghost" type="button" id="mSlots">Change hero</button>'
+      + `<button class="btn ghost" type="button" id="mSound">${muted ? 'Sound off' : 'Sound on'}</button>`;
+  } else {
+    $('#menuBtns').innerHTML = `<div class="slots">${[0, 1, 2].map((i) => { const l = slotLine(i); return `<div class="slotrow${i === SET.slot && started ? ' cur' : ''}"><button class="btn${l ? '' : ' ghost'} slotb" type="button" id="mSlot${i}"><b>Slot ${i + 1}</b><span>${l ? esc(l) : 'Empty · begin a new hero'}</span></button>${l ? `<button class="btn ghost sm" type="button" id="mDel${i}" aria-label="Erase slot ${i + 1}">Erase</button>` : ''}</div>`; }).join('')}</div>`
+      + (started ? '<button class="btn ghost" type="button" id="mBack">Back</button>' : '') + `<button class="btn ghost" type="button" id="mSound">${muted ? 'Sound off' : 'Sound on'}</button>`;
+  }
   $('#opts').innerHTML = optRow('View', 'cam', [['top', 'Overhead'], ['third', 'Third person'], ['first', 'First person']]) + optRow('Graphics', 'q', [['high', 'High'], ['medium', 'Medium'], ['low', 'Low']]) + optRow('Look speed', 'sens', [[0.6, 'Slow'], [1, 'Normal'], [1.6, 'Fast']])
     + optRow('Music', 'music', [[true, 'On'], [false, 'Off']]) + optRow('Screen shake', 'shake', [[true, 'On'], [false, 'Off']]);
   if (document.pointerLockElement) document.exitPointerLock();
   $('#title').hidden = false; $('#confirmNew').hidden = true; mouseDown = false;
-  const b = $('#mResume') || $('#mCont') || $('#mNew'); if (b) b.focus();
+  const b = $('#mResume') || $('#mSlot' + (SET.slot || 0)); if (b) b.focus();
 }
 function resume() { $('#title').hidden = true; }
 function optRow(label, key, items) { return `<div class="opt"><span>${label}</span><div class="seg">${items.map(([v, n]) => `<button type="button" class="${String(SET[key]) === String(v) ? 'on' : ''}" data-opt="${key}" data-v="${v}">${n}</button>`).join('')}</div></div>`; }
@@ -106,21 +116,35 @@ function begin() {
   setTouchMode(touchMode || window.matchMedia('(pointer: coarse)').matches);
   $('#touch').hidden = !touchMode;
   hud(); save();
-  if (S.runs === 0 && S.kills === 0) setTimeout(() => toast('Walk to the glowing gate at the south of town to begin your first descent.', 'var(--brass-2)', true), 600);
+  if (!S.cls) openPanel('class');
+  else if (S.runs === 0 && S.kills === 0) setTimeout(() => toast('Walk to the glowing gate at the south of town to begin your first descent.', 'var(--brass-2)', true), 600);
 }
 function freshHero() {
-  S = newSave(); uid = 1;
+  S = newSave(); uid = 1; RUN = null; P.dead = false;
   S.equip.weapon = genItem(1, { slot: 'weapon', kind: 'sword', rarity: 0 });
   S.equip.chest = genItem(1, { slot: 'chest', rarity: 0 });
-  ST = calcStats(); loadTown();
+  setClassSkills(); buildActionBar();
+  ST = calcStats(); rebuildHero(); loadTown();
 }
 $('#title').addEventListener('click', (ev) => {
   const id = ev.target.closest('button') && ev.target.closest('button').id;
   if (id === 'mResume') resume();
-  else if (id === 'mCont') begin();
-  else if (id === 'mNew') { freshHero(); begin(); }
-  else if (id === 'mNew2') { $('#confirmNew').hidden = false; $('#btnWipe').focus(); }
-  else if (id === 'btnWipe') { try { localStorage.removeItem(SAVE_KEY); } catch (err) { /* ignore */ } started = false; RUN = null; freshHero(); begin(); }
+  else if (id === 'mCodex') { resume(); openPanel('codex'); }
+  else if (id === 'mSlots') { titleSlots = true; showTitle(); }
+  else if (id === 'mBack') { titleSlots = false; showTitle(); }
+  else if (id && id.startsWith('mSlot')) {
+    const i = +id.slice(5);
+    if (started && i === SET.slot) { titleSlots = false; resume(); return; }
+    save(); SET.slot = i; saveSettings();
+    const s = peekSlot(i);
+    if (s) switchToSave(s); else freshHero();
+    titleSlots = false; begin();
+  } else if (id && id.startsWith('mDel')) { eraseSlot = +id.slice(4); $('#confirmNew').hidden = false; $('#confirmNew span').textContent = `Erase slot ${eraseSlot + 1}? That hero is gone for good.`; $('#btnWipe').focus(); }
+  else if (id === 'btnWipe') {
+    try { localStorage.removeItem(SLOT_KEYS[eraseSlot]); } catch (err) { /* ignore */ }
+    if (eraseSlot === SET.slot) { started = false; freshHero(); $('#hud').hidden = true; $('#touch').hidden = true; }
+    eraseSlot = -1; titleSlots = !started ? false : titleSlots; showTitle();
+  }
   else if (id === 'btnKeep') $('#confirmNew').hidden = true;
   else if (id === 'mSound') { toggleMute(); showTitle(); }
   const o = ev.target.closest('[data-opt]');
@@ -138,7 +162,7 @@ $('#btnMenu').addEventListener('click', showTitle);
 $('#btnView').addEventListener('click', cycleCam);
 $('#btnRevive').addEventListener('click', () => { $('#death').hidden = true; P.dead = false; returnToTown(true); });
 $('#keyList').innerHTML = [
-  ['WASD', 'Move'], ['Mouse', 'Aim or look'], ['Left click', 'Attack (hold)'], ['Space', 'Roll'], ['1 2 3', 'Skills'], ['Tab', 'Lock on / next'], ['X', 'Release lock'], ['E', 'Use, open, talk'], ['V', 'Switch view'], ['Wheel', 'Zoom'], ['Q / R', 'Draught / Greater'], ['T', 'Portal scroll'], ['I', 'Bag and character'], ['Esc', 'Menu'], ['`', 'Performance readout'],
+  ['WASD', 'Move'], ['Mouse', 'Aim or look'], ['Left click', 'Attack (hold)'], ['Space', 'Roll'], ['1 2 3', 'Skills'], ['Tab', 'Lock on / next'], ['X', 'Release lock'], ['E', 'Use, open, talk'], ['V', 'Switch view'], ['Wheel', 'Zoom'], ['Q / R', 'Draught / Greater'], ['T', 'Portal scroll'], ['I', 'Bag and character'], ['K', 'Talents'], ['C', 'Codex'], ['Esc', 'Menu'], ['`', 'Performance readout'],
 ].map(([k, v]) => `<div><kbd>${k}</kbd><span>${v}</span></div>`).join('') + '<div><kbd>Touch</kbd><span>Stick moves; drag the screen to look in close views</span></div>';
 
 // ================= performance readout & adaptive resolution =================
@@ -163,7 +187,7 @@ function perfTick(dt, cpuMs) {
 // ================= main loop =================
 const timer = new THREE.Timer();
 timer.connect(document);
-let hudT = 0, miniT = 0, saveT = 0;
+let hudT = 0, miniT = 0, saveT = 0, achT = 0;
 function frame(ts) {
   timer.update(ts);
   const dt = Math.min(0.05, timer.getDelta());
@@ -183,11 +207,22 @@ function frame(ts) {
       separate();
       for (const e of enemies) if (!e.dead) collide(e);
       for (let i = enemies.length - 1; i >= 0; i--) if (enemies[i].dead) enemies.splice(i, 1);
+      // anything past the fog is invisible anyway: skip drawing it (and its shadow passes)
+      // and only foes close to the lantern throw shadows: the six-sided shadow pass costs per caster
+      const vr = SET.cam === 'top' ? 34 : SET.cam === 'third' ? 25 : 22;
+      for (const e of enemies) {
+        const d = Math.hypot(e.x - P.x, e.z - P.z), v = e.boss || d < vr;
+        if (e.mesh.visible !== v) { e.mesh.visible = v; if (e.bar) e.bar.visible = v; if (e.auraRing) e.auraRing.visible = v; }
+        const cs = d < 10 || e.boss;
+        if (e.cs !== cs) { e.cs = cs; for (const c of e.mesh.children) if (c.userData.cs) c.castShadow = cs; }
+      }
       updTeles(gdt); updDrops(gdt); updTraps(gdt); updAmbush(gdt);
       revealT -= dt; if (revealT <= 0) { revealT = 0.2; reveal(); }
     }
     updProjs(gdt);
-    updCorpses(gdt);
+    updCorpses(gdt); updPet(gdt);
+    if (LV.type === 'town') { updVillagers(gdt); updTimeOfDay(gdt); }
+    S.time = (S.time || 0) + dt;
     updInteract();
     saveT += dt; if (saveT > 20) { saveT = 0; save(); }
   }
@@ -204,11 +239,11 @@ function frame(ts) {
   sky.position.copy(camera.position);
   if (LV.type === 'town' && sun.castShadow) { // keep the sun's shadow box centred on the player, snapped to texels to avoid shimmer
     const step = 44 / sun.shadow.mapSize.x, sx = Math.round(P.x / step) * step, sz = Math.round(P.z / step) * step;
-    sun.position.set(sx - 26, 30, sz + 22); sun.target.position.set(sx, 0, sz);
+    sun.position.set(sx + sunOff.x, sunOff.y, sz + sunOff.z); sun.target.position.set(sx, 0, sz);
   }
   Post.render();
   updOverlays(dt); updLockMark();
-  hudT -= dt; if (hudT <= 0) { hudT = 0.1; hud(); }
+  hudT -= dt; if (hudT <= 0) { hudT = 0.1; hud(); achT -= 1; if (achT <= 0) { achT = 10; checkAch(); } }
   miniT -= dt; if (miniT <= 0 && LV) { miniT = 0.1; drawMini(); }
   perfTick(dt, performance.now() - t0);
 }
@@ -219,13 +254,12 @@ function boot(data) {
   renderer.setPixelRatio(perf.ratio);
   resize();
   $('#btnView').textContent = window.innerWidth < 640 ? 'View' : 'View: ' + CAM_NAMES[SET.cam]; $('#crosshair').hidden = SET.cam === 'top';
-  buildActionBar();
   const saved = (data && data.S) || loadSave();
-  if (saved) { S = normalizeSave(saved); fixUid(); ST = calcStats(); loadTown(); }
+  if (saved) { S = normalizeSave(saved); fixUid(); setClassSkills(); buildActionBar(); ST = calcStats(); loadTown(); }
   else freshHero();
   if (data && data.started) { begin(); } else showTitle();
   renderer.setAnimationLoop(frame);
 }
 if (window.claude && window.claude.hot && window.claude.hot.snapshot) window.claude.hot.snapshot(() => ({ S, started }));
 if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(boot); else boot((window.claude && window.claude.hot && window.claude.hot.data) || {});
-return { get S() { return S; }, get P() { return P; }, get LV() { return LV; }, enemies, renderer, startDelve, begin, freshHero, openPanel, closePanel, loadDungeon, get ready() { return levelReady; }, perf, debug: { playerAttack, CAM, setCamMode, useSkill, cycleLock, get lockT() { return lockT; }, corpses, skillCd, questEvent, makeQuestOffers, claimQuest, get trail() { return trail; } } };
+return { get S() { return S; }, get P() { return P; }, get LV() { return LV; }, enemies, renderer, startDelve, begin, freshHero, openPanel, closePanel, loadDungeon, get ready() { return levelReady; }, perf, debug: { genItem, makeSetItem, scene, sun, hemi, sky, walkable, spawnEnemy, bossPattern, get LVL() { return LV; }, applyTimeOfDay, get pet() { return pet; }, villagers, zones, chooseClass, checkAch, playerAttack, CAM, setCamMode, useSkill, cycleLock, get lockT() { return lockT; }, corpses, skillCd, questEvent, makeQuestOffers, claimQuest, get trail() { return trail; } } };

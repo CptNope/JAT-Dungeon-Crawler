@@ -55,7 +55,7 @@ const BIOMES = [
     enemies: { grunt: ['Hollow Thrall', 0x5a4a7a], brute: ['Null Brute', 0x3a2a5a], archer: ['Rift Archer', 0x7a5aaa], caster: ['Void Seer', 0x9a4ad0], skitter: ['Glimmer Wisp', 0xd0b0ff], bomber: ['Unstable Rift', 0x6a2aa0], summoner: ['Star Weaver', 0x2a2a6a], warden: ['Abyssal Warden', 0x2a2040] },
     boss: { name: 'The Hollow Star', shape: 'caster', color: 0x9a6aff, patterns: ['teleport', 'spiral', 'ring', 'summon'] } },
 ];
-const biomeOf = (d) => BIOMES[Math.floor((d - 1) / 5) % 5];
+const biomeOf = (d) => BIOMES[Math.floor((d - 1) / 5) % BIOMES.length]; // five depths per biome, eight biomes, then round again
 const cycleOf = (d) => Math.floor((d - 1) / 25);
 
 const ARCH = {
@@ -184,6 +184,7 @@ function genItem(il, o = {}) {
   }
   rollAffixes(it);
   if (r === 4) { const L = pick(LEGENDS); it.power = L.power; it.lname = L.name; }
+  if (r >= 2 && o.sock !== 0) { it.sock = o.sock !== undefined ? o.sock : randi(r >= 3 ? 1 : 0, Math.min(MAX_SOCK, r - 1)); if (it.sock) it.gems = Array(it.sock).fill(null); else delete it.sock; }
   nameItem(it);
   it.value = Math.round(5 * Math.pow(1.1, il) * [1, 2, 4, 9, 20][r]);
   return it;
@@ -223,6 +224,12 @@ const HOME = {
     { n: 'Walled Garden', cost: { gold: 800, bone: 6 } },
     { n: 'Glasshouse', cost: { gold: 3000, spore: 10, shard: 4 } },
   ], fx: (l) => (l === 0 ? 'Grows nothing yet.' : `Each time you come home: ${[0, 2, 4, 7][l]} Bitterleaf${l >= 2 ? `, ${l - 1} Arcane Essence` : ''}${l >= 3 ? ', 2 Spore Sacs' : ''}.`) },
+  kennel: { n: 'Kennel', levels: [
+    { n: 'No Kennel' },
+    { n: 'Doghouse', cost: { gold: 400, bone: 6 } },
+    { n: 'Hound Kennel', cost: { gold: 2200, chitin: 8, iron: 12 } },
+    { n: 'Wolf Den', cost: { gold: 7000, pelt: 8, ember: 6, sigil: 1 } },
+  ], fx: (l) => (l === 0 ? 'No companion yet. Build a doghouse and a hound will follow you into the deep.' : `Your ${['', 'hound', 'hound', 'dire wolf'][l]} fights beside you, biting for ${[0, 30, 45, 65][l]}% of your damage.`) },
   trophy: { n: 'Trophy Hall', levels: [
     { n: 'Empty Wall' },
     { n: 'Trophy Hall', cost: { gold: 600, bone: 12 } },
@@ -238,10 +245,11 @@ function newSave() {
   const s = {
     v: 1, gold: 40, level: 1, xp: 0, potions: 3, gpotions: 0, scrolls: 2,
     inv: [], equip: { weapon: null, helm: null, chest: null, boots: null, ring: null, amulet: null }, stash: [],
-    mats: { herb: 2, iron: 2 }, home: { house: 0, bench: 0, garden: 0, trophy: 0 },
+    mats: { herb: 2, iron: 2 }, home: { house: 0, bench: 0, garden: 0, kennel: 0, trophy: 0 },
     bossKills: 0, slain: [], best: 0, kills: 0, deaths: 0, waypoints: [1], shop: null,
     elixirs: { might: 0, stone: 0, swift: 0 }, rested: false, runs: 0,
     quest: null, questOffers: null, questsDone: 0,
+    cls: null, tal: {}, gems: {}, stats: {}, ach: {}, bestiary: {}, records: [], decor: {}, time: 0, pet: null, created: Date.now(),
   };
   return s;
 }
@@ -267,6 +275,7 @@ function calcStats() {
   if (s.wk === 'fists') s.dmg += 5;
   if (WEAPONS[s.wk].crit) s.crit += WEAPONS[s.wk].crit;
   if (S.home.trophy > 0) { const b = (S.home.trophy === 1 ? 0.03 : 0.05) * S.bossKills; s.dmg *= 1 + b; s.maxHp *= 1 + b; }
+  applyMeta(s);
   if (RUN && LV && LV.type === 'dungeon') {
     if (RUN.buffs.might) s.dmg *= 1.25;
     if (RUN.buffs.stone) s.armor = s.armor * 1.4 + 10;
@@ -281,6 +290,7 @@ function calcStats() {
   }
   s.maxHp = Math.round(s.maxHp);
   s.crit = Math.min(75, s.crit);
+  if (P.cryT > 0) { s.dmg *= 1.3; s.armor *= 1.3; } // War Cry
   return s;
 }
 let ST = null;

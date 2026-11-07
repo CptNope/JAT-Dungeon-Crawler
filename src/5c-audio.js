@@ -60,6 +60,12 @@ function sfx(t) {
       case 'ambush': tone(98, 49, 1.6, 'sawtooth', 0.09, now, null, 0.02); noise(1.2, 0.12, now, 'lowpass', 500, 60); tone(147, 73, 1.4, 'square', 0.03, now + 0.1); break;
       case 'lock': tone(1200, 1600, 0.06, 'square', 0.025, now); break;
       case 'step': noise(0.05, 0.03, now, 'lowpass', 600); break;
+      case 'cry': tone(140, 90, 0.7, 'sawtooth', 0.09, now); tone(210, 130, 0.6, 'square', 0.04, now + 0.02); noise(0.5, 0.1, now, 'bandpass', 600, 300, 1); break;
+      case 'blink': tone(1600, 400, 0.25, 'sine', 0.06, now); tone(800, 2400, 0.2, 'sine', 0.03, now + 0.08); noise(0.15, 0.05, now, 'highpass', 4000); break;
+      case 'bite': noise(0.06, 0.12, now, 'bandpass', 1800, 700, 2); tone(260, 140, 0.07, 'square', 0.03, now); break;
+      case 'block': tone(1900, 1700, 0.12, 'square', 0.03, now); noise(0.06, 0.12, now, 'highpass', 3000); break;
+      case 'gem': [1568, 2093, 2637].forEach((f, i) => tone(f, f, 0.2, 'sine', 0.035, now + i * 0.06)); break;
+      case 'page': noise(0.12, 0.05, now, 'bandpass', 3000, 1200, 1.5); break;
     }
   } catch (err) { /* audio unavailable */ }
 }
@@ -68,7 +74,7 @@ function sfx(t) {
 // A tiny step sequencer schedules notes ~0.3 s ahead of the audio clock. Tracks: town, one per biome, boss.
 const Music = { want: null, track: null, next: 0, step: 0, bpm: 80, nodes: [], out: null, echo: null };
 const hz = (midi) => 440 * Math.pow(2, (midi - 69) / 12);
-const BIOME_ROOT = { crypt: 45, fungal: 48, magma: 38, frost: 50, void: 43 }; // MIDI note of each biome's drone
+const BIOME_ROOT = { crypt: 45, fungal: 48, magma: 38, frost: 50, void: 43, drowned: 41, clock: 47, blood: 40 }; // MIDI note of each biome's drone
 function setMusic(track) { Music.want = track; }
 function stopTrack() {
   if (!Music.out) { Music.track = null; return; }
@@ -125,7 +131,7 @@ function playStep(i, at) {
     const id = tr.slice(4), root = BIOME_ROOT[id] || 45;
     if (Math.random() < 0.13) { const n = root + 24 + MINOR_PENTA[randi(0, 4)] + pick([0, 12]); tone(hz(n), hz(n), 3, 'sine', 0.024, at, Music.echo, 0.01); tone(hz(n) * 2.01, hz(n) * 2.01, 1.4, 'sine', 0.006, at, out, 0.01); }
     if (i % 16 === 0) tone(hz(root - 12), hz(root - 14), 1.6, 'sine', 0.07, at, out, 0.02);
-    if ((id === 'crypt' || id === 'frost' || id === 'fungal') && Math.random() < 0.025) tone(1900 + Math.random() * 600, 700, 0.09, 'sine', 0.014, at, Music.echo); // drips
+    if ((id === 'crypt' || id === 'frost' || id === 'fungal' || id === 'drowned') && Math.random() < (id === 'drowned' ? 0.06 : 0.025)) tone(1900 + Math.random() * 600, 700, 0.09, 'sine', 0.014, at, Music.echo); // drips
     if (id === 'magma' && Math.random() < 0.03) noise(1.2, 0.04, at, 'lowpass', 140, 60, 0.7, out); // rumble
     if (id === 'void' && Math.random() < 0.04) tone(hz(root + 36 + MINOR_PENTA[randi(0, 4)]), hz(root + 48), 1.5, 'sine', 0.01, at, Music.echo, 0.4);
   }

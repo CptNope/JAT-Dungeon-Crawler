@@ -22,6 +22,16 @@ const IC = {
   dash: '<path d="M4 12h9m-3-5 5 5-5 5"/><path d="M15 6l5 6-5 6"/><path d="M3 7h3M3 17h3"/>',
   nova: '<circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.8 2.8M16.2 16.2 19 19M5 19l2.8-2.8M16.2 7.8 19 5"/>',
   lock: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
+  leap: '<path d="M4 19c3-9 9-13 16-13"/><path d="M15 4l5 2-2 5"/><path d="M3 21h8"/><path d="M5 18l-2 3m4-3 1 3"/>',
+  cry: '<path d="M4 10v4h3l5 4V6L7 10z"/><path d="M15 9c1 1 1 5 0 6M18 7c2 2 2 8 0 10"/>',
+  volley: '<path d="M4 20 18 6M7 20 20 9M4 17 15 4"/><path d="M15 4h3v3M18 6h2v3M20 9v2"/>',
+  rain: '<path d="M6 3v7M10 2v7M14 3v7M18 2v7"/><path d="m5 9 1 2 1-2m2-1 1 2 1-2m2 1 1 2 1-2m2-1 1 2 1-2"/><ellipse cx="12" cy="19" rx="8" ry="2.5"/>',
+  blink: '<circle cx="6" cy="16" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M8 14l1.5-1.5M11 11l1.5-1.5M14 8l1.5-1.5" stroke-dasharray="1 2"/>',
+  meteor: '<circle cx="15" cy="15" r="4"/><path d="M12 12 4 4M14 10 8 3M10 14 3 8"/>',
+  hound: '<path d="M5 18v-5l-2-3 3-1 2-3 2 2h6l3 3v7"/><path d="M8 18v-3m8 3v-3"/><circle cx="6.5" cy="10.5" r=".6"/>',
+  star: '<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L3.4 9.3l6-.7z"/>',
+  book: '<path d="M4 5c3-1 6-1 8 1 2-2 5-2 8-1v14c-3-1-6-1-8 1-2-2-5-2-8-1z"/><path d="M12 6v14"/>',
+  gem: '<path d="M6 4h12l3 5-9 11L3 9z"/><path d="M3 9h18M9 4l3 5 3-5M12 9v11"/>',
 };
 const svg = (k) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">${IC[k] || ''}</svg>`;
 const itemIcon = (it) => svg(it.slot === 'weapon' ? it.kind : it.slot);
@@ -41,7 +51,7 @@ function banner(t, sub) { const b = $('#banner'); b.innerHTML = `${esc(t)}<small
 const SLOTS_BAR = [
   { id: 'atk', key: 'LMB', icon: () => (ST ? ST.wk : 'sword'), act: () => {}, title: 'Attack: hold the left mouse button or J' },
   { id: 'dodge', key: 'Space', icon: () => 'dodge', act: () => tryDodge(), title: 'Roll: Space, Shift or right mouse' },
-  ...SKILLS.map((k, i) => ({ id: 'sk' + i, key: k.key, icon: () => k.id, act: () => useSkill(i), title: `${k.n}: ${k.d} Unlocks at level ${k.lvl}. ${k.cd}s cooldown.`, skill: i })),
+  ...[0, 1, 2].map((i) => ({ id: 'sk' + i, key: String(i + 1), icon: () => (SKILLS[i] ? SKILLS[i].id : 'whirl'), act: () => useSkill(i), title: () => (SKILLS[i] ? `${SKILLS[i].n}: ${SKILLS[i].d} Unlocks at level ${SKILLS[i].lvl}. ${SKILLS[i].cd}s cooldown.` : ''), skill: i })),
   { id: 'pot', key: 'Q', icon: () => 'potion', act: () => usePotion(false), title: 'Healing Draught' },
   { id: 'gpot', key: 'R', icon: () => 'gpotion', act: () => usePotion(true), title: 'Greater Draught' },
   { id: 'scroll', key: 'T', icon: () => 'scroll', act: () => useScroll(), title: 'Portal Scroll' },
@@ -49,8 +59,8 @@ const SLOTS_BAR = [
 ];
 function buildActionBar() {
   const bar = $('#actionBar');
-  bar.innerHTML = SLOTS_BAR.map((s) => `<button class="slot${s.skill !== undefined ? ' skill' : ''}" type="button" data-slot="${s.id}" title="${esc(s.title)}"><span class="k">${s.key}</span><span class="ic">${svg(s.icon())}</span><span class="n"></span><span class="cd"></span></button>`).join('');
-  SKILLS.forEach((k, i) => { const b = $('#tS' + (i + 1)); if (b) b.innerHTML = svg(k.id) + '<i></i>'; });
+  bar.innerHTML = SLOTS_BAR.map((s) => `<button class="slot${s.skill !== undefined ? ' skill' : ''}" type="button" data-slot="${s.id}" title="${esc(typeof s.title === 'function' ? s.title() : s.title)}"><span class="k">${s.key}</span><span class="ic">${svg(s.icon())}</span><span class="n"></span><span class="cd"></span></button>`).join('');
+  SKILLS.forEach((k, i) => { const b = $('#tS' + (i + 1)); if (b) { b.innerHTML = svg(k.id) + '<i></i>'; b.setAttribute('aria-label', k.n); } });
   const tl = $('#tLock'); if (tl) tl.innerHTML = svg('lock');
   bar.querySelectorAll('.slot').forEach((b) => b.addEventListener('click', () => { const s = SLOTS_BAR.find((q) => q.id === b.dataset.slot); s.act(); }));
 }
@@ -63,13 +73,16 @@ function hud() {
   $('#hpText').textContent = `${Math.ceil(Math.max(0, P.hp))} / ${ST.maxHp}`;
   $('#xpFill').style.width = clamp(S.xp / xpNeed(S.level), 0, 1) * 100 + '%';
   $('#hGold').textContent = fmt(S.gold) + ' gold';
-  $('#hMisc').textContent = `Bag ${S.inv.length}/${BAG_CAP}`;
+  const tp = talPoints();
+  $("#hMisc").textContent = `Bag ${S.inv.length}/${BAG_CAP}`;
   const buffs = [];
   if (RUN) { if (RUN.buffs.might) buffs.push('Might'); if (RUN.buffs.stone) buffs.push('Stoneskin'); if (RUN.buffs.swift) buffs.push('Gale'); if (RUN.rested) buffs.push('Rested'); }
   if (P.frenzy) buffs.push('Frenzy ×' + P.frenzy);
+  if (P.cryT > 0) buffs.push('War Cry ' + Math.ceil(P.cryT) + 's');
+  if (RUN && RUN.shrine) buffs.push(SHRINES[RUN.shrine].n.replace('Shrine of ', ''));
   if (P.chillT > 0) buffs.push('Chilled'); if (P.burnT > 0) buffs.push('Burning');
-  $('#hBuffs').innerHTML = buffs.map((b) => `<span class="buff">${b}</span>`).join('');
-  if (LV.type === 'town') { $('#hLoc').textContent = 'Hearthdeep'; $('#hObj').textContent = 'Shops restock each time you return. The Delve waits at the south gate.'; }
+  $('#hBuffs').innerHTML = (tp ? `<span class="buff tp">${tp} talent point${tp > 1 ? 's' : ''} · K</span>` : '') + buffs.map((b) => `<span class="buff">${b}</span>`).join('');
+  if (LV.type === 'town') { $('#hLoc').textContent = 'Hearthdeep · ' + todName(); $('#hObj').textContent = 'Shops restock each time you return. The Delve waits at the south gate.'; }
   else {
     const B = biomeOf(LV.depth);
     $('#hLoc').textContent = `Depth ${LV.depth} · ${B.name}`;
@@ -87,7 +100,7 @@ function hud() {
   set('dodge', null, P.dodgeCd > 0 ? P.dodgeCd / 0.85 : 0);
   set('pot', S.potions, 0); set('gpot', S.gpotions, 0); set('scroll', S.scrolls, 0); set('bag', null, 0);
   SKILLS.forEach((k, i) => {
-    const locked = S.level < k.lvl, cd = skillCd[i] / k.cd;
+    const locked = S.level < k.lvl, cd = skillCd[i] / skillCdOf(k);
     set('sk' + i, locked ? 'Lv' + k.lvl : null, locked ? 0 : cd);
     const b = document.querySelector(`[data-slot="sk${i}"]`); if (b) b.classList.toggle('locked', locked);
     const t = $('#tS' + (i + 1));
@@ -109,7 +122,8 @@ const Panel = { kind: null, tab: null, sel: null, forge: {}, elix: {} };
 function isPaused() { return !started || Panel.kind !== null || !$('#title').hidden || !$('#death').hidden; }
 function openPanel(kind, tab) {
   Panel.kind = kind; Panel.sel = null;
-  Panel.tab = tab || { bag: 'gear', home: 'home', smith: 'buy', trader: 'buy', alch: 'buy', delve: 'delve', elder: 'tasks' }[kind];
+  Panel.tab = tab || { bag: 'gear', home: 'home', smith: 'buy', trader: 'buy', alch: 'buy', delve: 'delve', elder: 'tasks', class: 'class', codex: 'ach' }[kind];
+  $('#pClose').hidden = kind === 'class';
   if (kind === 'elder' && !S.quest && !S.questOffers) S.questOffers = makeQuestOffers();
   Panel.abandon = false;
   if ((kind === 'smith') && !S.shop) restock();
@@ -117,7 +131,7 @@ function openPanel(kind, tab) {
   renderPanel();
   $('#pClose').focus({ preventScroll: true });
 }
-function closePanel() { Panel.kind = null; $('#panel').hidden = true; hud(); }
+function closePanel() { if (Panel.kind === 'class' && !S.cls) return; Panel.kind = null; $('#panel').hidden = true; hud(); }
 function restock() {
   const il = Math.max(1, S.best);
   S.shop = { items: [] };
@@ -145,19 +159,20 @@ function itemCard(it, cmp) {
   if (W) base = `<div class="base"><b>${fmt(main)}</b> damage${diff} <span class="sub">· ${W.cd.toFixed(2)}s · ${W.ranged ? 'ranged' : 'reach ' + W.range.toFixed(1)}</span></div>`;
   else if (it.base) base = `<div class="base"><b>${fmt(main)}</b> armor${diff}</div>`;
   const affs = it.aff.map((a) => `<li>${esc(AFF[a.k].l(a.v * am)).replace(/^\+ ?/, '')}</li>`).join('');
-  const leg = it.power ? `<div class="leg">${esc(legendOf(it).desc)}</div>` : '';
-  return `<div class="icard"><div class="nm r${it.rarity}">${esc(it.name)}${it.up ? ` <span class="r0">+${it.up}</span>` : ''}</div>
-    <div class="sub">${RAR[it.rarity].n} ${esc(typeName(it))} · ${SLOT_N[it.slot]}</div>${base}${affs ? `<ul>${affs}</ul>` : ''}${leg}
+  const leg = it.set ? setInfoHtml(it) : it.power ? `<div class="leg">${esc(legendOf(it).desc)}</div>` : '';
+  const socks = it.sock ? `<div class="socks">${it.gems.map((g) => (g ? `<span class="sock" style="--gc:${GEMS[gemSplit(g)[0]].c}"><i></i>${esc(gemName(g))}: ${esc(gemLine(g))}</span>` : '<span class="sock empty"><i></i>Empty socket</span>')).join('')}</div>` : '';
+  return `<div class="icard"><div class="nm r${it.rarity}${it.set ? ' set' : ''}">${esc(it.name)}${it.up ? ` <span class="r0">+${it.up}</span>` : ''}</div>
+    <div class="sub">${it.set ? 'Set' : RAR[it.rarity].n} ${esc(typeName(it))} · ${SLOT_N[it.slot]}</div>${base}${affs ? `<ul>${affs}</ul>` : ''}${socks}${leg}
     <div class="meta"><span>Item level ${it.il}</span><span>Sells for ${fmt(it.value)}g</span>${cmp && cmp !== it ? `<span>vs ${esc(cmp.name)}</span>` : ''}</div></div>`;
 }
 const cellsHtml = (list, src, cap, priceFn) => {
-  let h = list.map((it) => `<button class="cell r${it.rarity}${Panel.sel && Panel.sel.src === src && String(Panel.sel.id) === String(it.id) ? ' on' : ''}" type="button" data-act="sel" data-src="${src}" data-id="${it.id}" title="${esc(it.name)}">${itemIcon(it)}${it.up ? `<b>+${it.up}</b>` : ''}${priceFn ? `<i>${fmt(priceFn(it))}</i>` : ''}</button>`).join('');
+  let h = list.map((it) => `<button class="cell r${it.rarity}${it.set ? ' set' : ''}${Panel.sel && Panel.sel.src === src && String(Panel.sel.id) === String(it.id) ? ' on' : ''}" type="button" data-act="sel" data-src="${src}" data-id="${it.id}" title="${esc(it.name)}">${itemIcon(it)}${it.up ? `<b>+${it.up}</b>` : ''}${priceFn ? `<i>${fmt(priceFn(it))}</i>` : ''}</button>`).join('');
   if (cap) for (let k = list.length; k < Math.min(cap, list.length + 6); k++) h += '<div class="cell empty"></div>';
   return `<div class="cells">${h}</div>`;
 };
 function eqHtml() {
   return `<div class="eq-grid">${SLOTS.map((sl) => { const it = S.equip[sl]; const on = Panel.sel && Panel.sel.src === 'equip' && Panel.sel.id === sl;
-    return `<button class="eqs ${it ? 'r' + it.rarity : ''}${on ? ' on' : ''}" type="button" data-act="sel" data-src="equip" data-id="${sl}"${it ? '' : ' disabled'}>${it ? itemIcon(it) : svg(sl === 'weapon' ? 'fists' : sl)}<div style="min-width:0"><span>${SLOT_N[sl]}</span><em class="${it ? 'r' + it.rarity : ''}">${it ? esc(it.name) : 'Empty'}</em></div></button>`; }).join('')}</div>`;
+    return `<button class="eqs ${it ? 'r' + it.rarity : ''}${it && it.set ? ' set' : ''}${on ? ' on' : ''}" type="button" data-act="sel" data-src="equip" data-id="${sl}"${it ? '' : ' disabled'}>${it ? itemIcon(it) : svg(sl === 'weapon' ? 'fists' : sl)}<div style="min-width:0"><span>${SLOT_N[sl]}</span><em class="${it ? 'r' + it.rarity : ''}${it && it.set ? ' set' : ''}">${it ? esc(it.name) : 'Empty'}</em></div></button>`; }).join('')}</div>`;
 }
 function costChips(c) {
   return `<div class="costs">${Object.entries(c).map(([k, v]) => { const have = k === 'gold' ? S.gold : S.mats[k] || 0; return `<span class="cost${have >= v ? '' : ' no'}">${k === 'gold' ? fmt(v) + ' gold' : `${v} ${MATS[k].n}`} <span style="opacity:.6">(${fmt(have)})</span></span>`; }).join('')}</div>`;
@@ -191,9 +206,10 @@ function renderPanel() {
   switch (p.kind) {
     case 'bag': {
       title = 'Bag'; sub = `Level ${S.level} delver`;
-      tabs = [['gear', 'Gear'], ['mats', 'Materials'], ['char', 'Character']];
+      tabs = [['gear', 'Gear'], ['mats', 'Materials'], ['char', 'Character'], ['talents', `Talents${talPoints() ? ' (' + talPoints() + ')' : ''}`]];
       if (p.tab === 'gear') body = purseRow() + `<div class="inv"><section><h3>Equipped</h3>${eqHtml()}</section><section><h3>Bag<small>${S.inv.length}/${BAG_CAP}</small></h3>${S.inv.length ? cellsHtml(S.inv, 'inv', BAG_CAP) : '<p class="hint">Empty. Loot drops from foes, chests and bosses; walk over an item to pick it up.</p>'}<div class="acts" style="margin-top:10px"><button class="btn ghost" type="button" data-act="salvageJunk"${S.inv.some((q) => q.rarity <= 1) ? '' : ' disabled'}>Salvage all Common and Uncommon</button></div></section><section class="detail">${detailFor(it, 'bag')}</section></div>`;
       else if (p.tab === 'mats') body = matsHtml();
+      else if (p.tab === 'talents') body = talentsHtml();
       else body = charHtml();
       break;
     }
@@ -222,8 +238,10 @@ function renderPanel() {
     }
     case 'home': {
       title = 'Home'; sub = HOME.house.levels[S.home.house].n;
-      tabs = [['home', 'Upgrades'], ['craft', 'Workbench'], ['work', 'Workshop'], ['stash', 'Stash']];
+      tabs = [['home', 'Upgrades'], ['decor', 'Yard'], ['craft', 'Workbench'], ['work', 'Workshop'], ['gems', 'Gems'], ['stash', 'Stash']];
       if (p.tab === 'home') body = homeHtml();
+      else if (p.tab === 'decor') body = decorHtml();
+      else if (p.tab === 'gems') body = gemsHtml();
       else if (p.tab === 'craft') body = craftHtml();
       else if (p.tab === 'work') body = workHtml(it);
       else body = purseRow() + `<div class="inv"><section><h3>Bag<small>${S.inv.length}/${BAG_CAP}</small></h3>${cellsHtml(S.inv, 'inv', BAG_CAP)}</section><section><h3>Stash<small>${S.stash.length}/${stashCap()}</small></h3>${cellsHtml(S.stash, 'stash', stashCap())}<p class="hint">A bigger house holds more.</p></section><section class="detail">${detailFor(it, 'stash')}</section></div>`;
@@ -233,6 +251,17 @@ function renderPanel() {
       title = 'Elder Maren'; sub = `Keeper of the well · tasks done: ${S.questsDone || 0}`;
       tabs = [['tasks', 'Tasks'], ['skills', 'Skills']];
       body = p.tab === 'skills' ? skillsHtml() : elderHtml();
+      break;
+    }
+    case 'class': {
+      title = 'Choose your path'; sub = S.runs || S.kills ? 'Your gear stays with you; talents start fresh' : 'You can change your talents later, but not your class';
+      body = classHtml();
+      break;
+    }
+    case 'codex': {
+      title = 'Codex'; sub = `${Object.keys(S.ach).length}/${ACH.length} achievements · ${fmtTime(S.time || 0)} played`;
+      tabs = [['ach', 'Achievements'], ['beasts', 'Bestiary'], ['records', 'Records'], ['save', 'Save file']];
+      body = codexHtml(p.tab);
       break;
     }
     case 'delve': {
@@ -287,7 +316,7 @@ function charHtml() {
 function homeHtml() {
   const restBtn = S.rested ? '<span class="hint">You are rested for your next descent.</span>' : '<button class="btn" type="button" data-act="rest">Sleep until morning</button>';
   return purseRow() + `<div class="rows"><div class="row"><div><div class="t">Your bed</div><div class="d">Sleep to wake rested: +${6 + 4 * S.home.house}% max health for your next descent.</div></div>${restBtn}</div>
-    ${Object.entries(HOME).map(([k, h]) => { const lvl = S.home[k], next = h.levels[lvl + 1];
+    ${Object.entries(HOME).map(([k, h]) => { const lvl = S.home[k] || 0, next = h.levels[lvl + 1];
       return `<div class="row"><div><div class="t">${h.levels[lvl].n}<small>${h.n} · ${lvl + 1}/${h.levels.length}</small></div><div class="d">${h.fx(lvl)}</div>${next ? `<div class="d" style="margin-top:6px;color:var(--fg)">Next: ${next.n}. ${h.fx(lvl + 1)}</div>${costChips(next.cost)}` : '<div class="d" style="color:var(--brass-2)">Fully built.</div>'}</div>${next ? `<button class="btn" type="button" data-act="homeUp" data-k="${k}"${hasCost(next.cost) ? '' : ' disabled'}>Build</button>` : ''}</div>`; }).join('')}</div>`;
 }
 function craftHtml() {
@@ -307,11 +336,12 @@ function workHtml(it) {
     const cap = benchCap();
     const uc = upCost(it), rc = rerollCost(it);
     act = itemCard(it) + `<div class="row"><div><div class="t">Upgrade to +${it.up + 1}</div>${it.up >= cap ? `<div class="d">${it.up >= 10 ? 'Maximum level reached.' : 'A better workbench can push this further.'}</div>` : costChips(uc)}</div><button class="btn" type="button" data-act="upItem"${it.up < cap && hasCost(uc) ? '' : ' disabled'}>Upgrade</button></div>
+      ${socketHtml(it)}
       <div class="row"><div><div class="t">Reroll affixes</div><div class="d">${it.rarity === 0 ? 'Common gear has no affixes to reroll.' : 'Keeps rarity, level and upgrades.'}</div>${it.rarity ? costChips(rc) : ''}</div><button class="btn" type="button" data-act="reroll"${it.rarity && hasCost(rc) ? '' : ' disabled'}>Reroll</button></div>`;
   }
   const sel = (q) => Panel.sel && String(Panel.sel.id) === String(q.id);
   const src = (q) => (SLOTS.some((s) => S.equip[s] === q) ? 'equip' : 'inv');
-  const cell = (q) => `<button class="cell r${q.rarity}${sel(q) || (Panel.sel && Panel.sel.src === 'equip' && S.equip[Panel.sel.id] === q) ? ' on' : ''}" type="button" data-act="sel" data-src="${src(q)}" data-id="${src(q) === 'equip' ? q.slot : q.id}" title="${esc(q.name)}">${itemIcon(q)}${q.up ? `<b>+${q.up}</b>` : ''}</button>`;
+  const cell = (q) => `<button class="cell r${q.rarity}${q.set ? " set" : ""}${sel(q) || (Panel.sel && Panel.sel.src === 'equip' && S.equip[Panel.sel.id] === q) ? ' on' : ''}" type="button" data-act="sel" data-src="${src(q)}" data-id="${src(q) === 'equip' ? q.slot : q.id}" title="${esc(q.name)}">${itemIcon(q)}${q.up ? `<b>+${q.up}</b>` : ''}</button>`;
   return purseRow() + `<div class="two"><section><h3>Your gear<small>worn first</small></h3><div class="cells">${all.map(cell).join('')}</div></section><section class="detail">${act}</section></div>`;
 }
 function delveHtml() {
@@ -361,7 +391,7 @@ function doAct(d) {
         const ni = genItem(Math.max(1, S.best), { slot: Panel.forge[r.id] || 'weapon', rarity: r.forge, mf: 50 });
         S.inv.push(ni); toast(`Forged ${ni.name}`, `var(--r${ni.rarity})`, true);
       } else { payCost(r.cost); toast(`Crafted ${r.make()}`, 'var(--brass-2)'); }
-      sfx('craft'); break;
+      stat('crafts'); sfx('craft'); break;
     }
     case 'upItem': if (it) { const c = upCost(it); if (it.up < benchCap() && hasCost(c)) { payCost(c); it.up++; it.value = Math.round(it.value * 1.15); toast(`${it.name} is now +${it.up}`, `var(--r${it.rarity})`); afterGear(); sfx('craft'); } } break;
     case 'reroll': if (it && it.rarity) { const c = rerollCost(it); if (hasCost(c)) { payCost(c); rollAffixes(it); if (it.rarity < 4) nameItem(it); toast(`New affixes on ${it.name}`, `var(--r${it.rarity})`); afterGear(); sfx('craft'); } } break;
@@ -372,6 +402,7 @@ function doAct(d) {
     case 'qAbandonNo': Panel.abandon = false; break;
     case 'qAbandonYes': S.quest = null; Panel.abandon = false; S.questOffers = makeQuestOffers(); break;
     case 'delve': { const el = Object.keys(Panel.elix).filter((k) => Panel.elix[k]); Panel.elix = {}; startDelve(+d.d, el); return; }
+    default: if (metaAct(d, it) === 'stop') return;
   }
   renderPanel(); hud(); save();
 }

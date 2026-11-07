@@ -143,7 +143,8 @@ function spawnEnemy(arch, x, z, o = {}) {
     world.remove(cr.g); cr.mats.forEach((m) => m.dispose());
     const bc = makeCreature(B.boss.shape, B.boss.color, 0xffffff);
     e.mesh = bc.g; e.mats = bc.mats; e.h = bc.h; e.u = bc.u;
-    e.boss = 1; e.name = B.boss.name + (cyc ? ' ' + roman(cyc + 1) : '');
+    const lap = Math.floor((d - 1) / (5 * BIOMES.length)); // how many times this biome has come round
+    e.boss = 1; e.name = B.boss.name + (lap ? ' ' + roman(lap + 1) : '');
     e.hp = 950 * hpm; e.dmg = 15 * dm; e.xp = 400 * (1 + 0.2 * d); e.scale = 2.4; e.r = 1.25; e.spd = 2.6; e.arm = 0.1;
     e.patterns = B.boss.patterns; e.patT = 2; e.color = B.boss.color;
     e.mats[0].emissive.setHex(B.boss.color).multiplyScalar(0.25);
@@ -247,6 +248,7 @@ function updEnemy(e, dt) {
   if (e.chillT > 0) { e.chillT -= dt; spdM *= 0.5; atkM *= 0.7; }
   if (e.burnT > 0) { e.burnT -= dt; e.hpTick = (e.hpTick || 0) + dt; if (e.hpTick > 0.5) { e.hpTick = 0; damageEnemy(e, e.burnD * 0.5, false, 0, 0, 0, false, 'burn'); if (e.dead) return; } }
   if (e.regen) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * e.regen * dt);
+  if (e.wardT > 0) e.wardT -= dt;
   e.auraOn = null;
   if (e.lead && !e.lead.dead && Math.hypot(e.lead.x - e.x, e.lead.z - e.z) < 7) {
     e.auraOn = e.lead.aura;
@@ -262,12 +264,24 @@ function updEnemy(e, dt) {
     e.charging -= dt;
     mx = Math.sin(e.cdir) * (e.boss ? 15 : 13); mz = Math.cos(e.cdir) * (e.boss ? 15 : 13);
     if (dist < e.r + P.r + 0.2 && !e.chargeHit) { e.chargeHit = 1; hurtPlayer(e.dmg * 1.4, e); P.kx = Math.sin(e.cdir) * 9; P.kz = Math.cos(e.cdir) * 9; }
+  } else if (e.leapW > 0) { // crouch, then spring at where you stood
+    e.leapW -= dt; e.face = Math.atan2(e.htx - e.x, e.htz - e.z);
+    if (e.leapW <= 0) { e.hopT = e.hopDur = 0.42; e.hx0 = e.x; e.hz0 = e.z; sfx('dodge'); }
+  } else if (e.hopT > 0) {
+    e.hopT -= dt; const k = clamp(1 - e.hopT / e.hopDur, 0, 1);
+    e.x = lerp(e.hx0, e.htx, k); e.z = lerp(e.hz0, e.htz, k); e.hopY = Math.sin(k * Math.PI) * 1.5;
+    if (e.hopT <= 0) { e.hopY = 0; burst(e.x, 0.2, e.z, 0xc8b89a, 10, 4, 0.12); }
   } else if (e.boss) { updBoss(e, dt, dist, dx, dz, spd); }
   else if (e.wind > 0) {
     e.wind -= dt * atkM; faceP();
     if (e.wind <= 0) {
       e.strikeT = 0.2;
-      if (e.ai === 'melee' || e.ai === 'charger') { if (dist < e.A.range * e.scale + P.r + 0.35) hurtPlayer(e.dmg, e); swipeFx(e); }
+      if (e.ai === 'melee' || e.ai === 'charger' || e.ai === 'leaper') { if (dist < e.A.range * e.scale + P.r + 0.35) hurtPlayer(e.dmg, e); swipeFx(e); }
+      else if (e.ai === 'totem') { // pulse: a slow ring of bolts and a ward on every ally nearby
+        for (let k = 0; k < 10; k++) enemyFire(e, e.face + k * Math.PI / 5, { spd: 5, size: 0.22, dmg: e.dmg });
+        ringFx(e.x, e.z, 0.5, 6, 0.4, biomeOf(RUN.depth).bolt, 2);
+        for (const o of enemies) if (!o.dead && o !== e && Math.hypot(o.x - e.x, o.z - e.z) < 6) { o.wardT = 4; burst(o.x, o.h * o.scale, o.z, 0x6a9aff, 4, 2, 0.1); }
+      }
       else if (e.ai === 'ranged') { enemyFire(e, e.face, { spd: 11, size: 0.16 }); }
       else if (e.ai === 'caster') {
         if (e.castAlt = !e.castAlt) { for (let k = -1; k <= 1; k++) enemyFire(e, e.face + k * 0.22, { spd: 8 }); }
@@ -311,6 +325,21 @@ function updEnemy(e, dt) {
         if (e.los && dist < e.A.range + 1 && e.cd <= 0) { e.wind = e.ai === 'ranged' ? 0.35 : 0.6; e.cd = e.A.cd * rand(0.85, 1.2); }
         break;
       }
+      case 'leaper': {
+        faceP();
+        if (dist < e.A.range * e.scale + P.r && (e.bite || 0) <= 0) { e.wind = 0.32; e.bite = 1.0; }
+        else if (dist > 2.4 && dist < 7.5 && e.los && e.cd <= 0 && walkable(P.x, P.z)) {
+          e.cd = e.A.cd * rand(0.8, 1.2); e.leapW = 0.5; e.htx = P.x; e.htz = P.z;
+          telegraph(P.x, P.z, 1.5, 0.92, e.dmg * 1.25, {});
+        } else { const [sx, sz] = steer(e, dist); mx = sx * spd; mz = sz * spd; }
+        e.bite = (e.bite || 0) - dt;
+        break;
+      }
+      case 'totem': {
+        e.face += dt * 0.5;
+        if (e.cd <= 0 && dist < 11 && e.los) { e.cd = e.A.cd * rand(0.9, 1.15); e.wind = 0.7; }
+        break;
+      }
       case 'bomber': {
         faceP();
         if (dist < e.A.range + P.r) { e.fuse = 0.85; e.tele = telegraph(e.x, e.z, 2.4, 0.85, 0, { visualOnly: true }); }
@@ -326,7 +355,7 @@ function updEnemy(e, dt) {
   if (collide(e) && e.charging > 0) { e.charging = 0; }
   // visuals
   e.bob += dt * (Math.abs(mx) + Math.abs(mz) > 0.1 ? 9 : 2);
-  e.mesh.position.set(e.x, Math.abs(Math.sin(e.bob)) * 0.08, e.z);
+  e.mesh.position.set(e.x, Math.abs(Math.sin(e.bob)) * 0.08 + (e.hopY || 0), e.z);
   const cur = e.mesh.rotation.y; e.mesh.rotation.y = cur + angDiff(e.face, cur) * Math.min(1, dt * 12);
   const windGlow = e.wind > 0 || e.windCharge > 0;
   if (e.flashT > 0 || windGlow) { e.flashT -= dt; e.mats[0].emissive.setHex(windGlow && !(e.flashT > 0) ? 0x663322 : 0xffffff).multiplyScalar(windGlow ? 0.5 : 0.8); }
@@ -369,7 +398,7 @@ function separate() {
       const dx = b.x - a.x, dz = b.z - a.z, rr = a.r + b.r, d2 = dx * dx + dz * dz;
       if (d2 < rr * rr && d2 > 1e-6) {
         const d = Math.sqrt(d2), push = (rr - d) / 2, nx = dx / d, nz = dz / d;
-        const wa = a.boss ? 0 : 1, wb = b.boss ? 0 : 1;
+        const wa = a.boss || a.ai === 'totem' ? 0 : 1, wb = b.boss || b.ai === 'totem' ? 0 : 1;
         a.x -= nx * push * wa; a.z -= nz * push * wa; b.x += nx * push * wb; b.z += nz * push * wb;
       }
     }
@@ -434,6 +463,40 @@ function bossPattern(e, p, p2) {
         const m = spawnEnemy(pick(['skitter', 'grunt', 'skitter', 'bomber']), sx, sz); m.awake = true; m.owner = e; m.xp *= 0.3; alive++;
         burst(sx, 0.5, sz, B.bolt, 10, 3);
       }
+      break;
+    }
+    case 'whirlpool': { // drags you in while bolts circle outward
+      let acc = 0, a = rand(0, 6.28);
+      ringFx(e.x, e.z, 7, 0.6, 1.2, B.bolt, 2.2);
+      e.casting = { t: p2 ? 2.8 : 2.2, tick: (dt) => {
+        const dx = e.x - P.x, dz = e.z - P.z, d = Math.hypot(dx, dz) || 1;
+        if (d > e.r + 1.2) { P.kx = dx / d * (p2 ? 4.2 : 3.3); P.kz = dz / d * (p2 ? 4.2 : 3.3); }
+        acc += dt; while (acc > 0.16) { acc -= 0.16; a += 0.7; enemyFire(e, a, { spd: 5, size: 0.26, dmg: e.dmg * 0.7 }); enemyFire(e, a + Math.PI, { spd: 5, size: 0.26, dmg: e.dmg * 0.7 }); burst(e.x + Math.sin(a) * 4, 0.3, e.z + Math.cos(a) * 4, B.bolt, 2, 2, 0.1); }
+      } };
+      break;
+    }
+    case 'wave': { // rows of breakers roll towards you, each with one gap to slip through
+      const a0 = Math.atan2(P.x - e.x, P.z - e.z), fx = Math.sin(a0), fz = Math.cos(a0), px = Math.cos(a0), pz = -Math.sin(a0);
+      let step = 0, acc = 0; const gap = randi(-2, 2);
+      e.casting = { t: 1.9, tick: (dt) => {
+        acc += dt; if (acc < 0.28 || step >= (p2 ? 7 : 5)) return; acc = 0; step++;
+        const g = gap + (p2 ? randi(-1, 1) : 0);
+        for (let k = -4; k <= 4; k++) { if (k === g) continue; const x = e.x + fx * (1.6 + step * 1.9) + px * k * 1.9, z = e.z + fz * (1.6 + step * 1.9) + pz * k * 1.9; if (walkable(x, z)) telegraph(x, z, 1.05, 0.55, e.dmg * 1.2, { col: 0x5ae8ff }); }
+      } };
+      break;
+    }
+    case 'beam': { // three turning arms of bolts
+      let acc = 0, a = rand(0, 6.28); const arms = p2 ? 4 : 3, turn = (chance(0.5) ? 1 : -1) * (p2 ? 0.95 : 0.75);
+      e.casting = { t: 2.6, tick: (dt) => { a += turn * dt; acc += dt; while (acc > 0.05) { acc -= 0.05; for (let k = 0; k < arms; k++) enemyFire(e, a + k * Math.PI * 2 / arms, { spd: 12, size: 0.2, dmg: e.dmg * 0.55, col: 0xffe08a }); } } };
+      break;
+    }
+    case 'roots': { // roots race along the ground towards you
+      const a0 = Math.atan2(P.x - e.x, P.z - e.z), lines = p2 ? [-0.5, -0.25, 0, 0.25, 0.5] : [-0.35, 0, 0.35];
+      let step = 0, acc = 0;
+      e.casting = { t: 1.6, tick: (dt) => {
+        acc += dt; if (acc < 0.09 || step >= 11) return; acc = 0; step++;
+        for (const o of lines) { const x = e.x + Math.sin(a0 + o) * (1 + step * 1.15), z = e.z + Math.cos(a0 + o) * (1 + step * 1.15); if (walkable(x, z)) telegraph(x, z, 0.9, 0.5, e.dmg * 1.1, { col: 0xd03a5a }); }
+      } };
       break;
     }
     case 'teleport': {
@@ -503,7 +566,7 @@ function updProjs(dt) {
         if (e.dead || p.hit.has(e.id)) continue;
         if (Math.hypot(e.x - p.x, e.z - p.z) < e.r + p.size + 0.15) {
           p.hit.add(e.id);
-          const { d, crit } = rollDmg(); damageEnemy(e, d * (p.mult || 1), crit, 2, p.vx / p.spd, p.vz / p.spd, true);
+          const { d, crit } = rollDmg(e); damageEnemy(e, d * (p.mult || 1), crit, 2, p.vx / p.spd, p.vz / p.spd, true);
           if (p.pierce-- <= 0) { dead = true; break; }
         }
       }
@@ -516,15 +579,19 @@ function updProjs(dt) {
 }
 
 // ================= combat =================
-function rollDmg() {
+function rollDmg(e) {
   let d = ST.dmg * rand(0.9, 1.1);
+  if (e) { // talents that care who is on the end of the blade
+    if (e.hp < e.maxHp * 0.3) d *= 1 + 0.15 * tal('executioner');
+    if (e.champ || e.leader || e.boss) d *= 1 + 0.1 * tal('huntersmark');
+  }
   const crit = Math.random() * 100 < ST.crit;
   if (crit) d *= 1.5 + ST.critd / 100;
   return { d, crit };
 }
 function curWeapon() { return WEAPONS[ST.wk]; }
 function playerAttack() {
-  if (P.atkT > 0 || P.dodgeT > 0 || P.dashT > 0 || P.spinT > 0 || P.dead) return;
+  if (P.atkT > 0 || P.dodgeT > 0 || P.dashT > 0 || P.spinT > 0 || P.leapT > 0 || P.dead) return;
   const w = curWeapon();
   const fr = 1 + (ST.aspd + P.frenzy * 4) / 100;
   // three-hit string: swings alternate direction, the third is a heavier finisher
@@ -534,8 +601,8 @@ function playerAttack() {
   sfx(w.ranged ? 'shoot' : P.fin || ST.wk === 'hammer' || ST.wk === 'axe' ? 'heavy' : 'swing');
   const a = P.face;
   if (w.ranged) {
-    const n = ST.powers.split ? 3 : 1;
-    for (let k = 0; k < n; k++) spawnProj({ x: P.x + Math.sin(a) * 0.5, z: P.z + Math.cos(a) * 0.5, a: a + (k - (n - 1) / 2) * 0.18, spd: w.pspd, owner: 'p', size: w.size, col: w.col, pierce: w.pierce, mult: k === 0 ? 1 : 0.6, life: LV.type === 'town' ? 0.8 : undefined });
+    const n = (ST.powers.split ? 3 : 1) + (Math.random() * 100 < 15 * tal('multishot') ? 2 : 0);
+    for (let k = 0; k < n; k++) spawnProj({ x: P.x + Math.sin(a) * 0.5, z: P.z + Math.cos(a) * 0.5, a: a + (k - (n - 1) / 2) * 0.18, spd: w.pspd, owner: 'p', size: w.size, col: w.col, pierce: w.pierce + ST.pierce, mult: k === 0 ? 1 : 0.6, life: LV.type === 'town' ? 0.8 : undefined });
   } else {
     if (SET.cam === 'top') swingFx(a, w);
     P.pend = { t: P.swingDur * 0.42, fin: P.fin }; // the blow lands mid-swing, not on the button press
@@ -547,9 +614,9 @@ function resolveMelee(fin) {
   for (const e of enemies) {
     if (e.dead) continue;
     const dx = e.x - P.x, dz = e.z - P.z, d = Math.hypot(dx, dz);
-    if (d > w.range * (fin ? 1.12 : 1) + e.r) continue;
-    if (Math.abs(angDiff(Math.atan2(dx, dz), a)) > w.arc / 2 + 0.15 + (fin ? 0.25 : 0) && d > e.r + 0.4) continue;
-    const r = rollDmg();
+    if (d > w.range * ST.reachM * (fin ? 1.12 : 1) + e.r) continue;
+    if (Math.abs(angDiff(Math.atan2(dx, dz), a)) > w.arc * ST.arcM / 2 + 0.15 + (fin ? 0.25 : 0) && d > e.r + 0.4) continue;
+    const r = rollDmg(e);
     damageEnemy(e, r.d * (fin ? 1.35 : 1), r.crit, w.kb * (fin ? 1.6 : 1), dx / (d || 1), dz / (d || 1), true);
     hits++; if (r.crit) crits++;
   }
@@ -565,19 +632,20 @@ function damageEnemy(e, d, crit, kb, nx, nz, proc, kind) {
   wake(e);
   let m = 1 - e.arm;
   if (e.auraOn === 'ward') m *= 0.6;
+  if (e.wardT > 0) m *= 0.5;
   d *= m;
   e.hp -= d; e.flashT = 0.1; e.hitT = 0.16;
   if (nx || nz) { e.lastNx = nx; e.lastNz = nz; }
   // heavy blows and crits stagger ordinary foes out of a wind-up
   if (proc && e.wind > 0 && !e.boss && !e.leader && (crit || kb >= 4.5)) { e.wind = 0; e.cd = Math.max(e.cd, 0.6); floatNum(e.x, e.h * e.scale + 0.6, e.z, 'Staggered', 'xp'); }
   floatNum(e.x, e.h * e.scale + 0.2, e.z, fmt(Math.max(1, d)), crit ? 'crit' : kind === 'burn' ? 'xp' : '');
-  if (kb && !e.boss) { const k = kb * (e.arch === 'brute' || e.arch === 'warden' ? 0.4 : 1) * (e.leader ? 0.5 : 1); e.kx += nx * k * 2.2; e.kz += nz * k * 2.2; }
+  if (kb && !e.boss && e.ai !== 'totem') { const k = kb * (e.arch === 'brute' || e.arch === 'warden' ? 0.4 : 1) * (e.leader ? 0.5 : 1); e.kx += nx * k * 2.2; e.kz += nz * k * 2.2; }
   ensureBar(e);
   if (proc) {
     burst(e.x, 0.9, e.z, e.color, 4, 3, 0.1);
     sfx('hit');
     if (ST.ls > 0) healPlayer(d * ST.ls / 100, true);
-    if (Math.random() * 100 < ST.burn) { e.burnT = 3; e.burnD = ST.dmg * 0.3; }
+    if (Math.random() * 100 < ST.burn) { e.burnT = 3; e.burnD = ST.dmg * 0.3 * ST.burnM; }
     if (Math.random() * 100 < ST.chill) e.chillT = 2.5;
     if (ST.powers.chain && chance(0.3)) chainLightning(e, d * 0.6);
     if (ST.powers.frenzy) { P.frenzy = Math.min(10, P.frenzy + 1); P.frenzyT = 2; }
@@ -601,6 +669,12 @@ function killEnemy(e, noLoot) {
   questEvent('kill', e);
   gainXP(e.xp);
   S.kills++;
+  if (!e.boss && !e.leader) { const bn = e.champ ? e.name.split(' ').slice(e.aff.length).join(' ') : e.name; S.bestiary[bn] = (S.bestiary[bn] || 0) + 1; }
+  else S.bestiary[e.name] = (S.bestiary[e.name] || 0) + 1;
+  if (e.leader) stat('leaders'); if (e.champ) stat('champs');
+  if (tal('rage')) for (let i = 0; i < 3; i++) skillCd[i] = Math.max(0, skillCd[i] - 0.3 * tal('rage'));
+  if (Math.random() * 100 < 10 * tal('volatile') && !e.boss) { ringFx(e.x, e.z, 0.4, 2.6, 0.25, 0xb08cff, 2.4); for (const o of enemies) if (!o.dead && o !== e && Math.hypot(o.x - e.x, o.z - e.z) < 2.6 + o.r) damageEnemy(o, ST.dmg * 0.6 * ST.skillM, false, 3, (o.x - e.x), (o.z - e.z), false); }
+  if (pet) pet.kills++;
   if (!noLoot || e.explode) dropLoot(e);
   if (e.split) for (let k = 0; k < 2; k++) { const s = spawnEnemy('skitter', e.x + rand(-0.6, 0.6), e.z + rand(-0.6, 0.6)); s.awake = true; s.xp *= 0.3; }
   if (e.explode && !e.ai.startsWith('bomb')) { telegraph(e.x, e.z, 2.2, 0.6, e.dmg * 0.9, { col: 0xffb02a }); }
@@ -611,8 +685,10 @@ function killEnemy(e, noLoot) {
 }
 function hurtPlayer(d, src) {
   if (P.iframes > 0 || P.dead || LV.type !== 'dungeon') return;
+  if (Math.random() * 100 < ST.block) { floatNum(P.x, 2, P.z, 'Blocked', 'xp'); sfx('block'); burst(P.x + Math.sin(P.face) * 0.5, 1, P.z + Math.cos(P.face) * 0.5, 0xd8e0ff, 6, 3, 0.1); P.iframes = 0.15; return; }
+  if (Math.random() * 100 < ST.evade) { floatNum(P.x, 2, P.z, 'Evaded', 'xp'); P.iframes = 0.15; return; }
   const red = ST.armor / (ST.armor + 40 + 9 * RUN.depth);
-  d *= 1 - red;
+  d *= (1 - red) * (1 - ST.dr / 100);
   P.hp -= d; P.hurtT = 0.2;
   shake(clamp(d / ST.maxHp * 2.2, 0.18, 0.55)); addHitStop(0.04);
   floatNum(P.x, 2, P.z, '-' + fmt(d), 'hurt');
@@ -634,6 +710,7 @@ function healPlayer(n, quiet) {
   if (!quiet && P.hp - before >= 1) floatNum(P.x, 2, P.z, '+' + fmt(P.hp - before), 'heal');
 }
 function gainXP(x) {
+  if (S.decor && S.decor.dummy) x *= 1.05;
   S.xp += x;
   let up = false;
   while (S.xp >= xpNeed(S.level)) { S.xp -= xpNeed(S.level); S.level++; up = true; }
@@ -649,9 +726,10 @@ function spawnDrop(x, z, data) {
   const g = new THREE.Group();
   if (data.gold) { for (let k = 0; k < 3; k++) g.add(mesh(G.cyl, metal(0xe8b450, 0.25), 0.22, 0.05, 0.22, rand(-0.1, 0.1), k * 0.06, rand(-0.1, 0.1))); }
   else if (data.mat) { g.add(mesh(G.oct, mat(new THREE.Color(MATS[data.mat].c).getHex(), 1.8), 0.26, 0.34, 0.26, 0, 0.1, 0)); }
+  else if (data.gem) { g.add(mesh(G.oct, mat(new THREE.Color(GEMS[gemSplit(data.gem)[0]].c).getHex(), 3), 0.22, 0.3, 0.22, 0, 0.12, 0)); }
   else if (data.potion) { g.add(mesh(G.sph, mat(0xe0473b, 2), 0.28, 0.28, 0.28, 0, 0.1, 0), mesh(G.box, mat(0x8a6a4a), 0.08, 0.12, 0.08, 0, 0.3, 0)); }
   else if (data.item) {
-    const c = RCOL[data.item.rarity];
+    const c = data.item.set ? 0x5fd38a : RCOL[data.item.rarity];
     g.add(mesh(G.box, mat(c, 2.4), 0.3, 0.3, 0.3, 0, 0.2, 0)); g.children[0].rotation.set(0.6, 0, 0.6);
     if (data.item.rarity >= 2) { const beam = new THREE.Mesh(G.cyl, new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(1.5), transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending })); beam.scale.set(0.35, 6, 0.35); beam.position.y = 3; g.add(beam); levelDisp.push(beam.material); }
     if (data.item.rarity >= 3) sfx('rare');
@@ -672,7 +750,8 @@ function dropLoot(e) {
   if (chance(0.02)) spawnDrop(e.x, e.z, { potion: 1 });
   let n = e.boss ? 3 : e.leader ? 1 : 0;
   if (chance(e.champ ? 0.4 : 0.065 + 0.002 * d)) n++;
-  for (let k = 0; k < n; k++) spawnDrop(e.x, e.z, { item: genItem(d + (e.boss ? 1 : 0), { mf, min: e.boss ? (k === 0 ? 3 : 2) : e.leader ? 2 : 0 }) });
+  for (let k = 0; k < n; k++) spawnDrop(e.x, e.z, { item: lootItem(d + (e.boss ? 1 : 0), { mf, min: e.boss ? (k === 0 ? 3 : 2) : e.leader ? 2 : 0 }) });
+  if (chance(0.025 * mult)) spawnDrop(e.x, e.z, { gem: gemKey(pick(Object.keys(GEMS)), d >= 30 && chance(0.15) ? 3 : d >= 12 && chance(0.3) ? 2 : 1) });
   if (e.boss) { spawnDrop(e.x, e.z, { mat: 'sigil', n: 1 + cycleOf(d) }); spawnDrop(e.x, e.z, { mat: 'essence', n: randi(3, 6) }); }
 }
 function updDrops(dt) {
@@ -695,6 +774,7 @@ function updDrops(dt) {
 function pickup(dt) {
   if (dt.gold) { S.gold += dt.gold; RUN && (RUN.gold += dt.gold); floatNum(P.x, 1.8, P.z, '+' + dt.gold + 'g', 'crit'); sfx('coin'); }
   else if (dt.mat) { addMat(dt.mat, dt.n); toast(`+${dt.n} ${MATS[dt.mat].n}`, MATS[dt.mat].c); sfx('coin'); questEvent('mat', dt.mat, dt.n); }
+  else if (dt.gem) { S.gems[dt.gem] = (S.gems[dt.gem] || 0) + 1; toast(`+1 ${gemName(dt.gem)}`, GEMS[gemSplit(dt.gem)[0]].c); sfx('coin'); }
   else if (dt.potion) { S.potions++; toast('+1 Healing Draught', 'var(--blood-2)'); sfx('coin'); }
-  else if (dt.item) { S.inv.push(dt.item); toast(dt.item.name, `var(--r${dt.item.rarity})`); sfx('coin'); if (RUN) RUN.items++; }
+  else if (dt.item) { S.inv.push(dt.item); toast(dt.item.name, dt.item.set ? 'var(--set)' : `var(--r${dt.item.rarity})`); sfx('coin'); if (RUN) RUN.items++; if (dt.item.set) stat('sets'); else if (dt.item.rarity === 4) stat('legs'); }
 }

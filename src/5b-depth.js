@@ -1,17 +1,22 @@
 // ================= skills =================
-const SKILLS = [
-  { id: 'whirl', key: '1', n: 'Whirlwind', lvl: 1, cd: 6, d: 'Spin with your weapon out, striking every foe around you twice for 85% damage each.' },
-  { id: 'dash', key: '2', n: 'Shadow Dash', lvl: 4, cd: 7, d: 'Dash six paces through foes, striking each for 200% damage. Nothing can hit you mid-dash.' },
-  { id: 'nova', key: '3', n: 'Ember Nova', lvl: 8, cd: 12, d: 'A ring of fire bursts from you for 250% damage, hurling foes back and setting them alight.' },
-];
+// each class brings its own three skills (see CLASSES); this array is refilled when the class is set
+const SKILLS = [];
+function setClassSkills() {
+  SKILLS.length = 0;
+  clsOf().skills.forEach((id, i) => SKILLS.push(Object.assign({ id, key: String(i + 1), lvl: SKILL_LVL[i] }, SKILL_DEFS[id])));
+}
+const skillCdOf = (s) => s.cd * (1 - (ST ? ST.cdr : 0) / 100);
 const skillCd = [0, 0, 0];
 Object.assign(P, { spinT: 0, dashT: 0, dashDir: 0, dashHit: new Set(), spinTicks: 0 });
 function useSkill(i) {
   const s = SKILLS[i];
   if (!s || P.dead || isPaused() || !LV) return;
   if (S.level < s.lvl) { toast(`${s.n} unlocks at level ${s.lvl}.`, 'var(--muted)'); return; }
-  if (skillCd[i] > 0 || P.dodgeT > 0 || P.dashT > 0 || P.spinT > 0) return;
-  skillCd[i] = s.cd;
+  if (skillCd[i] > 0 || P.dodgeT > 0 || P.dashT > 0 || P.spinT > 0 || P.leapT > 0) return;
+  if (classSkill(s) === false) return; // nothing to aim at, or no room to land
+  skillCd[i] = Math.random() * 100 < 10 * tal('overflow') ? 0.4 : skillCdOf(s);
+  if (skillCd[i] < 1) floatNum(P.x, 2.2, P.z, 'Overflow', 'xp');
+  stat('skills');
   P.atkT = Math.max(P.atkT, 0.15); P.pend = null;
   if (s.id === 'whirl') {
     P.spinT = 0.46; P.spinTicks = 0; P.iframes = Math.max(P.iframes, 0.12);
@@ -24,7 +29,7 @@ function useSkill(i) {
   } else if (s.id === 'nova') {
     ringFx(P.x, P.z, 0.5, 5.0, 0.38, 0xff7a2a, 3.2); ringFx(P.x, P.z, 0.3, 3.6, 0.3, 0xffd06a, 2.4);
     for (let k = 0; k < 3; k++) burst(P.x, 0.4, P.z, k ? 0xff7a2a : 0xffd06a, 18, 9, 0.22, 2.2);
-    const n = hitAround(5.0, 2.5, 7, (e) => { e.burnT = 3; e.burnD = ST.dmg * 0.4; });
+    const n = hitAround(5.0, 2.5 * ST.skillM, 7, (e) => { e.burnT = 3; e.burnD = ST.dmg * 0.4 * ST.burnM; });
     shake(0.55); addHitStop(n ? 0.09 : 0.03); sfx('nova');
   }
 }
@@ -35,7 +40,7 @@ function hitAround(radius, mult, kb, extra) {
     if (e.dead) continue;
     const dx = e.x - P.x, dz = e.z - P.z, d = Math.hypot(dx, dz);
     if (d > radius + e.r) continue;
-    const r = rollDmg(); damageEnemy(e, r.d * mult, r.crit, kb, dx / (d || 1), dz / (d || 1), true);
+    const r = rollDmg(e); damageEnemy(e, r.d * mult, r.crit, kb, dx / (d || 1), dz / (d || 1), true);
     if (extra && !e.dead) extra(e);
     n++;
   }
@@ -50,16 +55,17 @@ function dashHits() {
     if (d > e.r + 1.1) continue;
     P.dashHit.add(e.id);
     const side = Math.sin(P.dashDir) * dz - Math.cos(P.dashDir) * dx > 0 ? 1 : -1; // knock foes aside, out of the lane
-    const r = rollDmg(); damageEnemy(e, r.d * 2, r.crit, 5, Math.cos(P.dashDir) * side, -Math.sin(P.dashDir) * side, true);
+    const r = rollDmg(e); damageEnemy(e, r.d * 2 * ST.skillM, r.crit, 5, Math.cos(P.dashDir) * side, -Math.sin(P.dashDir) * side, true);
     addHitStop(0.03); shake(0.15);
   }
 }
 function updSkills(dt) {
   for (let i = 0; i < 3; i++) skillCd[i] = Math.max(0, skillCd[i] - dt);
+  updClassSkills(dt);
   if (P.spinT > 0) {
     P.spinT -= dt;
     const due = P.spinT < 0.38 && P.spinTicks === 0 ? 1 : P.spinT < 0.12 && P.spinTicks === 1 ? 2 : 0;
-    if (due) { P.spinTicks = due; ringFx(P.x, P.z, 0.6, 3.0, 0.22, 0xfff2c8, 2); const n = hitAround(2.9, 0.85, 3.5); if (n) { addHitStop(0.04); shake(0.2); } }
+    if (due) { P.spinTicks = due; ringFx(P.x, P.z, 0.6, 3.0, 0.22, 0xfff2c8, 2); const n = hitAround(2.9, 0.85 * ST.skillM, 3.5); if (n) { addHitStop(0.04); shake(0.2); } }
   }
 }
 
@@ -201,7 +207,7 @@ function updAmbush(dt) {
   RUN.ambush = null;
   addChest(A.x + 1.6, A.z, true);
   banner('The altar falls silent', 'A hoard lies open');
-  setMusic('dng:' + biomeOf(RUN.depth).id); sfx('quest'); questEvent('altar');
+  setMusic('dng:' + biomeOf(RUN.depth).id); sfx('quest'); questEvent('altar'); stat('altars');
 }
 
 // ================= quests =================

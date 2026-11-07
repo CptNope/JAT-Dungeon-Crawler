@@ -20,7 +20,7 @@ function makeCreature(kind, color, eyeCol, opts = {}) {
   const dark = limbMat(new THREE.Color(color).multiplyScalar(0.45).getHex(), { rough: 0.5, metal: 0.4, nmap: TEX.brick.normal, ns: 0.35 }, u);
   const eye = mat(eyeCol || 0xffe08a, 3);
   const map = new Map([[ROLE_BODY, body], [ROLE_DARK, dark], [ROLE_EYE, eye], [ROLE_GLOW, mat(eyeCol || 0xb48cff, 3)]]);
-  for (const p of T.parts) { const m = new THREE.Mesh(p.geometry, map.get(p.material) || p.material); m.castShadow = p.material === ROLE_BODY || p.material === ROLE_DARK; g.add(m); } // only the bulk casts shadows
+  for (const p of T.parts) { const m = new THREE.Mesh(p.geometry, map.get(p.material) || p.material); m.castShadow = m.userData.cs = p.material === ROLE_BODY || p.material === ROLE_DARK; g.add(m); } // only the bulk casts shadows
   for (const l of T.live) { const o = new THREE.Mesh(l.geo, map.get(ROLE_GLOW)); o.position.copy(l.pos); o.scale.copy(l.scale); o.rotation.copy(l.rot); o.userData = { ...l.ud }; delete o.userData.live; g.add(o); }
   return { g, mats: [body, dark], h: T.h, u };
 }
@@ -150,6 +150,46 @@ function buildCreatureTemplate(kind) {
       P(G.dodec, D, 0.28, 0.28, 0.28, 0.5, 0.68, 0.58, 4, [0.5, 1.18, 0]);
       h = 1.9; ey = 1.52; ez = 0.26; es = 0.05; ex = 0.1;
       break;
+    case 'hound': // four legs: diagonal pairs share a limb tag, so the walk cycle reads as a trot
+      P(G.box, B, 0.46, 0.4, 0.92, 0, 0.62, -0.02);
+      P(G.sph, B, 0.5, 0.46, 0.5, 0, 0.66, 0.36);
+      P(G.box, D, 0.48, 0.12, 0.7, 0, 0.84, -0.08);
+      P(G.sph, B, 0.36, 0.34, 0.4, 0, 0.92, 0.6);
+      P(G.box, B, 0.2, 0.16, 0.26, 0, 0.86, 0.84); P(G.box, K, 0.08, 0.06, 0.04, 0, 0.9, 0.97);
+      P(G.cone4, D, 0.1, 0.2, 0.06, -0.12, 1.12, 0.56, 0, 0, [0, 0, 0.3]); P(G.cone4, D, 0.1, 0.2, 0.06, 0.12, 1.12, 0.56, 0, 0, [0, 0, -0.3]);
+      P(G.box, D, 0.36, 0.08, 0.1, 0, 0.74, 0.52); // collar
+      P(G.box, B, 0.09, 0.09, 0.44, 0, 0.82, -0.62, 5, [0, 0.78, -0.46], [-0.6, 0, 0]); // tail
+      for (const [x, z, L] of [[-0.15, 0.3, 1], [0.15, 0.3, 2], [-0.15, -0.32, 2], [0.15, -0.32, 1]]) { P(G.box, D, 0.12, 0.44, 0.13, x, 0.22, z, L, [x, 0.46, z]); P(G.box, D, 0.14, 0.06, 0.18, x, 0.03, z + 0.03, L, [x, 0.46, z]); }
+      h = 1.15; ey = 0.98; ez = 0.76; es = 0.05; ex = 0.09;
+      break;
+    case 'leaper': // crouched, coiled back legs; leaps on its prey
+      P(G.sph, B, 0.74, 0.5, 0.8, 0, 0.5, 0);
+      P(G.sph, B, 0.48, 0.38, 0.44, 0, 0.66, 0.38);
+      P(G.box, D, 0.5, 0.08, 0.5, 0, 0.74, -0.06);
+      for (let k = 0; k < 4; k++) P(G.cone4, D, 0.08, 0.22, 0.08, 0, 0.78 - k * 0.02, 0.1 - k * 0.16, 0, 0, [-0.4, 0, 0]);
+      P(G.box, K, 0.32, 0.06, 0.04, 0, 0.56, 0.6); P(G.cone4, W, 0.04, 0.1, 0.04, -0.08, 0.5, 0.6, 0, 0, [3.0, 0, 0]); P(G.cone4, W, 0.04, 0.1, 0.04, 0.08, 0.5, 0.6, 0, 0, [3.0, 0, 0]);
+      for (const s of [-1, 1]) {
+        const L = s < 0 ? 1 : 2;
+        P(G.sph, D, 0.26, 0.44, 0.4, s * 0.34, 0.36, -0.22, L, [s * 0.34, 0.5, -0.2]);
+        P(G.box, D, 0.16, 0.06, 0.36, s * 0.38, 0.04, -0.06, L, [s * 0.34, 0.5, -0.2]);
+        P(G.box, B, 0.1, 0.34, 0.1, s * 0.24, 0.2, 0.32, s < 0 ? 3 : 4, [s * 0.24, 0.4, 0.32]);
+      }
+      h = 0.95; ey = 0.74; ez = 0.54; es = 0.07; ex = 0.12;
+      break;
+    case 'totem': { // a carved pillar that hums; does not move
+      P(G.cyl, D, 0.9, 0.2, 0.9, 0, 0.1, 0);
+      P(G.box, B, 0.6, 0.62, 0.6, 0, 0.5, 0);
+      P(G.box, D, 0.7, 0.1, 0.7, 0, 0.84, 0);
+      P(G.box, B, 0.52, 0.56, 0.52, 0, 1.16, 0);
+      P(G.box, D, 0.62, 0.1, 0.62, 0, 1.48, 0);
+      P(G.box, B, 0.46, 0.46, 0.46, 0, 1.76, 0);
+      for (const y of [0.5, 1.16]) for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2; P(G.box, ROLE_GLOW, 0.14, 0.18, 0.03, Math.sin(a) * 0.31, y, Math.cos(a) * 0.31, 0, 0, [0, a, 0]); }
+      P(G.cone4, D, 0.42, 0.3, 0.42, 0, 2.14, 0);
+      for (const s of [-1, 1]) P(G.cone4, W, 0.08, 0.32, 0.08, s * 0.32, 1.86, 0, 0, 0, [0, 0, -s * 0.9]);
+      const crys = P(G.oct, ROLE_GLOW, 0.2, 0.32, 0.2, 0, 2.5, 0); crys.userData.spin = 1;
+      h = 2.4; ey = 1.8; ez = 0.24; es = 0.07; ex = 0.11;
+      break;
+    }
   }
   P(G.sph, E, es, es, es, -ex, ey, ez); P(G.sph, E, es, es, es, ex, ey, ez);
   return { g, h };
@@ -185,8 +225,8 @@ function weaponMesh(kind) { // points along +z from the grip at the origin
 
 // ================= the delver =================
 function makeHero() {
-  const u = limbU();
-  const steel = limbMat(0x9aa4b2, { metal: 0.75, rough: 0.55, nmap: TEX.plaster.normal, ns: 0.4 }, u), cloth = limbMat(0x3a8288, { rough: 0.9, map: TEX.plaster.map, nmap: TEX.wood.normal, ns: 0.5 }, u), skin = limbMat(0xe2b48f, { rough: 0.6 }, u);
+  const u = limbU(), C = clsOf(), ck = (S && S.cls) || 'warrior';
+  const steel = limbMat(ck === 'warrior' ? 0x9aa4b2 : ck === 'ranger' ? 0x7a5a3e : 0x5a4a7a, { metal: ck === 'warrior' ? 0.75 : 0.1, rough: 0.55, nmap: TEX.plaster.normal, ns: 0.4 }, u), cloth = limbMat(C.col, { rough: 0.9, map: TEX.plaster.map, nmap: TEX.wood.normal, ns: 0.5 }, u), skin = limbMat(0xe2b48f, { rough: 0.6 }, u);
   const leather = limbMat(0x6a4630, { rough: 0.75, map: TEX.plaster.map, nmap: TEX.plaster.normal, ns: 0.8 }, u), hair = limbMat(0x2e2018, { rough: 0.9, nmap: TEX.wood.normal, ns: 0.8 }, u), gold = limbMat(0xe0aa50, { metal: 1, rough: 0.35 }, u);
   const g = new THREE.Group();
   const P = (geo, m, sx, sy, sz, x, y, z, limb, pv) => { const o = mesh(geo, m, sx, sy, sz, x, y, z); if (limb) { o.userData.limb = limb; o.userData.pivot = new THREE.Vector3(...pv); } g.add(o); return o; };
@@ -202,6 +242,9 @@ function makeHero() {
   P(G.box, hair, 0.36, 0.22, 0.12, 0, 1.44, -0.16);
   P(G.box, mat(0x1a1410), 0.06, 0.05, 0.02, -0.08, 1.44, 0.19); P(G.box, mat(0x1a1410), 0.06, 0.05, 0.02, 0.08, 1.44, 0.19);
   for (const s of [-1, 1]) { const L = s < 0 ? 3 : 4, pv = [s * 0.36, 1.1, 0]; P(G.box, cloth, 0.13, 0.28, 0.14, s * 0.36, 0.96, 0, L, pv); P(G.box, steel, 0.15, 0.22, 0.16, s * 0.36, 0.72, 0.01, L, pv); P(G.sph, leather, 0.13, 0.13, 0.13, s * 0.36, 0.6, 0.02, L, pv); }
+  if (ck === 'mage') { P(G.cyl, cloth, 0.62, 0.05, 0.62, 0, 1.6, 0); P(G.cone, cloth, 0.4, 0.62, 0.4, 0, 1.92, -0.06); P(G.cyl, gold, 0.42, 0.06, 0.42, 0, 1.64, 0); P(G.box, cloth, 0.62, 0.7, 0.04, 0, 0.42, 0.1); }
+  else if (ck === 'ranger') { P(G.sph, cloth, 0.46, 0.4, 0.46, 0, 1.5, -0.04); P(G.cone, cloth, 0.3, 0.3, 0.3, 0, 1.58, -0.24); P(G.cyl, leather, 0.14, 0.62, 0.14, 0.18, 1.0, -0.26); for (let k = 0; k < 3; k++) P(G.box, mat(0xeee6d0), 0.03, 0.14, 0.06, 0.14 + k * 0.04, 1.36, -0.26); }
+  else { P(G.box, steel, 0.42, 0.14, 0.42, 0, 1.6, 0); P(G.box, cloth, 0.06, 0.24, 0.32, 0, 1.76, -0.02); }
   const parts = bakeByMaterial(g);
   const out = new THREE.Group();
   for (const p of parts) { const m = new THREE.Mesh(p.geometry, p.material); m.castShadow = true; out.add(m); }

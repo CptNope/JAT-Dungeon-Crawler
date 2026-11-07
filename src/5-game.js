@@ -36,6 +36,7 @@ function loadTown() {
   placePlayerMesh(); resetMini(); snapCamera();
   releaseLock(); setMusic('town');
   P.u.uRim.value.setRGB(0.05, 0.06, 0.08);
+  spawnPet(); spawnVillagers(); applyTimeOfDay(true);
   warmLevel();
 }
 // threejs-performance, "Shader compile stalls": build every program the new level needs
@@ -78,7 +79,7 @@ function populate() {
     const vault = L.rooms.length > 4 ? L.rooms[randi(1, L.rooms.length - 1)] : null;
     for (const r of L.rooms.slice(1)) {
       const area = r.w * r.h;
-      let n = Math.min(10, randi(2, 4) + Math.floor(d / 5) + (area > 60 ? 2 : 0));
+      let n = Math.min(area > 60 ? 9 : 7, randi(2, 4) + Math.floor(d / 5) + (area > 60 ? 2 : 0)); // deep floors get tougher foes, not endless crowds
       let lead = null;
       if (d >= 2 && chance(Math.min(0.38, 0.14 + d * 0.012))) {
         const [x, z] = spot(r, 2);
@@ -123,7 +124,7 @@ function loadDungeon(depth) {
   const before = ST ? ST.maxHp : 0;
   ST = calcStats();
   if (RUN.fresh) { P.hp = ST.maxHp; RUN.fresh = false; } else P.hp = Math.min(ST.maxHp, P.hp + (ST.maxHp - before > 0 ? ST.maxHp - before : 0));
-  placePlayerMesh(); resetMini(); snapCamera();
+  placePlayerMesh(); resetMini(); snapCamera(); spawnPet();
   flow = null; flowTile = -1; computeFlow();
   warmLevel();
   banner(`Depth ${depth}`, B.name + (cycleOf(depth) ? ` · Cycle ${cycleOf(depth) + 1}` : ''));
@@ -148,11 +149,12 @@ function addChest(x, z, rich) {
     const d = RUN.depth, mf = ST.mf;
     spawnDrop(x, z, { gold: Math.round(randi(8, 18) * Math.pow(1.09, d) * (1 + ST.gold / 100)) });
     const n = randi(1, 2);
-    for (let k = 0; k < n + (rich ? 1 : 0); k++) spawnDrop(x, z, { item: genItem(d + (rich ? 1 : 0), { mf: mf + (rich ? 120 : 30), min: rich ? 2 : chance(0.35) ? 1 : 0 }) });
+    for (let k = 0; k < n + (rich ? 1 : 0); k++) spawnDrop(x, z, { item: lootItem(d + (rich ? 1 : 0), { mf: mf + (rich ? 120 : 30), min: rich ? 2 : chance(0.35) ? 1 : 0 }) });
     if (rich) { spawnDrop(x, z, { gold: Math.round(randi(30, 50) * Math.pow(1.09, d)) }); spawnDrop(x, z, { mat: 'essence', n: randi(2, 4) }); }
     spawnDrop(x, z, { mat: pick(biomeOf(d).mats), n: randi(1, 3) });
     if (chance(0.4)) spawnDrop(x, z, { mat: pick(['iron', 'herb', 'essence']), n: randi(1, 2) });
     if (chance(0.3)) spawnDrop(x, z, { potion: 1 });
+    if (chance(rich ? 0.6 : 0.12)) spawnDrop(x, z, { gem: gemKey(pick(Object.keys(GEMS)), d >= 30 && chance(0.2) ? 3 : d >= 12 && chance(0.35) ? 2 : 1) });
     burst(x, 0.8, z, 0xf2c56b, 16, 4, 0.12);
   } });
 }
@@ -195,7 +197,7 @@ function addPortalHome(x, z) {
 }
 function nextFloor() {
   const d = RUN.depth + 1;
-  RUN.floors++;
+  RUN.floors++; S.stats.longest = Math.max(S.stats.longest || 0, RUN.floors);
   loadDungeon(d);
 }
 function bossDefeated(e) {
@@ -226,7 +228,12 @@ function returnToTown(died) {
   const summary = RUN ? `Back home from depth ${RUN.depth} with ${RUN.gold} gold and ${RUN.items} item${RUN.items === 1 ? '' : 's'}.` : '';
   const gl = S.home.garden;
   let grew = '';
-  if (gl) { addMat('herb', [0, 2, 4, 7][gl]); if (gl >= 2) addMat('essence', gl - 1); if (gl >= 3) addMat('spore', 2); grew = 'Your garden yielded fresh Bitterleaf.'; }
+  if (gl) { addMat('herb', [0, 2, 4, 7][gl] + (S.decor && S.decor.flowers ? 2 : 0)); if (gl >= 2) addMat('essence', gl - 1); if (gl >= 3) addMat('spore', 2); grew = 'Your garden yielded fresh Bitterleaf.'; }
+  if (RUN) { // a line in the hall of records for every trip below
+    S.records.push({ deep: RUN.depth, from: RUN.start, floors: RUN.floors, gold: RUN.gold, items: RUN.items, died: !!died, cls: S.cls, lvl: S.level, at: Date.now() });
+    S.records.sort((a, b) => b.deep - a.deep || b.floors - a.floors); S.records.length = Math.min(S.records.length, 12);
+  }
+  S.tod = ((S.tod || 0.42) + 0.17) % 1; // time passes while you are below
   S.shop = null; S.questOffers = null;
   RUN = null;
   loadTown();
@@ -256,7 +263,7 @@ function tryDodge() {
   if (P.dodgeCd > 0 || P.dead || isPaused()) return;
   const mv = Math.hypot(P.mx || 0, P.mz || 0) > 0.1;
   P.dodgeDir = mv ? Math.atan2(P.mx, P.mz) : P.face;
-  P.dodgeT = 0.2; P.dodgeCd = 0.85; P.iframes = Math.max(P.iframes, 0.32); P.ghostT = 0;
+  P.dodgeT = 0.2; P.dodgeCd = 0.85 * ST.rollM; P.iframes = Math.max(P.iframes, 0.32); P.ghostT = 0;
   sfx('dodge'); burst(P.x, 0.2, P.z, 0xc8c0a8, 6, 2, 0.1);
 }
 function usePotion(greater) {
@@ -304,7 +311,7 @@ function setCamMode(m) {
   $('#crosshair').hidden = m === 'top';
   $('#btnView').textContent = window.innerWidth < 640 ? 'View' : 'View: ' + CAM_NAMES[m];
   if (LV && LV.type === 'dungeon') { layoutWalls(); lightForView(); }
-  if (LV && LV.type === 'town') scene.fog = new THREE.Fog(0xe2c8a0, m === 'top' ? 40 : 30, m === 'top' ? 95 : 150);
+  if (LV && LV.type === 'town') { scene.fog = new THREE.Fog(0xe2c8a0, m === 'top' ? 40 : 30, m === 'top' ? 95 : 150); applyTimeOfDay(true); }
   snapCamera();
 }
 function cycleCam() { setCamMode(SET.cam === 'top' ? 'third' : SET.cam === 'third' ? 'first' : 'top'); toast('View: ' + CAM_NAMES[SET.cam], 'var(--brass-2)'); }
@@ -405,6 +412,7 @@ function updPlayer(dt) {
     P.dodgeT -= dt; vx = Math.sin(P.dodgeDir) * 15; vz = Math.cos(P.dodgeDir) * 15;
     if (ST.powers.ghost && LV.type === 'dungeon') { P.ghostT -= dt; if (P.ghostT <= 0) { P.ghostT = 0.07; telegraph(P.x, P.z, 1.3, 0.35, ST.dmg * 0.45, { player: true, col: 0x9fd4ff }); } }
   }
+  if (P.leapT > 0) { vx = vz = 0; } // the leap carries you (see updClassSkills)
   P.kx = (P.kx || 0) * Math.pow(0.002, dt); P.kz = (P.kz || 0) * Math.pow(0.002, dt);
   P.x += (vx + P.kx) * dt; P.z += (vz + P.kz) * dt;
   collide(P);
@@ -460,7 +468,7 @@ function animateHero(dt, moving) {
   P.aR = armR !== null ? armR : lerp(P.aR || 0, 0, k); P.aY = armR !== null ? armY : lerp(P.aY || 0, 0, k); P.hX = armR !== null ? handX : lerp(P.hX || 0.5, 0.5, k);
   u.uArmR.value = Math.abs(P.aR) < 0.01 ? 0 : P.aR; u.uArmL.value = armL; u.uArmRY.value = P.aY;
   P.shoulder.rotation.x = armAngle(u, true); P.shoulder.rotation.y = P.aY; P.hand.rotation.x = P.hX;
-  P.mesh.position.set(P.x, moving ? Math.abs(Math.sin(u.uWalk.value)) * 0.05 : 0, P.z);
+  P.mesh.position.set(P.x, (moving ? Math.abs(Math.sin(u.uWalk.value)) * 0.05 : 0) + P.leapY, P.z);
   if (P.spinT > 0) P.spinRot = (P.spinRot || 0) + dt * 17; else P.spinRot = 0;
   P.mesh.rotation.y = P.face + twist + P.spinRot; P.mesh.rotation.z = 0;
   const blink = P.iframes > 0 && P.dodgeT <= 0 && Math.floor(P.iframes * 20) % 2 === 0;
@@ -552,9 +560,10 @@ function drawMini() {
 }
 
 // ================= persistence =================
-const SAVE_KEY = 'hearthdeep.save.v1';
-function save() { try { if (S && started) localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (err) { /* storage unavailable */ } }
-function loadSave() { try { const s = localStorage.getItem(SAVE_KEY); return s ? JSON.parse(s) : null; } catch (err) { return null; } }
+// three save slots; slot 1 keeps the original key so older saves load as they were
+const saveKey = () => ['hearthdeep.save.v1', 'hearthdeep.save.v1.s2', 'hearthdeep.save.v1.s3'][SET.slot || 0];
+function save() { try { if (S && started) localStorage.setItem(saveKey(), JSON.stringify(S)); } catch (err) { /* storage unavailable */ } }
+function loadSave() { try { const s = localStorage.getItem(saveKey()); return s ? JSON.parse(s) : null; } catch (err) { return null; } }
 function fixUid() {
   let m = 0; const all = [...S.inv, ...S.stash, ...Object.values(S.equip).filter(Boolean), ...((S.shop && S.shop.items) || [])];
   for (const it of all) m = Math.max(m, it.id || 0);
@@ -564,5 +573,7 @@ function normalizeSave(s) {
   const d = newSave();
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
   s.home = Object.assign(d.home, s.home); s.elixirs = Object.assign(d.elixirs, s.elixirs); s.equip = Object.assign(d.equip, s.equip);
+  for (const k of ['tal', 'gems', 'stats', 'ach', 'bestiary', 'decor']) if (!s[k] || typeof s[k] !== 'object') s[k] = {};
+  if (!Array.isArray(s.records)) s.records = [];
   return s;
 }
