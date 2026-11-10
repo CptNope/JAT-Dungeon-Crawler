@@ -19,10 +19,10 @@
   </div>
   <div id="actionBar"></div>
   <div id="prompt" hidden></div>
-  <div id="toasts"></div>
+  <div id="toasts" role="status" aria-live="polite"></div>
   <div id="labels"></div>
   <div id="floaters"></div>
-  <div id="banner"></div>
+  <div id="banner" role="status" aria-live="assertive"></div>
   <div id="vignette"></div>
   <div id="crosshair" hidden></div>
   <div id="lockMark" hidden></div>
@@ -43,12 +43,14 @@
     <button class="tb" id="tBag" type="button" aria-label="Bag"></button>
   </div>
 </div>
-<div id="panel" hidden>
+<div id="panel" role="dialog" aria-modal="true" aria-labelledby="pTitle" hidden>
   <div class="card" role="dialog" aria-modal="true" aria-labelledby="pTitle">
     <header><h2 id="pTitle"></h2><nav id="pTabs"></nav><button class="x" id="pClose" type="button">Close</button></header>
     <div id="pBody"></div>
   </div>
 </div>
+<div id="bossIntro" hidden aria-live="assertive"><i class="lb t"></i><i class="lb b"></i><div class="bi-card"><div id="biEpi"></div><div id="biName"></div><div id="biWhere"></div></div></div>
+<div id="loading" hidden role="status"><div class="ld-in"><div class="ld-spin" aria-hidden="true"></div><div class="ld-h">Descending</div><p id="ldTip"></p></div></div>
 <div class="over" id="title">
   <div class="over-in">
     <h1 class="logo">Hearthdeep</h1>
@@ -59,9 +61,9 @@
     <div class="keys" id="keyList"></div>
   </div>
 </div>
-<div class="over" id="death" hidden>
+<div class="over" id="death" role="alertdialog" aria-labelledby="deathH" hidden>
   <div class="over-in">
-    <h1 class="logo" style="color:var(--blood-2)">You fell</h1>
+    <h1 class="logo" id="deathH" style="color:var(--blood-2)">You fell</h1>
     <p class="tag" id="deathText"></p>
     <div class="menu"><button class="btn" id="btnRevive" type="button">Wake up in Hearthdeep</button></div>
   </div>

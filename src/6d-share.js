@@ -117,10 +117,10 @@ function renderPhotoBar() {
 }
 function updPhoto(dt) {
   const k = 4 * dt;
-  if (keys.KeyW) { PHOTO.tx -= Math.sin(PHOTO.yaw) * k; PHOTO.tz -= Math.cos(PHOTO.yaw) * k; }
-  if (keys.KeyS) { PHOTO.tx += Math.sin(PHOTO.yaw) * k; PHOTO.tz += Math.cos(PHOTO.yaw) * k; }
-  if (keys.KeyA) { PHOTO.tx -= Math.cos(PHOTO.yaw) * k; PHOTO.tz += Math.sin(PHOTO.yaw) * k; }
-  if (keys.KeyD) { PHOTO.tx += Math.cos(PHOTO.yaw) * k; PHOTO.tz -= Math.sin(PHOTO.yaw) * k; }
+  if (held('up')) { PHOTO.tx -= Math.sin(PHOTO.yaw) * k; PHOTO.tz -= Math.cos(PHOTO.yaw) * k; }
+  if (held('down')) { PHOTO.tx += Math.sin(PHOTO.yaw) * k; PHOTO.tz += Math.cos(PHOTO.yaw) * k; }
+  if (held('left')) { PHOTO.tx -= Math.cos(PHOTO.yaw) * k; PHOTO.tz += Math.sin(PHOTO.yaw) * k; }
+  if (held('right')) { PHOTO.tx += Math.cos(PHOTO.yaw) * k; PHOTO.tz -= Math.sin(PHOTO.yaw) * k; }
   if (keys.KeyQ) PHOTO.ty = Math.max(0.2, PHOTO.ty - k * 0.5); if (keys.KeyE) PHOTO.ty = Math.min(8, PHOTO.ty + k * 0.5);
   const cp = Math.cos(PHOTO.pitch);
   camera.position.set(PHOTO.tx + Math.sin(PHOTO.yaw) * cp * PHOTO.dist, PHOTO.ty + Math.sin(PHOTO.pitch) * PHOTO.dist, PHOTO.tz + Math.cos(PHOTO.yaw) * cp * PHOTO.dist);

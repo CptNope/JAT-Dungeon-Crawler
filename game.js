@@ -144,6 +144,15 @@ const LEGENDS = [
   { name: 'Phoenix Plume', power: 'phoenix', desc: 'Once per floor, a killing blow leaves you standing at 30% health.' },
   { name: 'Midas Knuckle', power: 'midas', desc: 'Foes drop 60% more gold.' },
   { name: 'Gravewind Treads', power: 'ghost', desc: 'Rolling leaves a trail of grave-cold that chills and harms foes.' },
+  // skill-changing powers
+  { name: 'Maelstrom Sash', power: 'vortex', desc: 'Using a skill drags foes within 7 paces toward you and slows them.', skill: 1 },
+  { name: 'Earthshaker Greaves', power: 'quake', desc: 'Every roll ends in a shockwave that strikes and staggers foes around you.', skill: 1 },
+  { name: 'Horn of the Old Guard', power: 'warhorn', desc: 'Using a skill grants 15% damage for 5 seconds, stacking three times.', skill: 1 },
+  { name: 'Quiver of Ash', power: 'barrage', desc: 'Using a skill looses five seeking ember-bolts at nearby foes.', skill: 1 },
+  { name: 'Tempest Crown', power: 'storm', desc: 'Using a skill calls lightning down on up to three foes.', skill: 1 },
+  { name: 'Rimewalker Band', power: 'frostpath', desc: 'Using a skill chills every foe within 5 paces; chilled foes struck again freeze.', skill: 1 },
+  { name: 'Ring of Embers', power: 'emberring', desc: 'A ring of fire circles you, burning foes it touches.', skill: 1 },
+  { name: 'Twinstar Seal', power: 'twinstar', desc: 'Skills have a 30% chance to come straight back off cooldown.', skill: 1 },
 ];
 const TIERS = ['Rusted', 'Iron', 'Tempered', 'Steel', 'Mithril', 'Runic', 'Starforged', 'Voidwrought', 'Eternal'];
 const BASEN = { helm: ['Cap', 'Helm', 'Visage'], chest: ['Jerkin', 'Hauberk', 'Cuirass'], boots: ['Boots', 'Greaves', 'Treads'], ring: ['Band', 'Ring', 'Seal'], amulet: ['Pendant', 'Amulet', 'Talisman'] };
@@ -251,7 +260,7 @@ function newSave() {
     bossKills: 0, slain: [], best: 0, kills: 0, deaths: 0, waypoints: [1], shop: null,
     elixirs: { might: 0, stone: 0, swift: 0 }, rested: false, runs: 0,
     quest: null, questOffers: null, questsDone: 0,
-    cls: null, tal: {}, hints: {}, shards: 0, rift: { max: 1, best: {} }, arenaBest: 0, caravan: null, gems: {}, stats: {}, ach: {}, bestiary: {}, records: [], decor: {}, time: 0, pet: null, created: Date.now(),
+    cls: null, diff: 'normal', filter: 'none', loadouts: [null, null, null], learned: [], tal: {}, hints: {}, shards: 0, rift: { max: 1, best: {} }, arenaBest: 0, caravan: null, gems: {}, stats: {}, ach: {}, bestiary: {}, records: [], decor: {}, time: 0, pet: null, created: Date.now(),
   };
   return s;
 }
@@ -518,7 +527,7 @@ function applyMeta(s) {
 function lootItem(il, o) { const it = genItem(il, o); return it.rarity === 4 && chance(0.4) ? makeSetItem(il) : it; }
 // ================= settings =================
 const SET_KEY = 'hearthdeep.settings.v1';
-const SET = (() => { const d = { cam: 'top', q: 'high', sens: 1, music: true, shake: true, hints: true, slot: 0 }; try { return Object.assign(d, JSON.parse(localStorage.getItem(SET_KEY) || '{}')); } catch (err) { return d; } })();
+const SET = (() => { const d = { cam: 'top', q: 'high', sens: 1, music: true, shake: true, hints: true, slot: 0, haptics: true, motion: false, battery: false, cb: 'default', ui: 1 }; try { return Object.assign(d, JSON.parse(localStorage.getItem(SET_KEY) || '{}')); } catch (err) { return d; } })();
 function saveSettings() { try { localStorage.setItem(SET_KEY, JSON.stringify(SET)); } catch (err) { /* storage unavailable */ } }
 
 // ================= renderer, scene, camera =================
@@ -2078,13 +2087,25 @@ function updOverlays(dt) {
     f.el.style.transform = `translate(${p.x}px,${p.y}px) translate(-50%,-50%) scale(${pop.toFixed(3)})`;
     f.el.style.opacity = Math.min(1, f.t / f.max * 2);
   }
+  const stack = [];
   for (const L of labelEls) {
     if (L.ref && L.ref.mesh) { L.x = L.ref.x; L.z = L.ref.z; L.y = L.ref.h * L.ref.scale + 0.55; }
-    const far = Math.hypot(L.x - P.x, L.z - P.z) > (L.ref && L.ref.mesh ? 14 : 30);
+    const far = Math.hypot(L.x - P.x, L.z - P.z) > (L.ref && L.ref.mesh ? 14 : L.near || 30);
     const p = project(L.x, L.y, L.z);
     const show = p.ok && !far && !(L.ref && L.ref.hideLabel) && p.y > 110 && p.x > 30 && p.x < window.innerWidth - 30;
     L.el.style.display = show ? '' : 'none';
+    if (show && L.near && (!L.el.classList.contains('r0') || document.body.classList.contains('alt'))) { stack.push({ L, x: p.x, y: p.y }); continue; }
     if (show) L.el.style.transform = `translate(${p.x}px,${p.y}px) translate(-50%,-100%)`;
+  }
+  // item names on the ground stack upward instead of piling on top of each other
+  stack.sort((a, b) => b.y - a.y);
+  for (let i = 0; i < stack.length; i++) {
+    const s = stack[i]; s.w = s.L.w || (s.L.w = s.L.el.offsetWidth || 80);
+    for (let guard = 0; guard < 8; guard++) {
+      const hit = stack.slice(0, i).find((o) => Math.abs(o.x - s.x) < (o.w + s.w) / 2 + 4 && Math.abs(o.y - s.y) < 19);
+      if (!hit) break; s.y = hit.y - 19;
+    }
+    s.L.el.style.transform = `translate(${s.x}px,${s.y}px) translate(-50%,-100%)`;
   }
 }
 
@@ -2155,6 +2176,7 @@ function spawnEnemy(arch, x, z, o = {}) {
     e.mats[0].emissive.setHex(B.boss.color).multiplyScalar(0.25);
     bossDress(bc.g, B.id, bc.h);
   }
+  e.hp *= diff().hp; e.dmg *= diff().dmg; e.xp *= diff().xp;
   if (riftMod("swift")) e.spd *= 1.3;
   if (riftMod("brutal")) e.dmg *= 1.4;
   e.maxHp = e.hp;
@@ -2171,7 +2193,7 @@ function spawnEnemy(arch, x, z, o = {}) {
 function wake(e) {
   if (e.awake) return;
   e.awake = true;
-  if (e.boss && !bossRef) { bossRef = e; $('#bossBar').hidden = false; $('#bossName').textContent = e.name; banner(e.name, biomeOf(RUN.depth).name); sfx('boss'); setMusic('boss'); shake(0.35); hint('boss'); }
+  if (e.boss && !bossRef) { bossRef = e; $('#bossBar').hidden = false; $('#bossName').textContent = e.name; bossIntro(e); sfx('boss'); setMusic('boss'); shake(0.35); hint('boss'); }
   else hint('fight');
   // wake the rest of the pack
   for (const o of enemies) if (!o.awake && !o.boss && Math.hypot(o.x - e.x, o.z - e.z) < 7) { o.awake = true; }
@@ -2527,7 +2549,7 @@ function bossPattern(e, p, p2) {
 
 // ================= telegraphs =================
 function telegraph(x, z, r, T, dmg, o) {
-  const col = o.col || 0xff3b2f;
+  const col = o.col || TELE_COL;
   const tm = teleMats(col);
   const disc = new THREE.Mesh(G.disc, tm[0]), fill = new THREE.Mesh(G.disc, tm[1]), ring = new THREE.Mesh(G.ring, tm[2]);
   disc.position.set(x, 0.03, z); fill.position.set(x, 0.035, z); ring.position.set(x, 0.04, z);
@@ -2571,6 +2593,10 @@ function spawnProj(o) {
 function updProjs(dt) {
   for (let i = projs.length - 1; i >= 0; i--) {
     const p = projs[i];
+    if (p.home && !p.home.dead) { // seeking bolts turn toward their mark
+      const want = Math.atan2(p.home.x - p.x, p.home.z - p.z), cur = Math.atan2(p.vx, p.vz), a = cur + clamp(angDiff(want, cur), -dt * 7, dt * 7);
+      p.vx = Math.sin(a) * p.spd; p.vz = Math.cos(a) * p.spd; p.mesh.rotation.y = a;
+    }
     p.life -= dt; p.x += p.vx * dt; p.z += p.vz * dt;
     let dead = p.life <= 0 || blocksShot(p.x, p.z); // shots fly over chasms, not through walls
     if (!dead && p.owner === 'p') {
@@ -2578,7 +2604,7 @@ function updProjs(dt) {
         if (e.dead || p.hit.has(e.id)) continue;
         if (Math.hypot(e.x - p.x, e.z - p.z) < e.r + p.size + 0.15) {
           p.hit.add(e.id);
-          const { d, crit } = rollDmg(e); damageEnemy(e, d * (p.mult || 1), crit, 2, p.vx / p.spd, p.vz / p.spd, true);
+          const { d, crit } = rollDmg(e); withElem(p.el || hitElem, () => damageEnemy(e, d * (p.mult || 1), crit, 2, p.vx / p.spd, p.vz / p.spd, true));
           if (p.pierce-- <= 0) { dead = true; break; }
         }
       }
@@ -2592,7 +2618,7 @@ function updProjs(dt) {
 
 // ================= combat =================
 function rollDmg(e) {
-  let d = ST.dmg * rand(0.9, 1.1);
+  let d = ST.dmg * rand(0.9, 1.1) * (1 + 0.15 * (P.horn || 0));
   if (e) { // talents that care who is on the end of the blade
     if (e.hp < e.maxHp * 0.3) d *= 1 + 0.15 * tal('executioner');
     if (e.champ || e.leader || e.boss) d *= 1 + 0.1 * tal('huntersmark');
@@ -2730,7 +2756,7 @@ function killEnemy(e, noLoot) {
 function perfectRoll() {
   P.perfect = true; P.nextCrit = true; slowT = Math.max(slowT, 0.4);
   for (let i = 0; i < 3; i++) skillCd[i] = Math.max(0, skillCd[i] - 1.5);
-  floatNum(P.x, 2.3, P.z, 'Perfect roll', 'crit'); ringFx(P.x, P.z, 0.2, 2.2, 0.25, 0x9fd4ff, 2.4); sfx('blink'); stat('perfects');
+  floatNum(P.x, 2.3, P.z, 'Perfect roll', 'crit'); haptic(15); ringFx(P.x, P.z, 0.2, 2.2, 0.25, 0x9fd4ff, 2.4); sfx('blink'); stat('perfects');
 }
 function tryParry(src) {
   if (!src || !src.ai || !['melee', 'charger', 'leaper'].includes(src.ai) || src.boss) return false;
@@ -2739,7 +2765,7 @@ function tryParry(src) {
   src.wind = 0; src.cd = Math.max(src.cd, 1.6); src.chillT = Math.max(src.chillT, 0.8);
   const dx = src.x - P.x, dz = src.z - P.z, l = Math.hypot(dx, dz) || 1; src.kx += dx / l * 9; src.kz += dz / l * 9;
   floatNum(src.x, src.h * src.scale + 0.7, src.z, 'Parried', 'crit'); burst((src.x + P.x) / 2, 1.1, (src.z + P.z) / 2, 0xfff2c8, 14, 5, 0.12);
-  addHitStop(0.08); shake(0.2); sfx('block'); stat('parries');
+  addHitStop(0.08); shake(0.2); sfx('block'); stat('parries'); haptic(20);
   return true;
 }
 function hurtPlayer(d, src) {
@@ -2750,7 +2776,7 @@ function hurtPlayer(d, src) {
   if (Math.random() * 100 < ST.evade) { floatNum(P.x, 2, P.z, 'Evaded', 'xp'); P.iframes = 0.15; return; }
   const red = ST.armor / (ST.armor + 40 + 9 * RUN.depth);
   d *= (1 - red) * (1 - ST.dr / 100) * (riftMod('glass') ? 2 : 1);
-  P.hp -= d; P.hurtT = 0.2;
+  P.hp -= d; P.hurtT = 0.2; haptic(d > ST.maxHp * 0.15 ? 60 : 22);
   shake(clamp(d / ST.maxHp * 2.2, 0.18, 0.55)); addHitStop(0.04);
   floatNum(P.x, 2, P.z, '-' + fmt(d), 'hurt');
   const v = $('#vignette'); v.classList.add('hit'); setTimeout(() => v.classList.remove('hit'), 90);
@@ -2800,10 +2826,16 @@ function spawnDrop(x, z, data) {
   }
   g.position.set(fx, 0.3, fz);
   world.add(g);
-  drops.push({ x: fx, z: fz, g, data, t: 0, vy: 4 });
+  const D = { x: fx, z: fz, g, data, t: 0, vy: 4 };
+  if (data.item) { // a name over every item on the ground; commons show only while Alt is held
+    const it = data.item;
+    D.lbl = addLabel(it.name, fx, 1.0, fz, `drop r${it.rarity}${it.set ? ' set' : ''}${filtered(it) ? ' junk' : ''}`);
+    D.lbl.el.dataset.r = it.set ? 'S' : 'CURELS'[it.rarity]; D.lbl.near = 13;
+  }
+  drops.push(D);
 }
 function dropLoot(e) {
-  const d = RUN.depth, B = biomeOf(d), mf = ST.mf;
+  const d = RUN.depth, B = biomeOf(d), mf = ST.mf + diff().mf;
   const gm = 1 + ST.gold / 100 + (ST.powers.midas ? 0.6 : 0);
   const mult = e.boss ? 6 : e.leader ? 3 : e.champ ? 2 : 1;
   if (chance(0.5) || e.leader || e.boss) spawnDrop(e.x, e.z, { gold: Math.max(1, Math.round(randi(2, 6) * Math.pow(1.09, d) * mult * gm)) });
@@ -2828,18 +2860,23 @@ function updDrops(dt) {
     const auto = !D.data.item;
     if (auto && dist < 3.2 && D.t > 0.4) { const s = Math.min(1, dt * 9); D.x = lerp(D.x, P.x, s); D.z = lerp(D.z, P.z, s); }
     D.g.position.x = D.x; D.g.position.z = D.z;
+    if (D.lbl) { D.lbl.x = D.x; D.lbl.z = D.z; D.lbl.y = D.g.position.y + 0.7; }
     if (D.t > 0.35 && dist < 0.8) {
-      if (D.data.item && S.inv.length >= BAG_CAP) { if (!D.warned) { D.warned = 1; toast('Your bag is full. Salvage or sell something.', 'var(--bad)'); } continue; }
+      if (D.data.item && S.inv.length >= BAG_CAP && !filtered(D.data.item)) { if (!D.warned) { D.warned = 1; toast('Your bag is full. Salvage or sell something.', 'var(--bad)'); } continue; }
       pickup(D.data);
+      if (D.lbl) removeLabel(D.lbl);
       world.remove(D.g); drops.splice(i, 1);
     }
   }
 }
+// the loot filter salvages low gear on pickup; sets and legendaries are always kept
+const filtered = (it) => !it.set && it.rarity < 4 && !it.power && (S.filter === 'uncommon' ? it.rarity <= 1 : S.filter === 'common' ? it.rarity === 0 : false);
 function pickup(dt) {
   if (dt.gold) { S.gold += dt.gold; RUN && (RUN.gold += dt.gold); floatNum(P.x, 1.8, P.z, '+' + dt.gold + 'g', 'crit'); sfx('coin'); }
   else if (dt.mat) { addMat(dt.mat, dt.n); toast(`+${dt.n} ${MATS[dt.mat].n}`, MATS[dt.mat].c); sfx('coin'); questEvent('mat', dt.mat, dt.n); }
   else if (dt.gem) { hint('gem'); S.gems[dt.gem] = (S.gems[dt.gem] || 0) + 1; toast(`+1 ${gemName(dt.gem)}`, GEMS[gemSplit(dt.gem)[0]].c); sfx('coin'); }
   else if (dt.potion) { S.potions++; toast('+1 Healing Draught', 'var(--blood-2)'); sfx('coin'); }
+  else if (dt.item && filtered(dt.item)) { const n = RAR[dt.item.rarity].salv; addMat('essence', n); floatNum(P.x, 1.8, P.z, `+${n} essence`, 'xp'); sfx('coin'); }
   else if (dt.item) { S.inv.push(dt.item); toast(dt.item.name, dt.item.set ? 'var(--set)' : `var(--r${dt.item.rarity})`); sfx('coin'); if (RUN) RUN.items++; if (dt.item.set) { stat('sets'); hint('set'); } else if (dt.item.rarity === 4) stat('legs'); }
 }
 // ================= combat feel =================
@@ -2848,8 +2885,8 @@ function pickup(dt) {
 let hitStop = 0, trauma = 0;
 const shakeOff = new THREE.Vector3();
 const REDUCED_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-function addHitStop(t) { hitStop = Math.max(hitStop, t); }
-function shake(a) { if (SET.shake === false) return; trauma = Math.min(1, trauma + a); }
+function addHitStop(t) { if (calm()) return; hitStop = Math.max(hitStop, t); }
+function shake(a) { if (SET.shake === false || calm()) return; trauma = Math.min(1, trauma + a); }
 function applyShake(dt) {
   trauma = Math.max(0, trauma - dt * 1.8);
   const k = trauma * trauma * (REDUCED_MOTION ? 0.35 : 1);
@@ -3077,7 +3114,7 @@ function levelUpFx(from, to) {
   for (let k = 0; k < 3; k++) burst(P.x, 0.4 + k * 0.8, P.z, 0xf2c56b, 14, 5, 0.16);
   const gains = [`+${(to - from) * 14} health`, `${to - from} talent point${to - from > 1 ? 's' : ''}`];
   if (unlocked.length) gains.push(`new skill: ${unlocked.map((k) => k.n).join(', ')}`);
-  banner(`Level ${to}`, gains.join(' · '));
+  banner(`Level ${to}`, gains.join(' · ')); haptic([30, 40, 60]);
   hint('level'); if (unlocked.length) hint('skill');
 }
 const fxLife = [];
@@ -3177,6 +3214,42 @@ function bossDress(g, id, h) {
     }
     default: for (let k = 0; k < 7; k++) add(G.cone4, mat(0xf2c56b, 2.5), 0.1, 0.36, 0.1, Math.sin(k * 0.9) * 0.24, h + 0.16, Math.cos(k * 0.9) * 0.24);
   }
+}
+
+// ================= boss intro card and level loading tips =================
+const BOSS_EPI = { crypt: 'Keeper of the bone-halls', fungal: 'The rot that thinks', magma: 'Heart of the deep forge', frost: 'Who wears the winter', void: 'The space between', drowned: 'Lord of the sunken stair', clock: 'Measure of all hours', blood: 'The red tithe' };
+let bossIntroId = 0;
+function bossIntro(e) {
+  const B = biomeOf(RUN.depth), el = $('#bossIntro'), id = ++bossIntroId;
+  $('#biEpi').textContent = /Hollow King/.test(e.name) ? 'The crown beneath the world' : BOSS_EPI[B.id] || B.name;
+  $('#biName').textContent = e.name;
+  $('#biWhere').textContent = `${B.name} · depth ${RUN.depth}`;
+  el.hidden = false; el.classList.remove('out'); void el.offsetWidth; el.classList.add('in');
+  setTimeout(() => { if (id === bossIntroId) { el.classList.add('out'); setTimeout(() => { if (id === bossIntroId) el.hidden = true; }, 600); } }, 2800);
+}
+const TIPS = [
+  'Roll through an attack at the last moment for a perfect roll: your next hit is a guaranteed crit.',
+  'Chill a chilled foe to freeze it solid, then hit it hard to shatter it.',
+  'Fire on a chilled foe causes thermal shock for 50% more damage.',
+  'Hold Alt to see the names of common items on the ground.',
+  'The loot filter in Settings turns low items into Arcane Essence as you pick them up.',
+  'Loadouts in your Bag swap gear and talents in one press.',
+  'An Artificer’s Table lets you extract a legendary power and imprint it onto rare or epic gear.',
+  'Every fifth floor is a boss. Beat it to open a waypoint.',
+  'Champions glow and hit harder, but drop better loot.',
+  'Leaders carry an aura that empowers foes near them. Kill them first.',
+  'Each biome resists some elements and fears others. Watch the numbers.',
+  'Portal Scrolls take you home from any depth, and back again.',
+  'Your home stash keeps gear safe between heroes in the same slot.',
+  'Rifts scale with your best clear. Share a rift code to race a friend on the same layout.',
+  'Reduce motion, colour-safe palettes and bigger text are under Settings, Accessibility.',
+];
+let loadShown = false;
+function loadingTick() {
+  const want = !levelReady && !!LV;
+  if (want === loadShown) return;
+  loadShown = want; $('#loading').hidden = !want;
+  if (want) $('#ldTip').textContent = pick(TIPS);
 }
 // ================= level loading =================
 let spinners = [];
@@ -3402,7 +3475,7 @@ function bossDefeated(e) {
   S.waypoints.sort((a, b) => a - b);
   bossRef = null; $('#bossBar').hidden = true;
   banner(`${e.name} falls`, `Waypoint opened at depth ${wp}`);
-  slowT = 1.2; shake(0.7);
+  slowT = calm() ? 0 : 1.2; shake(0.7); haptic([60, 40, 120]);
   const pil = new THREE.Mesh(G.cyl, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff0c0).multiplyScalar(2.4), transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending }));
   pil.scale.set(2.4, 18, 2.4); pil.position.set(e.x, 9, e.z); world.add(pil); levelDisp.push(pil.material); fxLife.push({ m: pil, t: 2.4, T: 2.4, kind: 'pillar' });
   for (let k = 0; k < 4; k++) setTimeout(() => ringFx(e.x, e.z, 0.5, 6 + k * 2, 0.6, k % 2 ? 0xffd890 : 0xfff2c8, 3), k * 160);
@@ -3444,7 +3517,7 @@ function returnToTown(died) {
 }
 function die() {
   P.dead = true; P.hp = 0;
-  const lost = RUN.mode === 'arena' ? 0 : Math.floor(S.gold * 0.25);
+  const lost = RUN.mode === 'arena' || S.diff === 'story' ? 0 : Math.floor(S.gold * 0.25);
   if (RUN.arena) S.arenaBest = Math.max(S.arenaBest || 0, RUN.arena.wave - 1);
   S.gold -= lost; S.deaths++;
   P.mesh.rotation.z = Math.PI / 2; P.mesh.position.y = 0.3; P.mesh.visible = true; viewmodel.g.visible = false;
@@ -3575,7 +3648,7 @@ function placeCamera(dt, snap) {
 function snapCamera() { placeCamera(0, true); }
 function updCamera(dt) {
   placeCamera(dt, false);
-  const want = SET.cam !== 'top' && (P.dodgeT > 0 || P.dashT > 0) ? 8 : 0;
+  const want = SET.cam !== 'top' && !calm() && (P.dodgeT > 0 || P.dashT > 0) ? 8 : 0;
   const nk = lerp(fovKick, want, 1 - Math.exp(-dt * (want ? 18 : 6)));
   if (Math.abs(nk - fovKick) > 0.01 || (fovKick && !want && nk < 0.02)) { fovKick = nk < 0.02 && !want ? 0 : nk; camera.fov = camBaseFov + fovKick; camera.updateProjectionMatrix(); }
   applyShake(dt);
@@ -3595,10 +3668,10 @@ function lightForView() {
 function updPlayer(dt) {
   if (P.dead) return;
   let ix = 0, iz = 0;
-  if (keys.KeyW || keys.ArrowUp) iz -= 1;
-  if (keys.KeyS || keys.ArrowDown) iz += 1;
-  if (keys.KeyA || keys.ArrowLeft) ix -= 1;
-  if (keys.KeyD || keys.ArrowRight) ix += 1;
+  if (held('up')) iz -= 1;
+  if (held('down')) iz += 1;
+  if (held('left')) ix -= 1;
+  if (held('right')) ix += 1;
   ix += stick.x; iz += stick.y;
   const il = Math.hypot(ix, iz); if (il > 1) { ix /= il; iz /= il; }
   if (SET.cam !== 'top') { // camera-relative: up on the stick or W walks where the camera looks
@@ -3619,6 +3692,7 @@ function updPlayer(dt) {
   if (P.dashT > 0) { P.dashT -= dt; vx = Math.sin(P.dashDir) * 30; vz = Math.cos(P.dashDir) * 30; dashHits(); }
   else if (P.dodgeT > 0) {
     P.dodgeT -= dt; vx = Math.sin(P.dodgeDir) * 15; vz = Math.cos(P.dodgeDir) * 15;
+    if (P.dodgeT <= 0 && ST.powers.quake && LV.type === 'dungeon') { ringFx(P.x, P.z, 0.4, 3.2, 0.3, 0xd8b07a, 2.2); burst(P.x, 0.3, P.z, 0xa08060, 14, 5, 0.18); shake(0.25); withElem('phys', () => hitAround(3.2, 0.9 * ST.skillM, 5)); sfx('boom'); }
     if (ST.powers.ghost && LV.type === 'dungeon') { P.ghostT -= dt; if (P.ghostT <= 0) { P.ghostT = 0.07; telegraph(P.x, P.z, 1.3, 0.35, ST.dmg * 0.45, { player: true, col: 0x9fd4ff }); } }
   }
   if (P.leapT > 0) { vx = vz = 0; } // the leap carries you (see updClassSkills)
@@ -3628,7 +3702,7 @@ function updPlayer(dt) {
   if (P.pend) { P.pend.t -= dt; if (P.pend.t <= 0) { const f = P.pend.fin; P.pend = null; resolveMelee(f); } }
   updSkills(dt);
   // aim
-  const wantsAtk = mouseDown || touchAtk || keys.KeyJ || pad.atk;
+  const wantsAtk = mouseDown || touchAtk || held('attack') || pad.atk;
   const moving = il > 0.1 || P.dodgeT > 0 || P.dashT > 0;
   const la = lockAngle();
   if (la !== null && P.spinT <= 0) P.face = SET.cam === 'top' ? la : P.face + angDiff(la, P.face) * Math.min(1, dt * 16);
@@ -3636,8 +3710,19 @@ function updPlayer(dt) {
   else if (SET.cam === 'top') {
     if (pad.on && pad.aim !== null) P.face = pad.aim;
     else if (touchMode || pad.on) {
-      let best = null, bd = 9;
-      if (LV.type === 'dungeon') for (const e of enemies) { if (e.dead || !e.awake) continue; const d = Math.hypot(e.x - P.x, e.z - P.z); if (d < bd) { bd = d; best = e; } }
+      // auto-aim: stay on the current target while it lives and stays close; otherwise prefer foes
+      // in the direction you push the stick, then the nearest, with a nudge toward leaders and bosses
+      let best = P.aimT && !P.aimT.dead && Math.hypot(P.aimT.x - P.x, P.aimT.z - P.z) < 8 ? P.aimT : null;
+      if (best && il > 0.2 && Math.abs(angDiff(Math.atan2(best.x - P.x, best.z - P.z), Math.atan2(ix, iz))) > 1.6) best = null;
+      if (!best && LV.type === 'dungeon') {
+        let bs = 1e9; const ma = il > 0.2 ? Math.atan2(ix, iz) : null;
+        for (const e of enemies) {
+          if (e.dead || !e.awake) continue; const d = Math.hypot(e.x - P.x, e.z - P.z); if (d > 9) continue;
+          const s = d + (ma !== null ? Math.abs(angDiff(Math.atan2(e.x - P.x, e.z - P.z), ma)) * 2.2 : 0) - (e.boss || e.leader ? 1.5 : 0);
+          if (s < bs) { bs = s; best = e; }
+        }
+      }
+      P.aimT = best;
       if (best && (wantsAtk || il < 0.1)) P.face = Math.atan2(best.x - P.x, best.z - P.z);
       else if (il > 0.1) P.face = Math.atan2(ix, iz);
     } else { const ap = aimPoint(); if (ap) P.face = Math.atan2(ap.x - P.x, ap.z - P.z); }
@@ -3804,6 +3889,10 @@ function normalizeSave(s) {
   s.home = Object.assign(d.home, s.home); s.elixirs = Object.assign(d.elixirs, s.elixirs); s.equip = Object.assign(d.equip, s.equip);
   for (const k of ['tal', 'gems', 'stats', 'ach', 'bestiary', 'decor', 'hints']) if (!s[k] || typeof s[k] !== 'object') s[k] = {};
   if (!Array.isArray(s.records)) s.records = [];
+  if (!Array.isArray(s.loadouts) || s.loadouts.length !== 3) s.loadouts = [null, null, null];
+  if (!Array.isArray(s.learned)) s.learned = [];
+  if (!DIFF[s.diff]) s.diff = 'normal';
+  if (!['none', 'common', 'uncommon'].includes(s.filter)) s.filter = 'none';
   if (typeof s.shards !== 'number') s.shards = 0;
   if (!s.story || typeof s.story !== 'object' || !Array.isArray(s.story.pages)) s.story = null;
   if (!s.seedBest || typeof s.seedBest !== 'object') s.seedBest = {};
@@ -3840,6 +3929,8 @@ function useSkill(i) {
   if (classSkill(s) === false) return; // nothing to aim at, or no room to land
   skillCd[i] = Math.random() * 100 < 10 * tal('overflow') ? 0.4 : skillCdOf(s);
   if (skillCd[i] < 1) floatNum(P.x, 2.2, P.z, 'Overflow', 'xp');
+  else if (ST.powers.twinstar && chance(0.3)) { skillCd[i] = 0.3; floatNum(P.x, 2.2, P.z, 'Twinstar', 'crit'); burst(P.x, 1.6, P.z, 0xfff2a8, 10, 3, 0.12); }
+  legendSkillHooks();
   stat('skills');
   P.atkT = Math.max(P.atkT, 0.15); P.pend = null;
   if (s.id === 'whirl') {
@@ -3855,6 +3946,46 @@ function useSkill(i) {
     for (let k = 0; k < 3; k++) burst(P.x, 0.4, P.z, k ? 0xff7a2a : 0xffd06a, 18, 9, 0.22, 2.2);
     const n = withElem('fire', () => hitAround(5.0, 2.5 * ST.skillM, 7, (e) => { e.burnT = 3; e.burnD = ST.dmg * 0.4 * ST.burnM; }));
     shake(0.55); addHitStop(n ? 0.09 : 0.03); sfx('nova');
+  }
+}
+// legendary powers that change what every skill does
+function legendSkillHooks() {
+  if (!LV || LV.type !== 'dungeon') return;
+  const W = ST.powers, near = (r) => enemies.filter((e) => !e.dead && e.ai !== 'totem' && Math.hypot(e.x - P.x, e.z - P.z) < r + e.r);
+  if (W.warhorn) { P.horn = Math.min(3, (P.hornT > 0 ? P.horn || 0 : 0) + 1); P.hornT = 5; ringFx(P.x, P.z, 0.4, 2.6, 0.3, 0xffc46a, 2); }
+  if (W.vortex) {
+    ringFx(P.x, P.z, 7, 0.6, 0.35, 0x8fd0ff, 2.2);
+    for (const e of near(7)) { const dx = P.x - e.x, dz = P.z - e.z, d = Math.hypot(dx, dz) || 1; if (!e.boss) { e.kx += dx / d * Math.min(9, d * 1.6); e.kz += dz / d * Math.min(9, d * 1.6); } e.chillT = Math.max(e.chillT || 0, 1.2); }
+  }
+  if (W.frostpath) { ringFx(P.x, P.z, 0.4, 5, 0.3, 0xbfe8ff, 2.2); for (const e of near(5)) chillEnemy(e, 2.5); }
+  if (W.storm) {
+    const ts = near(10).filter((e) => e.awake && e.los !== false).sort(() => Math.random() - 0.5).slice(0, 3);
+    withElem('shock', () => { for (const e of ts) { zap(P.x, P.z, e.x, e.z, 0x9fd8ff); burst(e.x, 1, e.z, 0x9fd8ff, 10, 4, 0.12); damageEnemy(e, ST.dmg * 1.6 * ST.skillM, false, 1, 0, 0, false, 'shock'); } });
+    if (ts.length) sfx('crit');
+  }
+  if (W.barrage) {
+    const ts = near(11).filter((e) => e.awake && e.los !== false);
+    for (let k = 0; k < 5; k++) {
+      const t = ts.length ? ts[k % ts.length] : null, a = t ? Math.atan2(t.x - P.x, t.z - P.z) + rand(-0.25, 0.25) : P.face + (k - 2) * 0.35;
+      spawnProj({ x: P.x, z: P.z, a, spd: 15, owner: 'p', size: 0.2, col: 0xff9a4a, pierce: 0, mult: 0.55 * ST.skillM, life: 0.9, home: t, el: 'fire' });
+    }
+  }
+}
+function updLegends(dt) {
+  if (P.hornT > 0) { P.hornT -= dt; if (P.hornT <= 0) P.horn = 0; }
+  if (!ST.powers.emberring || !LV || LV.type !== 'dungeon') { if (P.ember) P.ember.visible = false; return; }
+  if (!P.ember) {
+    P.ember = new THREE.Group();
+    for (let k = 0; k < 6; k++) { const m = new THREE.Mesh(G.sph, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff8a2a).multiplyScalar(2.2), transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending })); m.scale.setScalar(0.22); P.ember.add(m); }
+  }
+  if (P.ember.parent !== world) world.add(P.ember);
+  P.ember.visible = true; P.emberA = (P.emberA || 0) + dt * 2.6;
+  P.ember.position.set(P.x, 0.8, P.z);
+  P.ember.children.forEach((m, k) => { const a = P.emberA + k * Math.PI / 3; m.position.set(Math.sin(a) * 2.2, Math.sin(P.emberA * 3 + k) * 0.12, Math.cos(a) * 2.2); });
+  P.emberTick = (P.emberTick || 0) - dt;
+  if (P.emberTick <= 0) {
+    P.emberTick = 0.5;
+    withElem('fire', () => { for (const e of enemies) { if (e.dead) continue; const d = Math.hypot(e.x - P.x, e.z - P.z); if (d > 1.4 + e.r && d < 3 + e.r) { damageEnemy(e, ST.dmg * 0.35, false, 0, 0, 0, false, 'fire'); e.burnT = Math.max(e.burnT || 0, 2); e.burnD = Math.max(e.burnD || 0, ST.dmg * 0.15 * ST.burnM); } } });
   }
 }
 function hitAround(radius, mult, kb, extra) {
@@ -3885,7 +4016,7 @@ function dashHits() {
 }
 function updSkills(dt) {
   for (let i = 0; i < 3; i++) skillCd[i] = Math.max(0, skillCd[i] - dt);
-  updClassSkills(dt);
+  updClassSkills(dt); updLegends(dt);
   if (P.spinT > 0) {
     P.spinT -= dt;
     const due = P.spinT < 0.38 && P.spinTicks === 0 ? 1 : P.spinT < 0.12 && P.spinTicks === 1 ? 2 : 0;
@@ -4229,6 +4360,52 @@ function playStep(i, at) {
     if ((id === 'crypt' || id === 'frost' || id === 'fungal' || id === 'drowned') && Math.random() < (id === 'drowned' ? 0.06 : 0.025)) tone(1900 + Math.random() * 600, 700, 0.09, 'sine', 0.014, at, Music.echo); // drips
     if (id === 'magma' && Math.random() < 0.03) noise(1.2, 0.04, at, 'lowpass', 140, 60, 0.7, out); // rumble
     if (id === 'void' && Math.random() < 0.04) tone(hz(root + 36 + MINOR_PENTA[randi(0, 4)]), hz(root + 48), 1.5, 'sine', 0.01, at, Music.echo, 0.4);
+  }
+}
+
+// ================= ambience and footsteps =================
+// Each biome has a few sparse one-shots layered over the music; the town has birds by day and crickets at night.
+const STEP_SURF = { crypt: 'stone', fungal: 'moss', magma: 'ash', frost: 'snow', void: 'stone', drowned: 'wet', clock: 'metal', blood: 'flesh' };
+function footstep(surf) {
+  if (muted || !AC) return; const now = AC.currentTime, v = 0.045;
+  switch (surf) {
+    case 'grass': noise(0.07, v * 0.8, now, 'highpass', 2600); break;
+    case 'snow': noise(0.11, v, now, 'bandpass', 1400, 700, 1.4); break;
+    case 'wet': noise(0.09, v, now, 'bandpass', 900, 1800, 3); tone(500, 900, 0.05, 'sine', 0.012, now + 0.02); break;
+    case 'metal': noise(0.04, v * 0.7, now, 'highpass', 3000); tone(1900, 1700, 0.08, 'triangle', 0.008, now); break;
+    case 'moss': noise(0.08, v * 0.7, now, 'lowpass', 500); break;
+    case 'ash': noise(0.08, v, now, 'bandpass', 2400, 1200, 0.9); break;
+    case 'flesh': noise(0.08, v, now, 'lowpass', 380); tone(90, 60, 0.08, 'sine', 0.02, now); break;
+    default: noise(0.05, v, now, 'lowpass', 700); tone(140, 90, 0.04, 'sine', 0.012, now);
+  }
+}
+let ambT = 2, stepD = 0, lastPX = null, lastPZ = 0;
+function ambTick(dt) {
+  if (muted || !AC || !LV || isPaused()) { lastPX = null; return; }
+  // footsteps from distance actually covered
+  if (lastPX !== null && !P.dead && P.dodgeT <= 0 && P.dashT <= 0) {
+    const m = Math.hypot(P.x - lastPX, P.z - lastPZ);
+    if (m < 1) { stepD += m; if (stepD > 1.25) { stepD = 0; footstep(LV.type === 'town' ? 'grass' : STEP_SURF[biomeOf(RUN ? RUN.depth : 1).id] || 'stone'); } }
+  }
+  lastPX = P.x; lastPZ = P.z;
+  ambT -= dt; if (ambT > 0) return;
+  ambT = rand(2.5, 6.5);
+  const now = AC.currentTime, B = AC.createGain(); B.gain.value = 0.55; B.connect(sfxBus);
+  if (LV.type === 'town') {
+    if (nightK > 0.5) { for (let k = 0; k < 3; k++) tone(4200, 4300, 0.04, 'sine', 0.008, now + k * 0.07, B); ambT = rand(1.2, 3); } // crickets
+    else { const f = rand(2200, 3200); tone(f, f * 1.3, 0.08, 'sine', 0.014, now, B); tone(f * 1.2, f * 0.9, 0.1, 'sine', 0.012, now + 0.12, B); } // a bird
+    return;
+  }
+  if (LV.type !== 'dungeon' || !RUN) return;
+  switch (biomeOf(RUN.depth).id) {
+    case 'crypt': if (chance(0.6)) { const f = rand(900, 1500); tone(f, f * 0.55, 0.12, 'sine', 0.02, now, B); } else noise(1.4, 0.02, now, 'bandpass', 300, 160, 2, B); break; // drips, distant wind
+    case 'drowned': for (let k = 0; k < 2; k++) { const f = rand(700, 1300); tone(f, f * 0.6, 0.1, 'sine', 0.02, now + k * rand(0.2, 0.5), B); } break;
+    case 'fungal': for (let k = 0; k < 3; k++) { const f = rand(200, 380); tone(f, f * 1.8, 0.07, 'sine', 0.014, now + k * 0.09, B); } break; // spore pops
+    case 'magma': noise(1.6, 0.035, now, 'lowpass', 140, 60, 1, B); tone(48, 40, 1.2, 'sine', 0.03, now, B, 0.3); break; // rumble
+    case 'frost': noise(2.4, 0.03, now, 'bandpass', 600, 1400, 4, B); break; // wind through ice
+    case 'void': tone(rand(180, 260), rand(150, 300), 2.2, 'sine', 0.012, now, B, 0.8); tone(rand(300, 420), rand(280, 440), 2, 'triangle', 0.006, now + 0.4, B, 0.8); break; // whispers
+    case 'clock': for (let k = 0; k < 4; k++) noise(0.03, 0.03, now + k * 0.5, 'highpass', 3500, 0, 1, B); ambT = rand(4, 7); break; // ticking
+    case 'blood': for (let k = 0; k < 2; k++) tone(62, 44, 0.16, 'sine', 0.05, now + k * 0.22, B); ambT = rand(3, 5); break; // heartbeat
   }
 }
 // ================= class skills =================
@@ -4616,7 +4793,7 @@ function updWeather(dt) {
   m.geometry.attributes.position.needsUpdate = true;
   startRainSound();
   thunderT -= dt;
-  if (thunderT <= 0) { thunderT = rand(14, 32); flashT = 0.35; if (AC && !muted) { noise(2.4, 0.28, AC.currentTime + 0.4, 'lowpass', 180, 60, 0.7); tone(55, 38, 2, 'sine', 0.12, AC.currentTime + 0.4); } }
+  if (thunderT <= 0) { thunderT = rand(14, 32); flashT = calm() ? 0 : 0.35; if (AC && !muted) { noise(2.4, 0.28, AC.currentTime + 0.4, 'lowpass', 180, 60, 0.7); tone(55, 38, 2, 'sine', 0.12, AC.currentTime + 0.4); } }
 }
 let flashT = 0;
 function startRainSound() {
@@ -5039,16 +5216,16 @@ let bannerT = 0;
 function banner(t, sub) { const b = $('#banner'); b.innerHTML = `${esc(t)}<small>${esc(sub || '')}</small>`; b.classList.add('on'); clearTimeout(bannerT); bannerT = setTimeout(() => b.classList.remove('on'), 2600); }
 const SLOTS_BAR = [
   { id: 'atk', key: 'LMB', icon: () => (ST ? ST.wk : 'sword'), act: () => {}, title: 'Attack: hold the left mouse button or J' },
-  { id: 'dodge', key: 'Space', icon: () => 'dodge', act: () => tryDodge(), title: 'Roll: Space, Shift or right mouse' },
-  ...[0, 1, 2].map((i) => ({ id: 'sk' + i, key: String(i + 1), icon: () => (SKILLS[i] ? SKILLS[i].id : 'whirl'), act: () => useSkill(i), title: () => (SKILLS[i] ? `${SKILLS[i].n}: ${SKILLS[i].d} Unlocks at level ${SKILLS[i].lvl}. ${SKILLS[i].cd}s cooldown.` : ''), skill: i })),
-  { id: 'pot', key: 'Q', icon: () => 'potion', act: () => usePotion(false), title: 'Healing Draught' },
-  { id: 'gpot', key: 'R', icon: () => 'gpotion', act: () => usePotion(true), title: 'Greater Draught' },
-  { id: 'scroll', key: 'T', icon: () => 'scroll', act: () => useScroll(), title: 'Portal Scroll' },
-  { id: 'bag', key: 'I', icon: () => 'bag', act: () => openPanel('bag'), title: 'Bag and character' },
+  { id: 'dodge', key: 'Space', kb: 'roll', icon: () => 'dodge', act: () => tryDodge(), title: 'Roll: Space, Shift or right mouse' },
+  ...[0, 1, 2].map((i) => ({ id: 'sk' + i, key: String(i + 1), kb: 'skill' + (i + 1), icon: () => (SKILLS[i] ? SKILLS[i].id : 'whirl'), act: () => useSkill(i), title: () => (SKILLS[i] ? `${SKILLS[i].n}: ${SKILLS[i].d} Unlocks at level ${SKILLS[i].lvl}. ${SKILLS[i].cd}s cooldown.` : ''), skill: i })),
+  { id: 'pot', key: 'Q', kb: 'potion', icon: () => 'potion', act: () => usePotion(false), title: 'Healing Draught' },
+  { id: 'gpot', key: 'R', kb: 'gpotion', icon: () => 'gpotion', act: () => usePotion(true), title: 'Greater Draught' },
+  { id: 'scroll', key: 'T', kb: 'scroll', icon: () => 'scroll', act: () => useScroll(), title: 'Portal Scroll' },
+  { id: 'bag', key: 'I', kb: 'bag', icon: () => 'bag', act: () => openPanel('bag'), title: 'Bag and character' },
 ];
 function buildActionBar() {
   const bar = $('#actionBar');
-  bar.innerHTML = SLOTS_BAR.map((s) => `<button class="slot${s.skill !== undefined ? ' skill' : ''}" type="button" data-slot="${s.id}" title="${esc(typeof s.title === 'function' ? s.title() : s.title)}"><span class="k">${s.key}</span><span class="ic">${svg(s.icon())}</span><span class="n"></span><span class="cd"></span></button>`).join('');
+  bar.innerHTML = SLOTS_BAR.map((s) => `<button class="slot${s.skill !== undefined ? ' skill' : ''}" type="button" data-slot="${s.id}" title="${esc(typeof s.title === 'function' ? s.title() : s.title)}" aria-label="${esc((typeof s.title === 'function' ? s.title() : s.title).split(':')[0])}"><span class="k">${esc(s.kb ? keyLabel(KB[s.kb]) : s.key)}</span><span class="ic">${svg(s.icon())}</span><span class="n"></span><span class="cd"></span></button>`).join('');
   SKILLS.forEach((k, i) => { const b = $('#tS' + (i + 1)); if (b) { b.innerHTML = svg(k.id) + '<i></i>'; b.setAttribute('aria-label', k.n); } });
   const tl = $('#tLock'); if (tl) tl.innerHTML = svg('lock');
   bar.querySelectorAll('.slot').forEach((b) => b.addEventListener('click', () => { const s = SLOTS_BAR.find((q) => q.id === b.dataset.slot); s.act(); }));
@@ -5067,6 +5244,7 @@ function hud() {
   const buffs = [];
   if (RUN) { if (RUN.buffs.might) buffs.push('Might'); if (RUN.buffs.stone) buffs.push('Stoneskin'); if (RUN.buffs.swift) buffs.push('Gale'); if (RUN.rested) buffs.push('Rested'); }
   if (P.frenzy) buffs.push('Frenzy ×' + P.frenzy);
+  if (P.horn) buffs.push('Warhorn ×' + P.horn);
   if (P.cryT > 0) buffs.push('War Cry ' + Math.ceil(P.cryT) + 's');
   if (RUN && RUN.shrine) buffs.push(SHRINES[RUN.shrine].n.replace('Shrine of ', ''));
   if (P.chillT > 0) buffs.push('Chilled'); if (P.burnT > 0) buffs.push('Burning');
@@ -5114,7 +5292,8 @@ const Panel = { kind: null, tab: null, sel: null, forge: {}, elix: {} };
 function isPaused() { return !started || Panel.kind !== null || !$('#title').hidden || !$('#death').hidden || dlgOn || PHOTO.on || !$('#ending').hidden || !$('#share').hidden; }
 function openPanel(kind, tab) {
   Panel.kind = kind; Panel.sel = null;
-  Panel.tab = tab || { bag: 'gear', home: 'home', smith: 'buy', trader: 'buy', alch: 'buy', delve: 'delve', elder: 'tasks', class: 'class', codex: 'ach' }[kind];
+  rebinding = null;
+  Panel.tab = tab || { settings: 'game', bag: 'gear', home: 'home', smith: 'buy', trader: 'buy', alch: 'buy', delve: 'delve', elder: 'tasks', class: 'class', codex: 'ach' }[kind];
   $('#pClose').hidden = kind === 'class';
   if (kind === 'elder' && !S.quest && !S.questOffers) S.questOffers = makeQuestOffers();
   Panel.abandon = false;
@@ -5198,9 +5377,10 @@ function renderPanel() {
   switch (p.kind) {
     case 'bag': {
       title = 'Bag'; sub = `Level ${S.level} delver`;
-      tabs = [['gear', 'Gear'], ['mats', 'Materials'], ['char', 'Character'], ['talents', `Talents${talPoints() ? ' (' + talPoints() + ')' : ''}`]];
+      tabs = [['gear', 'Gear'], ['loadouts', 'Loadouts'], ['mats', 'Materials'], ['char', 'Character'], ['talents', `Talents${talPoints() ? ' (' + talPoints() + ')' : ''}`]];
       if (p.tab === 'gear') body = purseRow() + `<div class="inv"><section><h3>Equipped</h3>${eqHtml()}</section><section><h3>Bag<small>${S.inv.length}/${BAG_CAP}</small></h3>${S.inv.length ? cellsHtml(S.inv, 'inv', BAG_CAP) : '<p class="hint">Empty. Loot drops from foes, chests and bosses; walk over an item to pick it up.</p>'}<div class="acts" style="margin-top:10px"><button class="btn ghost" type="button" data-act="salvageJunk"${S.inv.some((q) => q.rarity <= 1) ? '' : ' disabled'}>Salvage all Common and Uncommon</button></div></section><section class="detail">${detailFor(it, 'bag')}</section></div>`;
       else if (p.tab === 'mats') body = matsHtml();
+      else if (p.tab === 'loadouts') body = loadoutsHtml();
       else if (p.tab === 'talents') body = talentsHtml();
       else body = charHtml();
       break;
@@ -5245,6 +5425,13 @@ function renderPanel() {
       body = p.tab === 'skills' ? skillsHtml() : elderHtml();
       break;
     }
+    case 'settings': {
+      title = 'Settings'; sub = 'Saved in this browser · difficulty and loot filter are per hero';
+      tabs = [['game', 'Game'], ['access', 'Accessibility'], ['keys', 'Controls']];
+      body = settingsHtml(p.tab);
+      break;
+    }
+    case 'credits': { title = 'Credits'; sub = ''; body = creditsHtml(); break; }
     case 'caravan': {
       title = "Sabine's Caravan"; sub = 'Rare goods from the far roads';
       body = caravanHtml();
@@ -5333,7 +5520,7 @@ function workHtml(it) {
     const cap = benchCap();
     const uc = upCost(it), rc = rerollCost(it);
     act = itemCard(it) + `<div class="row"><div><div class="t">Upgrade to +${it.up + 1}</div>${it.up >= cap ? `<div class="d">${it.up >= 10 ? 'Maximum level reached.' : 'A better workbench can push this further.'}</div>` : costChips(uc)}</div><button class="btn" type="button" data-act="upItem"${it.up < cap && hasCost(uc) ? '' : ' disabled'}>Upgrade</button></div>
-      ${socketHtml(it)}
+      ${socketHtml(it)}${powerHtml(it)}
       <div class="row"><div><div class="t">Reroll affixes</div><div class="d">${it.rarity === 0 ? 'Common gear has no affixes to reroll.' : 'Keeps rarity, level and upgrades.'}</div>${it.rarity ? costChips(rc) : ''}</div><button class="btn" type="button" data-act="reroll"${it.rarity && hasCost(rc) ? '' : ' disabled'}>Reroll</button></div>`;
   }
   const sel = (q) => Panel.sel && String(Panel.sel.id) === String(q.id);
@@ -5408,7 +5595,7 @@ function doAct(d) {
     case 'copyCode': { const t = d.code; try { navigator.clipboard.writeText(t).then(() => toast('Code copied: ' + t, 'var(--ok)'), () => toast(t, 'var(--muted)', true)); } catch (err) { toast(t, 'var(--muted)', true); } return; }
     case 'cvBuy': caravanBuy(+d.i); break;
     case 'cvLook': Panel.cvLook = +d.i; break;
-    default: if (metaAct(d, it) === 'stop') return;
+    default: if (settingsAct(d)) break; if (metaAct(d, it) === 'stop') return;
   }
   renderPanel(); hud(); save();
 }
@@ -5428,6 +5615,10 @@ $('#panel').addEventListener('click', (ev) => {
   }
 });
 $('#pClose').addEventListener('click', closePanel);
+$('#panel').addEventListener('change', (ev) => { // renaming a loadout
+  const t = ev.target; if (!t.matches || !t.matches('.lo-name')) return;
+  const i = +t.dataset.k; if (S.loadouts[i]) { S.loadouts[i].name = t.value.trim().slice(0, 24) || `Loadout ${i + 1}`; save(); }
+});
 // ================= class choice =================
 function classHtml() {
   return `<p class="hint" style="margin:0 0 14px">${S.runs || S.kills ? 'The village has learned new ways while you were away. Pick the one that suits you; you keep your gear, and every level you have earned becomes a talent point.' : 'Every delver walks one of three paths. Each brings its own three skills and its own talents.'}</p>
@@ -5488,6 +5679,22 @@ function socketHtml(it) {
     h += `<div class="row"><div><div class="t">Drill a socket</div><div class="d">${ok ? `Up to ${MAX_SOCK} per item.` : "Needs a Joiner's Bench."}</div>${ok ? costChips(c) : ''}</div><button class="btn ghost" type="button" data-act="drill"${ok && hasCost(c) ? '' : ' disabled'}>Drill</button></div>`;
   }
   return h;
+}
+// ================= legendary powers: extract one to learn it, imprint it onto rare or epic gear =================
+const imprintCost = (it) => ({ essence: 18 + it.rarity * 6, sigil: it.rarity === 3 ? 2 : 1, gold: Math.round(400 + it.value) });
+function powerHtml(it) {
+  const learned = S.learned || [], ok = S.home.bench >= 2;
+  if (it.rarity === 4 && it.power) {
+    const known = learned.includes(it.power);
+    return `<div class="row"><div><div class="t">Extract the power<small>${known ? 'already learned' : 'destroys the item'}</small></div><div class="d">${ok ? `Learn ${esc(legendOf(it).name)}'s power for good, so you can imprint it onto rare or epic gear.` : "Needs an Artificer's Table."}</div></div><button class="btn ghost" type="button" data-act="extract"${ok && !known && !SLOTS.some((s) => S.equip[s] === it) ? '' : ' disabled'}>Extract</button></div>`;
+  }
+  if ((it.rarity === 2 || it.rarity === 3) && !it.set) {
+    const c = imprintCost(it);
+    if (!learned.length) return `<div class="row"><div><div class="t">Imprint a power</div><div class="d">Extract a legendary here first; its power can then be imprinted onto rare and epic gear.</div></div></div>`;
+    return `<div class="row"><div><div class="t">Imprint a power${it.power ? `<small>replaces ${esc(legendOf(it).name)}</small>` : ''}</div><div class="d">${ok ? 'Give this item one legendary power you have learned.' : "Needs an Artificer's Table."}</div>${ok ? costChips(c) : ''}
+      <div class="gemp">${learned.map((k) => { const L = LEGENDS.find((l) => l.power === k); return L ? `<button type="button" class="gemb" data-act="imprint" data-k="${k}" style="--gc:var(--r4)"${ok && hasCost(c) && it.power !== k ? '' : ' disabled'}><i></i>${esc(L.name)}<small>${esc(L.desc)}</small></button>` : ''; }).join('')}</div></div></div>`;
+  }
+  return '';
 }
 function gemsHtml() {
   const rows = Object.entries(GEMS).map(([g, G0]) => `<div class="row"><div><div class="t" style="color:${G0.c}">${G0.n}<small>${esc(G0.l('X').replace('X', G0.v.join(' / ')))}</small></div>
@@ -5574,6 +5781,23 @@ function metaAct(d, it) {
       const c = drillCost(it); if (!hasCost(c)) break;
       payCost(c); it.sock = (it.sock || 0) + 1; it.gems = (it.gems || []).concat([null]); toast(`${it.name} now has ${it.sock} socket${it.sock > 1 ? 's' : ''}`, 'var(--brass-2)'); sfx('craft'); break;
     }
+    case 'extract': {
+      if (!it || it.rarity !== 4 || !it.power || S.home.bench < 2 || SLOTS.some((s) => S.equip[s] === it)) break;
+      S.learned = S.learned || []; if (S.learned.includes(it.power)) break;
+      S.learned.push(it.power); S.inv.splice(S.inv.indexOf(it), 1); Panel.sel = null;
+      toast(`Learned: ${legendOf(it).name}`, 'var(--r4)', true); sfx('shrine'); break;
+    }
+    case 'imprint': {
+      if (!it || !(it.rarity === 2 || it.rarity === 3) || it.set || S.home.bench < 2 || !(S.learned || []).includes(d.k)) break;
+      const c = imprintCost(it); if (!hasCost(c)) break;
+      payCost(c); it.power = d.k; afterGear(); toast(`${it.name} now carries ${LEGENDS.find((l) => l.power === d.k).name}`, 'var(--r4)', true); sfx('gem'); break;
+    }
+    case 'loSave': {
+      const i = +d.k; S.loadouts[i] = { name: S.loadouts[i] ? S.loadouts[i].name : `Loadout ${i + 1}`, eq: Object.fromEntries(SLOTS.map((s) => [s, S.equip[s] ? S.equip[s].id : null])), tal: Object.assign({}, S.tal), cls: S.cls };
+      toast(`Saved ${S.loadouts[i].name}`, 'var(--brass-2)'); sfx('page'); break;
+    }
+    case 'loLoad': { applyLoadout(+d.k); break; }
+    case 'loClear': S.loadouts[+d.k] = null; break;
     case 'fuse': {
       const [g, t] = gemSplit(d.k); if ((S.gems[d.k] || 0) < 3 || t >= 3 || S.gold < 60 * t) break;
       S.gems[d.k] -= 3; S.gold -= 60 * t; const nk = gemKey(g, t + 1); S.gems[nk] = (S.gems[nk] || 0) + 1;
@@ -5592,6 +5816,42 @@ function metaAct(d, it) {
       return 'stop';
     }
   }
+}
+
+// ================= loadouts: three saved sets of gear and talents =================
+function findOwned(id) {
+  for (const s of SLOTS) if (S.equip[s] && S.equip[s].id === id) return { where: 'equip', it: S.equip[s] };
+  let it = S.inv.find((q) => q.id === id); if (it) return { where: 'inv', it };
+  if (LV && LV.type === 'town') { it = S.stash.find((q) => q.id === id); if (it) return { where: 'stash', it }; }
+  return null;
+}
+function applyLoadout(i) {
+  const L = S.loadouts[i]; if (!L) return;
+  let missing = 0;
+  for (const s of SLOTS) {
+    const id = L.eq[s]; if (!id) continue;
+    if (S.equip[s] && S.equip[s].id === id) continue;
+    const f = findOwned(id); if (!f || f.where === 'equip') { missing++; continue; }
+    const list = f.where === 'inv' ? S.inv : S.stash, prev = S.equip[s];
+    list.splice(list.indexOf(f.it), 1); S.equip[s] = f.it; if (prev) list.push(prev);
+  }
+  let note = '';
+  if (L.cls === S.cls && JSON.stringify(L.tal) !== JSON.stringify(S.tal)) {
+    if (LV.type === 'town') S.tal = Object.assign({}, L.tal); else note = ' Talents change only in town.';
+  }
+  Panel.sel = null; afterGear(); sfx('craft');
+  toast(`${L.name} equipped.${missing ? ` ${missing} piece${missing > 1 ? 's' : ''} not found${LV.type === 'town' ? '' : ' (stash pieces load in town)'}.` : ''}${note}`, 'var(--brass-2)');
+}
+function loadoutsHtml() {
+  const rows = [0, 1, 2].map((i) => {
+    const L = S.loadouts[i];
+    if (!L) return `<div class="row"><div><div class="t">Empty slot ${i + 1}</div><div class="d">Saves what you are wearing now and how your talents are spent.</div></div><button class="btn" type="button" data-act="loSave" data-k="${i}">Save current</button></div>`;
+    const icons = SLOTS.map((s) => { const f = L.eq[s] ? findOwned(L.eq[s]) : null; return f ? `<span class="lo-i r${f.it.rarity}${f.it.set ? ' set' : ''}" title="${esc(f.it.name)}">${itemIcon(f.it)}</span>` : `<span class="lo-i none" title="${L.eq[s] ? 'Missing' : 'Empty'}">${svg(s === 'weapon' ? 'fists' : s)}</span>`; }).join('');
+    const pts = Object.values(L.tal).reduce((a, b) => a + b, 0);
+    return `<div class="row"><div style="min-width:0"><input id="loName${i}" class="lo-name" maxlength="24" value="${esc(L.name)}" aria-label="Loadout name" data-k="${i}"><div class="lo-icons">${icons}</div><div class="d">${pts} talent point${pts === 1 ? '' : 's'}${L.cls !== S.cls ? ' (another class)' : ''}</div></div>
+      <div class="acts"><button class="btn" type="button" data-act="loLoad" data-k="${i}">Equip</button><button class="btn ghost" type="button" data-act="loSave" data-k="${i}">Overwrite</button><button class="btn ghost" type="button" data-act="loClear" data-k="${i}">Clear</button></div></div>`;
+  }).join('');
+  return `<p class="hint" style="margin:0 0 12px">Swap between builds in one press. Gear from your bag works anywhere; stash gear and talent changes apply in town.</p><div class="rows">${rows}</div>`;
 }
 // ================= gamepad =================
 // Standard mapping. In play: left stick moves, right stick aims (overhead) or looks (close views),
@@ -5787,10 +6047,10 @@ function renderPhotoBar() {
 }
 function updPhoto(dt) {
   const k = 4 * dt;
-  if (keys.KeyW) { PHOTO.tx -= Math.sin(PHOTO.yaw) * k; PHOTO.tz -= Math.cos(PHOTO.yaw) * k; }
-  if (keys.KeyS) { PHOTO.tx += Math.sin(PHOTO.yaw) * k; PHOTO.tz += Math.cos(PHOTO.yaw) * k; }
-  if (keys.KeyA) { PHOTO.tx -= Math.cos(PHOTO.yaw) * k; PHOTO.tz += Math.sin(PHOTO.yaw) * k; }
-  if (keys.KeyD) { PHOTO.tx += Math.cos(PHOTO.yaw) * k; PHOTO.tz -= Math.sin(PHOTO.yaw) * k; }
+  if (held('up')) { PHOTO.tx -= Math.sin(PHOTO.yaw) * k; PHOTO.tz -= Math.cos(PHOTO.yaw) * k; }
+  if (held('down')) { PHOTO.tx += Math.sin(PHOTO.yaw) * k; PHOTO.tz += Math.cos(PHOTO.yaw) * k; }
+  if (held('left')) { PHOTO.tx -= Math.cos(PHOTO.yaw) * k; PHOTO.tz += Math.sin(PHOTO.yaw) * k; }
+  if (held('right')) { PHOTO.tx += Math.cos(PHOTO.yaw) * k; PHOTO.tz -= Math.sin(PHOTO.yaw) * k; }
   if (keys.KeyQ) PHOTO.ty = Math.max(0.2, PHOTO.ty - k * 0.5); if (keys.KeyE) PHOTO.ty = Math.min(8, PHOTO.ty + k * 0.5);
   const cp = Math.cos(PHOTO.pitch);
   camera.position.set(PHOTO.tx + Math.sin(PHOTO.yaw) * cp * PHOTO.dist, PHOTO.ty + Math.sin(PHOTO.pitch) * PHOTO.dist, PHOTO.tz + Math.cos(PHOTO.yaw) * cp * PHOTO.dist);
@@ -5830,44 +6090,141 @@ function dailyCode() {
   const seed = h >>> 0;
   return withSeed(seed, () => { const keys = Object.keys(RIFT_MODS), mods = []; while (mods.length < 2) { const q = pick(keys); if (!mods.includes(q)) mods.push(q); } return riftCode(4, mods, seed); });
 }
+// ================= settings, accessibility, key bindings =================
+const KB_DEFAULT = { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', attack: 'KeyJ', roll: 'Space', use: 'KeyE', potion: 'KeyQ', gpotion: 'KeyR', scroll: 'KeyT', skill1: 'Digit1', skill2: 'Digit2', skill3: 'Digit3', lock: 'Tab', unlock: 'KeyX', view: 'KeyV', bag: 'KeyI', talents: 'KeyK', codex: 'KeyC', photo: 'KeyP' };
+const KB_NAMES = { up: 'Move up', down: 'Move down', left: 'Move left', right: 'Move right', attack: 'Attack (hold)', roll: 'Roll', use: 'Use, open, talk', potion: 'Healing Draught', gpotion: 'Greater Draught', scroll: 'Portal Scroll', skill1: 'Skill 1', skill2: 'Skill 2', skill3: 'Skill 3', lock: 'Lock on / next', unlock: 'Release lock', view: 'Switch view', bag: 'Bag', talents: 'Talents', codex: 'Codex', photo: 'Photo mode' };
+// keys that always work alongside the bindings (arrows move, shift rolls, F uses)
+const KB_EXTRA = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', ShiftLeft: 'roll', ShiftRight: 'roll', KeyF: 'use', KeyB: 'bag', KeyN: 'talents' };
+const KB = Object.assign({}, KB_DEFAULT, SET.keys || {});
+const keyAction = (code) => Object.keys(KB).find((a) => KB[a] === code) || KB_EXTRA[code] || null;
+const held = (a) => !!keys[KB[a]] || Object.entries(KB_EXTRA).some(([c, x]) => x === a && keys[c]);
+const keyLabel = (code) => (code || '').replace(/^Key/, '').replace(/^Digit/, '').replace('Space', 'Space').replace('Arrow', '').replace('Left', ' left').replace('Right', ' right') || '—';
+let rebinding = null;
+
+// colour palettes: rarities and the enemy warning colour, readable for common kinds of colour blindness
+const PALETTES = {
+  default: { n: 'Default', r: ['#bdb7a7', '#74c269', '#5c8ff2', '#b56ff2', '#f19a33'], set: '#5fd38a', tele: 0xff3b2f },
+  redgreen: { n: 'Red-green safe', r: ['#c8c4b8', '#56b4e9', '#f0e442', '#cc79a7', '#e69f00'], set: '#00c4a0', tele: 0xffd400 },
+  blueyellow: { n: 'Blue-yellow safe', r: ['#c8c4b8', '#3fbf6f', '#ff6f91', '#b56ff2', '#ff8c1a'], set: '#2bd4c0', tele: 0xff2a6a },
+};
+let TELE_COL = 0xff3b2f;
+function applyA11y() {
+  const pal = PALETTES[SET.cb] || PALETTES.default, root = document.documentElement.style;
+  pal.r.forEach((c, i) => { root.setProperty('--r' + i, c); RCOL[i] = new THREE.Color(c).getHex(); });
+  root.setProperty('--set', pal.set); TELE_COL = pal.tele;
+  document.body.classList.toggle('cb', SET.cb && SET.cb !== 'default');
+  root.setProperty('--ui', String(SET.ui || 1));
+  document.body.classList.toggle('calm', !!SET.motion);
+}
+const calm = () => !!SET.motion; // reduced motion: no shake, hit-stop, slow motion, lens kicks or flashes
+function haptic(p) { if (SET.haptics !== false && touchMode && navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) { try { navigator.vibrate(p); } catch (err) { /* unsupported */ } } }
+
+// difficulty is per hero
+const DIFF = {
+  story: { n: 'Story', hp: 0.6, dmg: 0.55, xp: 1, mf: 0, d: 'Foes are much softer and you lose no gold when you fall. For the tale and the sights.' },
+  normal: { n: 'Normal', hp: 1, dmg: 1, xp: 1, mf: 0, d: 'The deep as it was meant.' },
+  hard: { n: 'Hard', hp: 1.4, dmg: 1.35, xp: 1.3, mf: 40, d: 'Tougher, harder-hitting foes; 30% more experience and 40% more magic find.' },
+};
+const diff = () => DIFF[(S && S.diff) || 'normal'];
+
+function settingsHtml(tab) {
+  const seg = (key, items, per) => `<div class="seg">${items.map(([v, n]) => `<button type="button" class="${String(per ? S[key] || 'normal' : SET[key]) === String(v) ? 'on' : ''}" data-act="${per ? 'sset' : 'gset'}" data-k="${key}" data-v="${v}">${n}</button>`).join('')}</div>`;
+  const row = (t, d, c) => `<div class="row"><div><div class="t">${t}</div>${d ? `<div class="d">${d}</div>` : ''}</div>${c}</div>`;
+  if (tab === 'access') {
+    return `<div class="rows">${row('Colour palette', 'Rarity colours and the warning colour of enemy attacks. The non-default palettes also letter each item by rarity.', seg('cb', Object.entries(PALETTES).map(([k, p]) => [k, p.n])))}
+      ${row('Interface size', 'Scales the HUD, menus and dialogue.', seg('ui', [[0.9, 'Small'], [1, 'Normal'], [1.15, 'Large'], [1.3, 'Larger']]))}
+      ${row('Reduce motion', 'Turns off screen shake, hit-stop, slow motion, lens kicks and lightning flashes.', seg('motion', [[false, 'Off'], [true, 'On']]))}
+      ${row('Screen shake', '', seg('shake', [[true, 'On'], [false, 'Off']]))}
+      ${row('Hints', 'First-time tips for new players.', seg('hints', [[true, 'On'], [false, 'Off']]))}
+      ${row('Difficulty', `${esc(diff().d)} You can change this any time.`, seg('diff', Object.entries(DIFF).map(([k, q]) => [k, q.n]), true))}</div>`;
+  }
+  if (tab === 'keys') {
+    return `<p class="hint" style="margin:0 0 10px">Choose an action, then press the key you want for it. Arrow keys, Shift and F keep working as well.</p><div class="keys">${Object.keys(KB_DEFAULT).map((a) => `<button type="button" class="keyb${rebinding === a ? ' on' : ''}" data-act="rebind" data-k="${a}"><span>${KB_NAMES[a]}</span><kbd>${rebinding === a ? 'Press a key…' : esc(keyLabel(KB[a]))}</kbd></button>`).join('')}</div>
+      <div class="acts" style="margin-top:12px"><button class="btn ghost" type="button" data-act="kbReset">Reset to defaults</button></div>`;
+  }
+  return `<div class="rows">${row('View', '', seg('cam', [['top', 'Overhead'], ['third', 'Third person'], ['first', 'First person']]))}
+    ${row('Graphics', '', seg('q', [['high', 'High'], ['medium', 'Medium'], ['low', 'Low']]))}
+    ${row('Battery saver', 'Caps the frame rate at 30 and keeps resolution low. Good for phones and long sessions.', seg('battery', [[false, 'Off'], [true, 'On']]))}
+    ${row('Look speed', '', seg('sens', [[0.6, 'Slow'], [1, 'Normal'], [1.6, 'Fast']]))}
+    ${row('Music', '', seg('music', [[true, 'On'], [false, 'Off']]))}
+    ${row('Vibration', 'Short buzzes on hits, level-ups and big moments (phones that support it).', seg('haptics', [[true, 'On'], [false, 'Off']]))}
+    ${row('Loot filter', 'Turns low items into Arcane Essence the moment you pick them up. Set and legendary items are always kept.', seg('filter', [['none', 'Keep all'], ['common', 'Salvage common'], ['uncommon', 'Salvage common and uncommon']], true))}</div>`;
+}
+function settingsAct(d) {
+  switch (d.act) {
+    case 'gset': {
+      const k = d.k, v = d.v === 'true' ? true : d.v === 'false' ? false : isNaN(+d.v) ? d.v : +d.v;
+      if (k === 'cam') { setCamMode(v); break; }
+      if (k === 'q') { setQuality(v); break; }
+      SET[k] = v; saveSettings();
+      if (k === 'music' && musBus) musBus.gain.value = SET.music === false ? 0 : 0.5;
+      if (k === 'battery') { if (v) setQuality('low'); perf.cap = v ? 1 : Math.min(window.devicePixelRatio || 1, Q.ratioCap); perf.ratio = Math.min(perf.ratio, perf.cap); renderer.setPixelRatio(perf.ratio); Post.setup(); }
+      applyA11y(); break;
+    }
+    case 'sset': S[d.k] = d.v; if (d.k === 'diff') toast(`Difficulty: ${DIFF[d.v].n}`, 'var(--brass-2)'); save(); break;
+    case 'rebind': rebinding = d.k; break;
+    case 'kbReset': Object.assign(KB, KB_DEFAULT); SET.keys = {}; saveSettings(); rebinding = null; buildActionBar(); refreshKeyList(); break;
+    default: return false;
+  }
+  return true;
+}
+// a key press while rebinding is captured here first
+function captureRebind(ev) {
+  if (!rebinding) return false;
+  ev.preventDefault();
+  if (ev.code !== 'Escape') {
+    for (const a of Object.keys(KB)) if (KB[a] === ev.code && a !== rebinding) KB[a] = KB[rebinding]; // swap with whatever had it
+    KB[rebinding] = ev.code; SET.keys = Object.assign({}, KB); saveSettings(); buildActionBar(); refreshKeyList();
+  }
+  rebinding = null; renderPanel(); return true;
+}
+function creditsHtml() {
+  return `<div class="credits"><h3>Hearthdeep</h3><p>A JAT Dungeon Crawler by Jeremy Anderson (Jeremy Anderson Tech).</p>
+    <h3>Built with</h3><p>three.js r186 · © 2010–2026 three.js authors · MIT licence</p><p>Fonts: IM Fell English SC, Alegreya Sans, Spline Sans Mono (SIL Open Font License), via Google Fonts</p><p>Every texture, model, sound and note of music is generated by the game's own code.</p>
+    <h3>Thanks</h3><p>To everyone who answered the bell.</p></div>`;
+}
 // ================= input =================
 const GAME_KEYS = new Set(['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 window.addEventListener('keydown', (ev) => {
   if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'TEXTAREA')) return;
+  if (captureRebind(ev)) return;
   if (dlgOn) { if (['Space', 'Enter', 'KeyE', 'Escape'].includes(ev.code)) { ev.preventDefault(); dlgNext(); } return; }
   if (!$('#share').hidden) { if (ev.code === 'Escape') $('#share').hidden = true; return; }
-  if (PHOTO.on) { keys[ev.code] = true; if (ev.code === 'Escape' || ev.code === 'KeyP') exitPhoto(); return; }
-  if (ev.code === 'KeyP' && started && $('#title').hidden && !Panel.kind && $('#death').hidden) { enterPhoto(); return; }
+  if (PHOTO.on) { keys[ev.code] = true; if (ev.code === 'Escape' || ev.code === KB.photo) exitPhoto(); return; }
+
   if (!$('#title').hidden) { if (ev.code === 'Escape' && started) resume(); return; }
   if (!$('#death').hidden) return;
   if (Panel.kind) {
-    if (ev.code === 'Escape' || ((ev.code === 'KeyI' || ev.code === 'KeyB' || ev.code === 'KeyK') && Panel.kind === 'bag') || (ev.code === 'KeyC' && Panel.kind === 'codex')) { ev.preventDefault(); closePanel(); }
+    const a = keyAction(ev.code);
+    if (ev.code === 'Escape' || ((a === 'bag' || a === 'talents') && Panel.kind === 'bag') || (a === 'codex' && Panel.kind === 'codex')) { ev.preventDefault(); closePanel(); }
     return;
   }
-  if (GAME_KEYS.has(ev.code)) ev.preventDefault();
+  if (GAME_KEYS.has(ev.code) || ev.code === KB.roll || ev.code === KB.lock) ev.preventDefault();
   if (ev.code === 'Backquote' || ev.code === 'F3') { ev.preventDefault(); perf.on = !perf.on; $('#perf').hidden = !perf.on; return; }
+  if (ev.code === 'AltLeft' || ev.code === 'AltRight') { ev.preventDefault(); document.body.classList.add('alt'); }
   if (ev.repeat) return;
   keys[ev.code] = true;
-  switch (ev.code) {
-    case 'Space': case 'ShiftLeft': case 'ShiftRight': tryDodge(); break;
-    case 'KeyE': case 'KeyF': interact(); break;
-    case 'KeyQ': usePotion(false); break;
-    case 'KeyR': usePotion(true); break;
-    case 'KeyT': useScroll(); break;
-    case 'KeyI': case 'KeyB': openPanel('bag'); break;
-    case 'KeyK': case 'KeyN': openPanel('bag', 'talents'); break;
-    case 'KeyC': openPanel('codex'); break;
-    case 'Tab': cycleLock(); break;
-    case 'KeyX': releaseLock(); break;
-    case 'Digit1': useSkill(0); break;
-    case 'Digit2': useSkill(1); break;
-    case 'Digit3': useSkill(2); break;
-    case 'Escape': showTitle(); break;
-    case 'KeyV': cycleCam(); break;
+  if (ev.code === 'Escape') { showTitle(); return; }
+  switch (keyAction(ev.code)) { // actions follow the player's key bindings (Settings, Controls)
+    case 'roll': tryDodge(); break;
+    case 'use': interact(); break;
+    case 'potion': usePotion(false); break;
+    case 'gpotion': usePotion(true); break;
+    case 'scroll': useScroll(); break;
+    case 'bag': openPanel('bag'); break;
+    case 'talents': openPanel('bag', 'talents'); break;
+    case 'codex': openPanel('codex'); break;
+    case 'lock': cycleLock(); break;
+    case 'unlock': releaseLock(); break;
+    case 'skill1': useSkill(0); break;
+    case 'skill2': useSkill(1); break;
+    case 'skill3': useSkill(2); break;
+    case 'view': cycleCam(); break;
+    case 'photo': enterPhoto(); break;
   }
 });
-window.addEventListener('keyup', (ev) => { keys[ev.code] = false; });
-window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouseDown = false; touchAtk = false; });
+window.addEventListener('keyup', (ev) => { keys[ev.code] = false; if (ev.code === 'AltLeft' || ev.code === 'AltRight') document.body.classList.remove('alt'); });
+window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouseDown = false; touchAtk = false; document.body.classList.remove('alt'); });
 canvas.addEventListener('pointerdown', (ev) => {
   if (ev.pointerType === 'touch') { setTouchMode(true); if (SET.cam !== 'top') { lookTouch = ev.pointerId; lookX = ev.clientX; lookY = ev.clientY; } return; }
   if (isPaused()) return;
@@ -5937,8 +6294,8 @@ function showTitle() {
     $('#menuBtns').innerHTML = `<div class="slots">${[0, 1, 2].map((i) => { const l = slotLine(i); return `<div class="slotrow${i === SET.slot && started ? ' cur' : ''}"><button class="btn${l ? '' : ' ghost'} slotb" type="button" id="mSlot${i}"><b>Slot ${i + 1}</b><span>${l ? esc(l) : 'Empty · begin a new hero'}</span></button>${l ? `<button class="btn ghost sm" type="button" id="mDel${i}" aria-label="Erase slot ${i + 1}">Erase</button>` : ''}</div>`; }).join('')}</div>`
       + (started ? '<button class="btn ghost" type="button" id="mBack">Back</button>' : '') + `<button class="btn ghost" type="button" id="mSound">${muted ? 'Sound off' : 'Sound on'}</button>`;
   }
-  $('#opts').innerHTML = optRow('View', 'cam', [['top', 'Overhead'], ['third', 'Third person'], ['first', 'First person']]) + optRow('Graphics', 'q', [['high', 'High'], ['medium', 'Medium'], ['low', 'Low']]) + optRow('Look speed', 'sens', [[0.6, 'Slow'], [1, 'Normal'], [1.6, 'Fast']])
-    + optRow('Music', 'music', [[true, 'On'], [false, 'Off']]) + optRow('Screen shake', 'shake', [[true, 'On'], [false, 'Off']]) + optRow('Hints', 'hints', [[true, 'On'], [false, 'Off']]);
+  $('#opts').innerHTML = optRow('View', 'cam', [['top', 'Overhead'], ['third', 'Third person'], ['first', 'First person']]) + optRow('Graphics', 'q', [['high', 'High'], ['medium', 'Medium'], ['low', 'Low']])
+    + '<div class="opt"><span>More</span><div class="seg"><button type="button" id="mSettings">Settings</button><button type="button" id="mAccess">Accessibility</button><button type="button" id="mKeys">Controls</button><button type="button" id="mCredits">Credits</button></div></div>';
   if (document.pointerLockElement) document.exitPointerLock();
   $('#title').hidden = false; $('#confirmNew').hidden = true; mouseDown = false;
   const b = $('#mResume') || $('#mSlot' + (SET.slot || 0)); if (b) b.focus();
@@ -5946,8 +6303,16 @@ function showTitle() {
 function resume() { $('#title').hidden = true; }
 function optRow(label, key, items) { return `<div class="opt"><span>${label}</span><div class="seg">${items.map(([v, n]) => `<button type="button" class="${String(SET[key]) === String(v) ? 'on' : ''}" data-opt="${key}" data-v="${v}">${n}</button>`).join('')}</div></div>`; }
 function setQuality(q) { SET.q = q; saveSettings(); applyQuality(); perf.cap = Math.min(window.devicePixelRatio || 1, Q.ratioCap); perf.ratio = Math.min(perf.ratio, perf.cap); renderer.setPixelRatio(perf.ratio); Post.setup(); warmLevel(); }
+// behind the title menu the camera drifts slowly around the village
+let flyA = 0.6;
+function titleFly(dt) {
+  flyA += dt * (calm() ? 0.02 : 0.06);
+  const r = 26, cx = P.x, cz = P.z - 4;
+  camera.position.set(cx + Math.sin(flyA) * r, 13 + Math.sin(flyA * 0.7) * 2, cz + Math.cos(flyA) * r);
+  camera.lookAt(cx, 1.5, cz);
+}
 function begin() {
-  started = true;
+  started = true; snapCamera();
   $('#title').hidden = true; $('#hud').hidden = false;
   setTouchMode(touchMode || window.matchMedia('(pointer: coarse)').matches);
   $('#touch').hidden = !touchMode;
@@ -5983,6 +6348,8 @@ $('#title').addEventListener('click', (ev) => {
   }
   else if (id === 'btnKeep') $('#confirmNew').hidden = true;
   else if (id === 'mSound') { toggleMute(); showTitle(); }
+  else if (id === 'mSettings' || id === 'mAccess' || id === 'mKeys') { resume(); openPanel('settings', { mSettings: 'game', mAccess: 'access', mKeys: 'keys' }[id]); }
+  else if (id === 'mCredits') { resume(); openPanel('credits'); }
   const o = ev.target.closest('[data-opt]');
   if (o) {
     if (o.dataset.opt === 'cam') setCamMode(o.dataset.v);
@@ -5997,9 +6364,12 @@ $('#btnMute').addEventListener('click', toggleMute);
 $('#btnMenu').addEventListener('click', showTitle);
 $('#btnView').addEventListener('click', cycleCam);
 $('#btnRevive').addEventListener('click', () => { $('#death').hidden = true; P.dead = false; returnToTown(true); });
-$('#keyList').innerHTML = [
-  ['WASD', 'Move'], ['Mouse', 'Aim or look'], ['Left click', 'Attack (hold)'], ['Space', 'Roll'], ['1 2 3', 'Skills'], ['Tab', 'Lock on / next'], ['X', 'Release lock'], ['E', 'Use, open, talk'], ['V', 'Switch view'], ['Wheel', 'Zoom'], ['Q / R', 'Draught / Greater'], ['T', 'Portal scroll'], ['I', 'Bag and character'], ['K', 'Talents'], ['C', 'Codex'], ['Esc', 'Menu'], ['`', 'Performance readout'],
-].map(([k, v]) => `<div><kbd>${k}</kbd><span>${v}</span></div>`).join('') + '<div><kbd>Touch</kbd><span>Stick moves; drag the screen to look in close views</span></div>';
+function refreshKeyList() {
+  const k = (a) => esc(keyLabel(KB[a]));
+  $('#keyList').innerHTML = [
+    [`${k('up')}${k('left')}${k('down')}${k('right')}`, 'Move'], ['Mouse', 'Aim or look'], ['Left click', 'Attack (hold)'], [k('roll'), 'Roll'], [`${k('skill1')} ${k('skill2')} ${k('skill3')}`, 'Skills'], [k('lock'), 'Lock on / next'], [k('unlock'), 'Release lock'], [k('use'), 'Use, open, talk'], [k('view'), 'Switch view'], ['Wheel', 'Zoom'], [`${k('potion')} / ${k('gpotion')}`, 'Draught / Greater'], [k('scroll'), 'Portal scroll'], [k('bag'), 'Bag and character'], [k('talents'), 'Talents'], [k('codex'), 'Codex'], [k('photo'), 'Photo mode'], ['Alt', 'Show all item names'], ['Esc', 'Menu'], ['`', 'Performance readout'],
+  ].map(([a, v]) => `<div><kbd>${a}</kbd><span>${v}</span></div>`).join('') + '<div><kbd>Touch</kbd><span>Stick moves; drag the screen to look in close views</span></div>';
+}
 
 // ================= performance readout & adaptive resolution =================
 const perf = { on: false, acc: 0, cpu: 0, n: 0, slow: 0, fast: 0, ratio: Math.min(window.devicePixelRatio || 1, Q.ratioCap), cap: Math.min(window.devicePixelRatio || 1, Q.ratioCap), ms: 0, cpuMs: 0 };
@@ -6028,7 +6398,7 @@ let DBG = { turbo: 0 };
 function simTick(dt) {
   let gdt = dt;
   if (hitStop > 0) { hitStop -= dt; gdt = dt * 0.06; }
-  if (slowT > 0) { slowT -= dt; gdt *= 0.3; } // the moment a boss falls
+  if (slowT > 0) { slowT -= dt; if (!calm()) gdt *= 0.3; } // the moment a boss falls
   if (!isPaused()) {
     updPlayer(gdt);
     if (LV.type === 'dungeon') {
@@ -6060,12 +6430,16 @@ function simTick(dt) {
     saveT += dt; if (saveT > 20) { saveT = 0; save(); }
   }
 }
+let lastFrameTs = 0;
 function frame(ts) {
+  if (SET.battery && ts - lastFrameTs < 31) return; // battery saver: about 30 frames a second
+  lastFrameTs = ts;
   timer.update(ts);
   const dt = Math.min(0.05, timer.getDelta());
   elapsed += dt; U_TIME.value = elapsed;
   renderer.info.reset();
   const t0 = performance.now();
+  loadingTick();
   if (!levelReady) { perfTick(dt, 0); return; }
   // DBG.turbo runs extra fixed simulation steps per rendered frame (used by the autoplay test bots)
   const steps = 1 + (DBG.turbo | 0);
@@ -6073,9 +6447,9 @@ function frame(ts) {
   const gdt = dt * (hitStop > 0 ? 0.06 : 1) * (slowT > 0 ? 0.3 : 1); // effects follow the slowed clock too
   for (const s of spinners) s.rotation.y += dt * (s.userData.spin || 1);
   updParts(gdt); updSwings(dt); updRings(dt); updTorchLights(dt); updBlobs(); updLock();
-  if (PHOTO.on) updPhoto(dt); else if (P.mesh) updCamera(dt);
+  if (PHOTO.on) updPhoto(dt); else if (!started && LV.type === 'town' && !$('#title').hidden) titleFly(dt); else if (P.mesh) updCamera(dt);
   updTrail(gdt); updFacers();
-  musicTick();
+  musicTick(); ambTick(dt);
   // shader time, point-size scale and the things that follow the camera
   const ps = renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
   burstSys.pts.material.uniforms.uScale.value = ps; ambientSys.m.uniforms.uScale.value = ps;
@@ -6096,6 +6470,9 @@ function frame(ts) {
 
 // ================= boot =================
 function boot(data) {
+  applyA11y(); refreshKeyList();
+  // installable, offline-capable when served from a web host with the manifest (not inside claude.ai)
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && document.querySelector('link[rel=manifest]') && !window.claude) navigator.serviceWorker.register('sw.js').catch(() => {});
   applyQuality();
   renderer.setPixelRatio(perf.ratio);
   resize();
@@ -6108,5 +6485,5 @@ function boot(data) {
 }
 if (window.claude && window.claude.hot && window.claude.hot.snapshot) window.claude.hot.snapshot(() => ({ S, started }));
 if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(boot); else boot((window.claude && window.claude.hot && window.claude.hot.data) || {});
-return { get S() { return S; }, get RUN() { return RUN; }, get P() { return P; }, get LV() { return LV; }, enemies, renderer, startDelve, begin, freshHero, openPanel, closePanel, loadDungeon, get ready() { return levelReady; }, perf, debug: { parseRiftCode, setTouchMode, returnToTown, afterGear, DBG, stick, interacts, interact, usePotion, get skillCd() { return skillCd; }, isPaused, snapCamera, nextFloor, loadTown, rollCaravan, startRift, startArena, die, gainXP, hurtPlayer, calcStats, xpNeed, ARCH, BIOMES, genItem, makeSetItem, scene, sun, hemi, sky, walkable, spawnEnemy, bossPattern, get LVL() { return LV; }, applyTimeOfDay, get pet() { return pet; }, villagers, zones, chooseClass, checkAch, playerAttack, CAM, setCamMode, useSkill, cycleLock, get lockT() { return lockT; }, corpses, skillCd, questEvent, makeQuestOffers, claimQuest, get trail() { return trail; } } };
+return { get S() { return S; }, get RUN() { return RUN; }, get P() { return P; }, get LV() { return LV; }, enemies, renderer, startDelve, begin, freshHero, openPanel, closePanel, loadDungeon, get ready() { return levelReady; }, perf, debug: { parseRiftCode, setTouchMode, returnToTown, afterGear, DBG, stick, interacts, interact, usePotion, get skillCd() { return skillCd; }, isPaused, snapCamera, nextFloor, loadTown, rollCaravan, startRift, startArena, die, gainXP, hurtPlayer, calcStats, xpNeed, ARCH, BIOMES, genItem, makeSetItem, scene, sun, hemi, sky, walkable, spawnEnemy, bossPattern, get LVL() { return LV; }, applyTimeOfDay, get pet() { return pet; }, villagers, zones, chooseClass, checkAch, playerAttack, CAM, setCamMode, useSkill, cycleLock, get lockT() { return lockT; }, corpses, skillCd, questEvent, makeQuestOffers, claimQuest, get trail() { return trail; }, spawnDrop, bossIntro, LEGENDS, applyLoadout, get drops() { return drops; } } };
 };

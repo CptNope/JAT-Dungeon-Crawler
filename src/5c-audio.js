@@ -136,3 +136,49 @@ function playStep(i, at) {
     if (id === 'void' && Math.random() < 0.04) tone(hz(root + 36 + MINOR_PENTA[randi(0, 4)]), hz(root + 48), 1.5, 'sine', 0.01, at, Music.echo, 0.4);
   }
 }
+
+// ================= ambience and footsteps =================
+// Each biome has a few sparse one-shots layered over the music; the town has birds by day and crickets at night.
+const STEP_SURF = { crypt: 'stone', fungal: 'moss', magma: 'ash', frost: 'snow', void: 'stone', drowned: 'wet', clock: 'metal', blood: 'flesh' };
+function footstep(surf) {
+  if (muted || !AC) return; const now = AC.currentTime, v = 0.045;
+  switch (surf) {
+    case 'grass': noise(0.07, v * 0.8, now, 'highpass', 2600); break;
+    case 'snow': noise(0.11, v, now, 'bandpass', 1400, 700, 1.4); break;
+    case 'wet': noise(0.09, v, now, 'bandpass', 900, 1800, 3); tone(500, 900, 0.05, 'sine', 0.012, now + 0.02); break;
+    case 'metal': noise(0.04, v * 0.7, now, 'highpass', 3000); tone(1900, 1700, 0.08, 'triangle', 0.008, now); break;
+    case 'moss': noise(0.08, v * 0.7, now, 'lowpass', 500); break;
+    case 'ash': noise(0.08, v, now, 'bandpass', 2400, 1200, 0.9); break;
+    case 'flesh': noise(0.08, v, now, 'lowpass', 380); tone(90, 60, 0.08, 'sine', 0.02, now); break;
+    default: noise(0.05, v, now, 'lowpass', 700); tone(140, 90, 0.04, 'sine', 0.012, now);
+  }
+}
+let ambT = 2, stepD = 0, lastPX = null, lastPZ = 0;
+function ambTick(dt) {
+  if (muted || !AC || !LV || isPaused()) { lastPX = null; return; }
+  // footsteps from distance actually covered
+  if (lastPX !== null && !P.dead && P.dodgeT <= 0 && P.dashT <= 0) {
+    const m = Math.hypot(P.x - lastPX, P.z - lastPZ);
+    if (m < 1) { stepD += m; if (stepD > 1.25) { stepD = 0; footstep(LV.type === 'town' ? 'grass' : STEP_SURF[biomeOf(RUN ? RUN.depth : 1).id] || 'stone'); } }
+  }
+  lastPX = P.x; lastPZ = P.z;
+  ambT -= dt; if (ambT > 0) return;
+  ambT = rand(2.5, 6.5);
+  const now = AC.currentTime, B = AC.createGain(); B.gain.value = 0.55; B.connect(sfxBus);
+  if (LV.type === 'town') {
+    if (nightK > 0.5) { for (let k = 0; k < 3; k++) tone(4200, 4300, 0.04, 'sine', 0.008, now + k * 0.07, B); ambT = rand(1.2, 3); } // crickets
+    else { const f = rand(2200, 3200); tone(f, f * 1.3, 0.08, 'sine', 0.014, now, B); tone(f * 1.2, f * 0.9, 0.1, 'sine', 0.012, now + 0.12, B); } // a bird
+    return;
+  }
+  if (LV.type !== 'dungeon' || !RUN) return;
+  switch (biomeOf(RUN.depth).id) {
+    case 'crypt': if (chance(0.6)) { const f = rand(900, 1500); tone(f, f * 0.55, 0.12, 'sine', 0.02, now, B); } else noise(1.4, 0.02, now, 'bandpass', 300, 160, 2, B); break; // drips, distant wind
+    case 'drowned': for (let k = 0; k < 2; k++) { const f = rand(700, 1300); tone(f, f * 0.6, 0.1, 'sine', 0.02, now + k * rand(0.2, 0.5), B); } break;
+    case 'fungal': for (let k = 0; k < 3; k++) { const f = rand(200, 380); tone(f, f * 1.8, 0.07, 'sine', 0.014, now + k * 0.09, B); } break; // spore pops
+    case 'magma': noise(1.6, 0.035, now, 'lowpass', 140, 60, 1, B); tone(48, 40, 1.2, 'sine', 0.03, now, B, 0.3); break; // rumble
+    case 'frost': noise(2.4, 0.03, now, 'bandpass', 600, 1400, 4, B); break; // wind through ice
+    case 'void': tone(rand(180, 260), rand(150, 300), 2.2, 'sine', 0.012, now, B, 0.8); tone(rand(300, 420), rand(280, 440), 2, 'triangle', 0.006, now + 0.4, B, 0.8); break; // whispers
+    case 'clock': for (let k = 0; k < 4; k++) noise(0.03, 0.03, now + k * 0.5, 'highpass', 3500, 0, 1, B); ambT = rand(4, 7); break; // ticking
+    case 'blood': for (let k = 0; k < 2; k++) tone(62, 44, 0.16, 'sine', 0.05, now + k * 0.22, B); ambT = rand(3, 5); break; // heartbeat
+  }
+}

@@ -1,5 +1,6 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><meta name="theme-color" content="#15131b"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Hearthdeep</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"%3E%3Crect width="512" height="512" rx="96" fill="%2315131b"/%3E%3Cpath d="M128 410V236a128 128 0 0 1 256 0v174" fill="%230b0a0f" stroke="%23d6a24a" stroke-width="26" stroke-linejoin="round"/%3E%3Cpath d="M92 410h328" stroke="%238a6a3a" stroke-width="30" stroke-linecap="round"/%3E%3Cpath d="M256 372c-46 0-72-30-72-66 0-40 34-58 42-100 28 22 30 50 26 70 14-8 24-26 22-48 34 26 54 52 54 80 0 38-28 64-72 64z" fill="%23f19a33"/%3E%3Cpath d="M256 372c-22 0-36-14-36-34 0-20 16-30 22-50 14 12 16 26 14 36 8-4 14-12 14-24 16 14 22 26 22 40 0 20-14 32-36 32z" fill="%23ffe08a"/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya+Sans:wght@400;500;700;800&family=IM+Fell+English+SC&family=Spline+Sans+Mono:wght@400;600&display=swap">
@@ -195,13 +196,13 @@ h3 small{font-family:var(--f-mono);font-size:12px;color:var(--muted);margin-left
 #tS1{right:calc(132px + env(safe-area-inset-right,0px));bottom:calc(96px + env(safe-area-inset-bottom,0px))}
 #tS2{right:calc(92px + env(safe-area-inset-right,0px));bottom:calc(152px + env(safe-area-inset-bottom,0px))}
 #tS3{right:calc(24px + env(safe-area-inset-right,0px));bottom:calc(128px + env(safe-area-inset-bottom,0px))}
-.tb.sk{width:52px;height:52px;border-color:color-mix(in srgb,var(--brass) 70%,var(--line-2))}
+.tb.sk{width:56px;height:56px;border-color:color-mix(in srgb,var(--brass) 70%,var(--line-2))}
 .tb.sk::before{content:"";position:absolute;inset:0;border-radius:50%;background:conic-gradient(rgba(0,0,0,.65) calc(var(--cd,0)*360deg),transparent 0)}
 .tb.sk i{position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);font:600 10px var(--f-mono);font-style:normal;color:var(--fg);text-shadow:0 1px 2px #000;white-space:nowrap}
 .tb.locked{opacity:.4}
 #tUse{right:calc(24px + env(safe-area-inset-right,0px));bottom:calc(194px + env(safe-area-inset-bottom,0px));width:58px;height:58px}
 .util{position:absolute;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(168px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column-reverse;gap:8px;pointer-events:none}
-.util .tb{position:relative;width:46px;height:46px;font-size:10px}
+.util .tb{position:relative;width:50px;height:50px;font-size:10px}
 #tLock.on{border-color:#ff7a4a;background:rgba(255,122,74,.25)}
 @media (orientation:landscape) and (max-height:560px){.util{flex-direction:row;bottom:calc(14px + env(safe-area-inset-bottom,0px));left:calc(160px + env(safe-area-inset-left,0px))}}
 #tUse.ready{border-color:var(--brass-2);background:rgba(214,162,74,.3)}
@@ -357,6 +358,83 @@ body.photo #hud,body.photo #touch,body.photo #labels,body.photo .lbl,body.photo 
 .pagec b{font-family:var(--f-display);font-weight:400;color:var(--brass-2)}.pagec p{margin:4px 0 0;font-size:13px;line-height:1.45;font-style:italic}.pagec.locked{opacity:.5;font-style:normal}
 input.code-in{width:100%;box-sizing:border-box;margin-top:8px;font:14px var(--f-mono);background:var(--ink);color:var(--fg);border:1px solid var(--line-2);border-radius:3px;padding:7px 9px;text-transform:uppercase}
 </style>
+<style>
+/* settings, accessibility */
+.keys{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px}
+.keyb{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;min-height:44px;border:1px solid var(--line);border-radius:4px;background:var(--ink-2);color:var(--fg);cursor:pointer;text-align:left}
+.keyb:hover{border-color:var(--line-2)}
+.keyb.on{border-color:var(--brass-2);background:color-mix(in srgb,var(--brass) 14%,var(--ink-2))}
+kbd{font:600 12px var(--f-mono);padding:3px 7px;border:1px solid var(--line-2);border-bottom-width:2px;border-radius:3px;background:var(--ink);color:var(--brass-2);white-space:nowrap}
+.keyb.on kbd{animation:kbPulse 1s ease-in-out infinite}
+@keyframes kbPulse{50%{opacity:.45}}
+.row .seg{flex-wrap:wrap;justify-content:flex-end}
+@media (max-width:560px){.row{grid-template-columns:minmax(0,1fr)}.row .seg{justify-content:flex-start}}
+.credits h3{font-family:var(--f-display);font-weight:400;font-size:20px;margin:16px 0 6px;color:var(--brass-2)}
+.credits h3:first-child{margin-top:0;font-size:28px}
+.credits p{margin:0 0 6px;max-width:62ch;line-height:1.5}
+/* colour-blind palettes also letter each item by rarity, so colour is never the only cue */
+body.cb .cell::after{position:absolute;top:1px;left:3px;font:700 9px var(--f-mono);letter-spacing:.04em;color:var(--fg);opacity:.85}
+body.cb .cell.r0::after{content:"C"}body.cb .cell.r1::after{content:"U"}body.cb .cell.r2::after{content:"R"}body.cb .cell.r3::after{content:"E"}body.cb .cell.r4::after{content:"L"}body.cb .cell.set::after{content:"S"}
+body.cb .eqs em.r0::before{content:"C · "}body.cb .eqs em.r1::before{content:"U · "}body.cb .eqs em.r2::before{content:"R · "}body.cb .eqs em.r3::before{content:"E · "}body.cb .eqs em.r4::before{content:"L · "}body.cb .eqs em.set::before{content:"S · "}
+body.cb .lbl.drop[data-r]::before{content:attr(data-r) " · ";opacity:.8}
+/* interface size */
+#hud,#panel .card,#title .over-in,#dlg,#hint,#toasts,#death .over-in,#banner,#ending .over-in{zoom:var(--ui,1)}
+/* reduced motion */
+body.calm *,body.calm *::before,body.calm *::after{animation-duration:.001s!important;animation-iteration-count:1!important;transition-duration:.001s!important}
+/* phones held sideways: tighten the touch cluster so it clears the HUD */
+@media (orientation:landscape) and (max-height:500px){
+  #stick{width:112px;height:112px;bottom:calc(14px + env(safe-area-inset-bottom,0px))}
+  #tAtk{width:76px;height:76px;bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+  #tDodge{right:calc(110px + env(safe-area-inset-right,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px))}
+  #tS1{right:calc(116px + env(safe-area-inset-right,0px));bottom:calc(78px + env(safe-area-inset-bottom,0px))}
+  #tS2{right:calc(64px + env(safe-area-inset-right,0px));bottom:calc(112px + env(safe-area-inset-bottom,0px))}
+  #tS3{right:calc(10px + env(safe-area-inset-right,0px));bottom:calc(104px + env(safe-area-inset-bottom,0px))}
+  #tUse{right:calc(178px + env(safe-area-inset-right,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));width:52px;height:52px}
+  .hud-tc{top:calc(8px + env(safe-area-inset-top,0px))}
+  #toasts{top:calc(60px + env(safe-area-inset-top,0px))}
+  body.touch #actionBar{display:none}
+}
+</style>
+<style>
+/* item names on the ground */
+.lbl.drop{font-family:var(--f-body);font-weight:600;font-size:12px;padding:1px 6px;border-radius:3px;background:rgba(10,10,16,.6);border:1px solid color-mix(in srgb,currentColor 40%,transparent);text-shadow:0 1px 2px #000}
+.lbl.drop.r0{color:var(--r0);visibility:hidden}.lbl.drop.r1{color:var(--r1)}.lbl.drop.r2{color:var(--r2)}.lbl.drop.r3{color:var(--r3)}.lbl.drop.r4{color:var(--r4);font-size:13px}.lbl.drop.set{color:var(--set)}
+.lbl.drop.junk{opacity:.55;font-weight:400}
+body.alt .lbl.drop.r0{visibility:visible}
+body.photo .lbl.drop{display:none!important}
+/* loadouts */
+.lo-name{font:inherit;font-family:var(--f-display);font-size:18px;color:var(--fg);background:transparent;border:1px solid transparent;border-radius:3px;padding:2px 4px;margin-left:-5px;width:100%;max-width:240px}
+.lo-name:hover,.lo-name:focus{border-color:var(--line-2);background:var(--ink)}
+.lo-icons{display:flex;gap:4px;margin:6px 0 4px;flex-wrap:wrap}
+.lo-i{display:grid;place-items:center;width:32px;height:32px;border:1px solid var(--line);border-radius:3px;background:var(--ink-2)}
+.lo-i svg{width:20px;height:20px}
+.lo-i.r1{border-color:var(--r1)}.lo-i.r2{border-color:var(--r2)}.lo-i.r3{border-color:var(--r3)}.lo-i.r4{border-color:var(--r4)}.lo-i.set{border-color:var(--set)}
+.lo-i.none{opacity:.3;border-style:dashed}
+</style>
+<style>
+/* boss intro: letterbox bars and a title card */
+#bossIntro{position:fixed;inset:0;z-index:5;pointer-events:none}
+#bossIntro .lb{position:absolute;left:0;right:0;height:9vh;background:#000;transform:scaleY(0);transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+#bossIntro .lb.t{top:0;transform-origin:top}#bossIntro .lb.b{bottom:0;transform-origin:bottom}
+#bossIntro.in .lb{transform:scaleY(1)}
+#bossIntro .bi-card{position:absolute;left:0;right:0;top:24vh;text-align:center;opacity:0;transform:translateY(10px);transition:opacity .5s ease .15s,transform .6s cubic-bezier(.2,.8,.2,1) .15s;text-shadow:0 2px 12px #000,0 0 3px #000}
+#bossIntro.in .bi-card{opacity:1;transform:none}
+#bossIntro.out .lb{transform:scaleY(0)}#bossIntro.out .bi-card{opacity:0;transform:translateY(-6px)}
+#biEpi{font:500 13px var(--f-body);letter-spacing:.32em;text-transform:uppercase;color:var(--brass-2)}
+#biName{font-family:var(--f-display);font-size:clamp(34px,6vw,64px);line-height:1.05;color:var(--fg);margin:6px 0 8px;text-wrap:balance;padding:0 16px}
+#biWhere{font:12px var(--f-mono);letter-spacing:.08em;color:var(--muted)}
+#biName::after{content:"";display:block;width:120px;height:1px;margin:10px auto 0;background:linear-gradient(90deg,transparent,var(--brass),transparent)}
+/* loading between floors */
+#loading{position:fixed;inset:0;z-index:7;display:grid;place-items:center;background:rgba(6,6,10,.82);padding:16px max(16px,env(safe-area-inset-right,0px)) 16px max(16px,env(safe-area-inset-left,0px))}
+.ld-in{text-align:center;max-width:460px}
+.ld-spin{width:34px;height:34px;margin:0 auto 14px;border:2px solid var(--line-2);border-top-color:var(--brass-2);border-radius:50%;animation:ldSpin 1s linear infinite}
+@keyframes ldSpin{to{transform:rotate(360deg)}}
+.ld-h{font-family:var(--f-display);font-size:24px;color:var(--brass-2);margin-bottom:8px}
+#ldTip{margin:0;color:var(--fg);line-height:1.5;font-size:15px}
+#ldTip::before{content:"Tip";display:block;font:600 11px var(--f-body);letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+</style>
+<style>@media (orientation:portrait){body.touch #hint{bottom:auto;top:calc(214px + env(safe-area-inset-top,0px))}}</style>
+<style>body:has(#panel:not([hidden])) #dlg{visibility:hidden}</style>
 </head><body>
 <canvas id="stage"></canvas>
 <div id="hud" hidden>
@@ -379,10 +457,10 @@ input.code-in{width:100%;box-sizing:border-box;margin-top:8px;font:14px var(--f-
   </div>
   <div id="actionBar"></div>
   <div id="prompt" hidden></div>
-  <div id="toasts"></div>
+  <div id="toasts" role="status" aria-live="polite"></div>
   <div id="labels"></div>
   <div id="floaters"></div>
-  <div id="banner"></div>
+  <div id="banner" role="status" aria-live="assertive"></div>
   <div id="vignette"></div>
   <div id="crosshair" hidden></div>
   <div id="lockMark" hidden></div>
@@ -403,12 +481,14 @@ input.code-in{width:100%;box-sizing:border-box;margin-top:8px;font:14px var(--f-
     <button class="tb" id="tBag" type="button" aria-label="Bag"></button>
   </div>
 </div>
-<div id="panel" hidden>
+<div id="panel" role="dialog" aria-modal="true" aria-labelledby="pTitle" hidden>
   <div class="card" role="dialog" aria-modal="true" aria-labelledby="pTitle">
     <header><h2 id="pTitle"></h2><nav id="pTabs"></nav><button class="x" id="pClose" type="button">Close</button></header>
     <div id="pBody"></div>
   </div>
 </div>
+<div id="bossIntro" hidden aria-live="assertive"><i class="lb t"></i><i class="lb b"></i><div class="bi-card"><div id="biEpi"></div><div id="biName"></div><div id="biWhere"></div></div></div>
+<div id="loading" hidden role="status"><div class="ld-in"><div class="ld-spin" aria-hidden="true"></div><div class="ld-h">Descending</div><p id="ldTip"></p></div></div>
 <div class="over" id="title">
   <div class="over-in">
     <h1 class="logo">Hearthdeep</h1>
@@ -419,9 +499,9 @@ input.code-in{width:100%;box-sizing:border-box;margin-top:8px;font:14px var(--f-
     <div class="keys" id="keyList"></div>
   </div>
 </div>
-<div class="over" id="death" hidden>
+<div class="over" id="death" role="alertdialog" aria-labelledby="deathH" hidden>
   <div class="over-in">
-    <h1 class="logo" style="color:var(--blood-2)">You fell</h1>
+    <h1 class="logo" id="deathH" style="color:var(--blood-2)">You fell</h1>
     <p class="tag" id="deathText"></p>
     <div class="menu"><button class="btn" id="btnRevive" type="button">Wake up in Hearthdeep</button></div>
   </div>

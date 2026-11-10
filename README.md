@@ -12,6 +12,10 @@ python3 -m http.server 8000   # then open http://localhost:8000
 
 `dist/hearthdeep.html` is a single self-contained file that loads three.js from jsDelivr instead of `vendor/`.
 
+**Install it on a phone**: the hosted `index.html` ships a web app manifest and a service worker, so on GitHub Pages it can be added to the home screen ("Install app" or "Add to Home Screen") and then runs full screen and offline. Each build stamps a new cache version, so an update replaces the old copy on the next visit.
+
+Every key below can be rebound in **Settings → Controls** (arrow keys, Shift and F keep working too).
+
 | Input | Action |
 | --- | --- |
 | WASD / arrows | Move |
@@ -24,6 +28,7 @@ python3 -m http.server 8000   # then open http://localhost:8000
 | E | Use, open, talk |
 | V | Switch view: Overhead → Third person → First person |
 | Mouse wheel | Zoom (overhead and third person) |
+| Alt (hold) | Show the names of common items on the ground |
 | Q / R | Healing Draught / Greater Draught |
 | T | Portal Scroll (opens a way home) |
 | I | Bag, materials, character sheet |
@@ -33,9 +38,16 @@ python3 -m http.server 8000   # then open http://localhost:8000
 | Esc | Menu |
 | `` ` `` or F3 | Performance readout |
 | Gamepad | Left stick moves, right stick aims or looks; A attack, B roll, X use, Y draught; LB / RB / LT skills; R3 or d-pad left lock on; d-pad up greater draught, down portal scroll, right view; Start menu, Back bag. In menus the d-pad moves, A presses, B closes, LB / RB change tabs |
-| Touch | Left stick moves; drag the screen to look in close views; Strike aims for you; skill, lock and utility buttons around the thumbs |
+| Touch | Left stick moves; drag the screen to look in close views; Strike aims for you (it sticks to your target and prefers foes in the direction you push); skill, lock and utility buttons around the thumbs; short vibrations on hits, level-ups and boss kills |
 
 ## What's in it
+
+- **Settings** (menu → Settings): view, graphics, a battery saver (30 fps cap, low resolution), look speed, music, vibration and the loot filter; **Accessibility**: red-green and blue-yellow safe palettes (rarity colours and the enemy warning colour, with rarity letters on every item), four interface sizes, reduce motion (no shake, hit-stop, slow motion, lens kicks or lightning flashes), and difficulty; **Controls**: rebind any key. The HUD, panels, toasts and death screen carry screen-reader roles and live regions.
+- **Difficulty** (per hero, change any time): Story (much softer foes, no gold lost on death), Normal, Hard (tougher foes, 30% more experience, 40% more magic find).
+- **Builds**: item names float over loot on the ground; the loot filter salvages Common (or Common and Uncommon) gear into essence the moment you pick it up, never sets or legendaries; three **loadouts** in the Bag save your gear and talents and swap them in one press (bag gear anywhere, stash gear and talents in town).
+- **Skill legendaries**: eight more legendary powers change what every skill does: Maelstrom Sash (skills drag foes in), Earthshaker Greaves (rolls end in a shockwave), Horn of the Old Guard (stacking damage after each skill), Quiver of Ash (seeking ember-bolts), Tempest Crown (lightning strikes), Rimewalker Band (skills chill everything near you), Ring of Embers (a ring of fire circles you), Twinstar Seal (skills can come straight back).
+- **Extract and imprint**: with an Artificer's Table, extract a legendary at the Workshop to learn its power for good, then imprint any learned power onto rare or epic gear for essence, sigils and gold.
+- **Presentation**: boss title cards with letterboxing, a slow flyover of the village behind the title menu, loading tips between floors, credits, biome ambience (drips, spore pops, magma rumble, ice wind, void whispers, clockwork ticking, a heartbeat in the Bloodroot) and birds or crickets in town, footsteps that change with the ground underfoot.
 
 - **Three views**: angled overhead, over-the-shoulder third person with wall collision, and first person with a held weapon. Dungeon walls rise to full height in the close views. Change view with V, the View button, or the menu.
 - **Graphics**: golden-hour town with sun shadows, sky dome and image-based light; torch-lit dungeons where the lantern casts shadows and the nearest wall torches flicker as real lights; HDR bloom, ACES tone mapping, colour grade and vignette; procedurally generated stone, brick, cobble, grass, wood, shingle and plaster textures with normal maps; wind-blown grass, biome particles (dust, spores, embers, snow, void sparks) and torch flames; arm and leg animation for every creature. High, Medium and Low quality presets, with automatic step-down on slow devices.
@@ -69,7 +81,7 @@ python3 -m http.server 8000   # then open http://localhost:8000
 - **Progression**: three save slots, 28 achievements, a bestiary of every foe and boss by biome, a hall of records for your best descents, and a save code you can copy out and import on another device.
 - **Endless dungeon**: rooms-and-corridors generation with a flow field for enemy pathing. Eight biomes of five depths each, then round again with rising difficulty: Sunken Crypt, Fungal Hollows, Magma Forge, Rime Halls, The Hollow Rift, The Drowned Deep, The Clockwork Vault, The Bloodroot Warren.
 - **80 enemy types**: 10 behaviours (melee, charger, archer, caster, swarm, bomber, summoner, shield-bearer, leaper, warding totem) × 8 biomes, plus 10 champion affixes (Swift, Vampiric, Splitting, Explosive…), named **leaders** with Frenzy/Ward/Rally auras that buff their pack, and a two-phase **boss** every fifth depth with its own attack patterns (the deep three add whirlpools, breaking waves, turning beams and racing roots). Bosses open waypoints.
-- **Loot**: 7 weapon types (melee arcs and ranged projectiles), 6 slots, 5 rarities, 13 affixes, 8 legendary powers (chain lightning, flame nova, spectral blades, phoenix…).
+- **Loot**: 7 weapon types (melee arcs and ranged projectiles), 6 slots, 5 rarities, 13 affixes, 16 legendary powers (chain lightning, flame nova, spectral blades, phoenix, and the eight skill legendaries above).
 - **Crafting**: draughts, portal scrolls, elixirs, forging rare/epic/legendary gear for a chosen slot, upgrades to +10, affix rerolls, salvage into essence.
 - Progress saves in the browser (localStorage).
 
@@ -127,10 +139,13 @@ src/            game source (edit these)
   6b-meta-ui.js class choice, talents, gems and sockets, yard, codex, save slots and export
   6c-pad.js     gamepad play and menu navigation
   6d-share.js   run card, photo mode, rift seed codes
+  6e-settings.js settings, accessibility palettes, difficulty, key bindings, credits
+  sw.js         offline cache for the hosted build (version stamped by build.sh)
   6-ui.js       HUD and all panels (shops, home, crafting, bag)
-  7-main.js     input, look controls, settings, loop, adaptive quality, boot
+  7-main.js     input, look controls, title menu, loop, adaptive quality, boot
   head.html / body.html
-build.sh        assembles game.js, index.html and dist/hearthdeep.html
+build.sh        assembles game.js, index.html, sw.js and dist/hearthdeep.html
+manifest.webmanifest, icons/   installable web app
 vendor/         three.js r186 (MIT, see THREE-LICENSE)
 ```
 

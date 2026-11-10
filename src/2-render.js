@@ -1,6 +1,6 @@
 // ================= settings =================
 const SET_KEY = 'hearthdeep.settings.v1';
-const SET = (() => { const d = { cam: 'top', q: 'high', sens: 1, music: true, shake: true, hints: true, slot: 0 }; try { return Object.assign(d, JSON.parse(localStorage.getItem(SET_KEY) || '{}')); } catch (err) { return d; } })();
+const SET = (() => { const d = { cam: 'top', q: 'high', sens: 1, music: true, shake: true, hints: true, slot: 0, haptics: true, motion: false, battery: false, cb: 'default', ui: 1 }; try { return Object.assign(d, JSON.parse(localStorage.getItem(SET_KEY) || '{}')); } catch (err) { return d; } })();
 function saveSettings() { try { localStorage.setItem(SET_KEY, JSON.stringify(SET)); } catch (err) { /* storage unavailable */ } }
 
 // ================= renderer, scene, camera =================

@@ -222,7 +222,7 @@ function bossDefeated(e) {
   S.waypoints.sort((a, b) => a - b);
   bossRef = null; $('#bossBar').hidden = true;
   banner(`${e.name} falls`, `Waypoint opened at depth ${wp}`);
-  slowT = 1.2; shake(0.7);
+  slowT = calm() ? 0 : 1.2; shake(0.7); haptic([60, 40, 120]);
   const pil = new THREE.Mesh(G.cyl, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff0c0).multiplyScalar(2.4), transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending }));
   pil.scale.set(2.4, 18, 2.4); pil.position.set(e.x, 9, e.z); world.add(pil); levelDisp.push(pil.material); fxLife.push({ m: pil, t: 2.4, T: 2.4, kind: 'pillar' });
   for (let k = 0; k < 4; k++) setTimeout(() => ringFx(e.x, e.z, 0.5, 6 + k * 2, 0.6, k % 2 ? 0xffd890 : 0xfff2c8, 3), k * 160);
@@ -264,7 +264,7 @@ function returnToTown(died) {
 }
 function die() {
   P.dead = true; P.hp = 0;
-  const lost = RUN.mode === 'arena' ? 0 : Math.floor(S.gold * 0.25);
+  const lost = RUN.mode === 'arena' || S.diff === 'story' ? 0 : Math.floor(S.gold * 0.25);
   if (RUN.arena) S.arenaBest = Math.max(S.arenaBest || 0, RUN.arena.wave - 1);
   S.gold -= lost; S.deaths++;
   P.mesh.rotation.z = Math.PI / 2; P.mesh.position.y = 0.3; P.mesh.visible = true; viewmodel.g.visible = false;
@@ -395,7 +395,7 @@ function placeCamera(dt, snap) {
 function snapCamera() { placeCamera(0, true); }
 function updCamera(dt) {
   placeCamera(dt, false);
-  const want = SET.cam !== 'top' && (P.dodgeT > 0 || P.dashT > 0) ? 8 : 0;
+  const want = SET.cam !== 'top' && !calm() && (P.dodgeT > 0 || P.dashT > 0) ? 8 : 0;
   const nk = lerp(fovKick, want, 1 - Math.exp(-dt * (want ? 18 : 6)));
   if (Math.abs(nk - fovKick) > 0.01 || (fovKick && !want && nk < 0.02)) { fovKick = nk < 0.02 && !want ? 0 : nk; camera.fov = camBaseFov + fovKick; camera.updateProjectionMatrix(); }
   applyShake(dt);
@@ -415,10 +415,10 @@ function lightForView() {
 function updPlayer(dt) {
   if (P.dead) return;
   let ix = 0, iz = 0;
-  if (keys.KeyW || keys.ArrowUp) iz -= 1;
-  if (keys.KeyS || keys.ArrowDown) iz += 1;
-  if (keys.KeyA || keys.ArrowLeft) ix -= 1;
-  if (keys.KeyD || keys.ArrowRight) ix += 1;
+  if (held('up')) iz -= 1;
+  if (held('down')) iz += 1;
+  if (held('left')) ix -= 1;
+  if (held('right')) ix += 1;
   ix += stick.x; iz += stick.y;
   const il = Math.hypot(ix, iz); if (il > 1) { ix /= il; iz /= il; }
   if (SET.cam !== 'top') { // camera-relative: up on the stick or W walks where the camera looks
@@ -439,6 +439,7 @@ function updPlayer(dt) {
   if (P.dashT > 0) { P.dashT -= dt; vx = Math.sin(P.dashDir) * 30; vz = Math.cos(P.dashDir) * 30; dashHits(); }
   else if (P.dodgeT > 0) {
     P.dodgeT -= dt; vx = Math.sin(P.dodgeDir) * 15; vz = Math.cos(P.dodgeDir) * 15;
+    if (P.dodgeT <= 0 && ST.powers.quake && LV.type === 'dungeon') { ringFx(P.x, P.z, 0.4, 3.2, 0.3, 0xd8b07a, 2.2); burst(P.x, 0.3, P.z, 0xa08060, 14, 5, 0.18); shake(0.25); withElem('phys', () => hitAround(3.2, 0.9 * ST.skillM, 5)); sfx('boom'); }
     if (ST.powers.ghost && LV.type === 'dungeon') { P.ghostT -= dt; if (P.ghostT <= 0) { P.ghostT = 0.07; telegraph(P.x, P.z, 1.3, 0.35, ST.dmg * 0.45, { player: true, col: 0x9fd4ff }); } }
   }
   if (P.leapT > 0) { vx = vz = 0; } // the leap carries you (see updClassSkills)
@@ -448,7 +449,7 @@ function updPlayer(dt) {
   if (P.pend) { P.pend.t -= dt; if (P.pend.t <= 0) { const f = P.pend.fin; P.pend = null; resolveMelee(f); } }
   updSkills(dt);
   // aim
-  const wantsAtk = mouseDown || touchAtk || keys.KeyJ || pad.atk;
+  const wantsAtk = mouseDown || touchAtk || held('attack') || pad.atk;
   const moving = il > 0.1 || P.dodgeT > 0 || P.dashT > 0;
   const la = lockAngle();
   if (la !== null && P.spinT <= 0) P.face = SET.cam === 'top' ? la : P.face + angDiff(la, P.face) * Math.min(1, dt * 16);
@@ -456,8 +457,19 @@ function updPlayer(dt) {
   else if (SET.cam === 'top') {
     if (pad.on && pad.aim !== null) P.face = pad.aim;
     else if (touchMode || pad.on) {
-      let best = null, bd = 9;
-      if (LV.type === 'dungeon') for (const e of enemies) { if (e.dead || !e.awake) continue; const d = Math.hypot(e.x - P.x, e.z - P.z); if (d < bd) { bd = d; best = e; } }
+      // auto-aim: stay on the current target while it lives and stays close; otherwise prefer foes
+      // in the direction you push the stick, then the nearest, with a nudge toward leaders and bosses
+      let best = P.aimT && !P.aimT.dead && Math.hypot(P.aimT.x - P.x, P.aimT.z - P.z) < 8 ? P.aimT : null;
+      if (best && il > 0.2 && Math.abs(angDiff(Math.atan2(best.x - P.x, best.z - P.z), Math.atan2(ix, iz))) > 1.6) best = null;
+      if (!best && LV.type === 'dungeon') {
+        let bs = 1e9; const ma = il > 0.2 ? Math.atan2(ix, iz) : null;
+        for (const e of enemies) {
+          if (e.dead || !e.awake) continue; const d = Math.hypot(e.x - P.x, e.z - P.z); if (d > 9) continue;
+          const s = d + (ma !== null ? Math.abs(angDiff(Math.atan2(e.x - P.x, e.z - P.z), ma)) * 2.2 : 0) - (e.boss || e.leader ? 1.5 : 0);
+          if (s < bs) { bs = s; best = e; }
+        }
+      }
+      P.aimT = best;
       if (best && (wantsAtk || il < 0.1)) P.face = Math.atan2(best.x - P.x, best.z - P.z);
       else if (il > 0.1) P.face = Math.atan2(ix, iz);
     } else { const ap = aimPoint(); if (ap) P.face = Math.atan2(ap.x - P.x, ap.z - P.z); }
@@ -624,6 +636,10 @@ function normalizeSave(s) {
   s.home = Object.assign(d.home, s.home); s.elixirs = Object.assign(d.elixirs, s.elixirs); s.equip = Object.assign(d.equip, s.equip);
   for (const k of ['tal', 'gems', 'stats', 'ach', 'bestiary', 'decor', 'hints']) if (!s[k] || typeof s[k] !== 'object') s[k] = {};
   if (!Array.isArray(s.records)) s.records = [];
+  if (!Array.isArray(s.loadouts) || s.loadouts.length !== 3) s.loadouts = [null, null, null];
+  if (!Array.isArray(s.learned)) s.learned = [];
+  if (!DIFF[s.diff]) s.diff = 'normal';
+  if (!['none', 'common', 'uncommon'].includes(s.filter)) s.filter = 'none';
   if (typeof s.shards !== 'number') s.shards = 0;
   if (!s.story || typeof s.story !== 'object' || !Array.isArray(s.story.pages)) s.story = null;
   if (!s.seedBest || typeof s.seedBest !== 'object') s.seedBest = {};

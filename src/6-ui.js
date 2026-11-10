@@ -50,16 +50,16 @@ let bannerT = 0;
 function banner(t, sub) { const b = $('#banner'); b.innerHTML = `${esc(t)}<small>${esc(sub || '')}</small>`; b.classList.add('on'); clearTimeout(bannerT); bannerT = setTimeout(() => b.classList.remove('on'), 2600); }
 const SLOTS_BAR = [
   { id: 'atk', key: 'LMB', icon: () => (ST ? ST.wk : 'sword'), act: () => {}, title: 'Attack: hold the left mouse button or J' },
-  { id: 'dodge', key: 'Space', icon: () => 'dodge', act: () => tryDodge(), title: 'Roll: Space, Shift or right mouse' },
-  ...[0, 1, 2].map((i) => ({ id: 'sk' + i, key: String(i + 1), icon: () => (SKILLS[i] ? SKILLS[i].id : 'whirl'), act: () => useSkill(i), title: () => (SKILLS[i] ? `${SKILLS[i].n}: ${SKILLS[i].d} Unlocks at level ${SKILLS[i].lvl}. ${SKILLS[i].cd}s cooldown.` : ''), skill: i })),
-  { id: 'pot', key: 'Q', icon: () => 'potion', act: () => usePotion(false), title: 'Healing Draught' },
-  { id: 'gpot', key: 'R', icon: () => 'gpotion', act: () => usePotion(true), title: 'Greater Draught' },
-  { id: 'scroll', key: 'T', icon: () => 'scroll', act: () => useScroll(), title: 'Portal Scroll' },
-  { id: 'bag', key: 'I', icon: () => 'bag', act: () => openPanel('bag'), title: 'Bag and character' },
+  { id: 'dodge', key: 'Space', kb: 'roll', icon: () => 'dodge', act: () => tryDodge(), title: 'Roll: Space, Shift or right mouse' },
+  ...[0, 1, 2].map((i) => ({ id: 'sk' + i, key: String(i + 1), kb: 'skill' + (i + 1), icon: () => (SKILLS[i] ? SKILLS[i].id : 'whirl'), act: () => useSkill(i), title: () => (SKILLS[i] ? `${SKILLS[i].n}: ${SKILLS[i].d} Unlocks at level ${SKILLS[i].lvl}. ${SKILLS[i].cd}s cooldown.` : ''), skill: i })),
+  { id: 'pot', key: 'Q', kb: 'potion', icon: () => 'potion', act: () => usePotion(false), title: 'Healing Draught' },
+  { id: 'gpot', key: 'R', kb: 'gpotion', icon: () => 'gpotion', act: () => usePotion(true), title: 'Greater Draught' },
+  { id: 'scroll', key: 'T', kb: 'scroll', icon: () => 'scroll', act: () => useScroll(), title: 'Portal Scroll' },
+  { id: 'bag', key: 'I', kb: 'bag', icon: () => 'bag', act: () => openPanel('bag'), title: 'Bag and character' },
 ];
 function buildActionBar() {
   const bar = $('#actionBar');
-  bar.innerHTML = SLOTS_BAR.map((s) => `<button class="slot${s.skill !== undefined ? ' skill' : ''}" type="button" data-slot="${s.id}" title="${esc(typeof s.title === 'function' ? s.title() : s.title)}"><span class="k">${s.key}</span><span class="ic">${svg(s.icon())}</span><span class="n"></span><span class="cd"></span></button>`).join('');
+  bar.innerHTML = SLOTS_BAR.map((s) => `<button class="slot${s.skill !== undefined ? ' skill' : ''}" type="button" data-slot="${s.id}" title="${esc(typeof s.title === 'function' ? s.title() : s.title)}" aria-label="${esc((typeof s.title === 'function' ? s.title() : s.title).split(':')[0])}"><span class="k">${esc(s.kb ? keyLabel(KB[s.kb]) : s.key)}</span><span class="ic">${svg(s.icon())}</span><span class="n"></span><span class="cd"></span></button>`).join('');
   SKILLS.forEach((k, i) => { const b = $('#tS' + (i + 1)); if (b) { b.innerHTML = svg(k.id) + '<i></i>'; b.setAttribute('aria-label', k.n); } });
   const tl = $('#tLock'); if (tl) tl.innerHTML = svg('lock');
   bar.querySelectorAll('.slot').forEach((b) => b.addEventListener('click', () => { const s = SLOTS_BAR.find((q) => q.id === b.dataset.slot); s.act(); }));
@@ -78,6 +78,7 @@ function hud() {
   const buffs = [];
   if (RUN) { if (RUN.buffs.might) buffs.push('Might'); if (RUN.buffs.stone) buffs.push('Stoneskin'); if (RUN.buffs.swift) buffs.push('Gale'); if (RUN.rested) buffs.push('Rested'); }
   if (P.frenzy) buffs.push('Frenzy ×' + P.frenzy);
+  if (P.horn) buffs.push('Warhorn ×' + P.horn);
   if (P.cryT > 0) buffs.push('War Cry ' + Math.ceil(P.cryT) + 's');
   if (RUN && RUN.shrine) buffs.push(SHRINES[RUN.shrine].n.replace('Shrine of ', ''));
   if (P.chillT > 0) buffs.push('Chilled'); if (P.burnT > 0) buffs.push('Burning');
@@ -125,7 +126,8 @@ const Panel = { kind: null, tab: null, sel: null, forge: {}, elix: {} };
 function isPaused() { return !started || Panel.kind !== null || !$('#title').hidden || !$('#death').hidden || dlgOn || PHOTO.on || !$('#ending').hidden || !$('#share').hidden; }
 function openPanel(kind, tab) {
   Panel.kind = kind; Panel.sel = null;
-  Panel.tab = tab || { bag: 'gear', home: 'home', smith: 'buy', trader: 'buy', alch: 'buy', delve: 'delve', elder: 'tasks', class: 'class', codex: 'ach' }[kind];
+  rebinding = null;
+  Panel.tab = tab || { settings: 'game', bag: 'gear', home: 'home', smith: 'buy', trader: 'buy', alch: 'buy', delve: 'delve', elder: 'tasks', class: 'class', codex: 'ach' }[kind];
   $('#pClose').hidden = kind === 'class';
   if (kind === 'elder' && !S.quest && !S.questOffers) S.questOffers = makeQuestOffers();
   Panel.abandon = false;
@@ -209,9 +211,10 @@ function renderPanel() {
   switch (p.kind) {
     case 'bag': {
       title = 'Bag'; sub = `Level ${S.level} delver`;
-      tabs = [['gear', 'Gear'], ['mats', 'Materials'], ['char', 'Character'], ['talents', `Talents${talPoints() ? ' (' + talPoints() + ')' : ''}`]];
+      tabs = [['gear', 'Gear'], ['loadouts', 'Loadouts'], ['mats', 'Materials'], ['char', 'Character'], ['talents', `Talents${talPoints() ? ' (' + talPoints() + ')' : ''}`]];
       if (p.tab === 'gear') body = purseRow() + `<div class="inv"><section><h3>Equipped</h3>${eqHtml()}</section><section><h3>Bag<small>${S.inv.length}/${BAG_CAP}</small></h3>${S.inv.length ? cellsHtml(S.inv, 'inv', BAG_CAP) : '<p class="hint">Empty. Loot drops from foes, chests and bosses; walk over an item to pick it up.</p>'}<div class="acts" style="margin-top:10px"><button class="btn ghost" type="button" data-act="salvageJunk"${S.inv.some((q) => q.rarity <= 1) ? '' : ' disabled'}>Salvage all Common and Uncommon</button></div></section><section class="detail">${detailFor(it, 'bag')}</section></div>`;
       else if (p.tab === 'mats') body = matsHtml();
+      else if (p.tab === 'loadouts') body = loadoutsHtml();
       else if (p.tab === 'talents') body = talentsHtml();
       else body = charHtml();
       break;
@@ -256,6 +259,13 @@ function renderPanel() {
       body = p.tab === 'skills' ? skillsHtml() : elderHtml();
       break;
     }
+    case 'settings': {
+      title = 'Settings'; sub = 'Saved in this browser · difficulty and loot filter are per hero';
+      tabs = [['game', 'Game'], ['access', 'Accessibility'], ['keys', 'Controls']];
+      body = settingsHtml(p.tab);
+      break;
+    }
+    case 'credits': { title = 'Credits'; sub = ''; body = creditsHtml(); break; }
     case 'caravan': {
       title = "Sabine's Caravan"; sub = 'Rare goods from the far roads';
       body = caravanHtml();
@@ -344,7 +354,7 @@ function workHtml(it) {
     const cap = benchCap();
     const uc = upCost(it), rc = rerollCost(it);
     act = itemCard(it) + `<div class="row"><div><div class="t">Upgrade to +${it.up + 1}</div>${it.up >= cap ? `<div class="d">${it.up >= 10 ? 'Maximum level reached.' : 'A better workbench can push this further.'}</div>` : costChips(uc)}</div><button class="btn" type="button" data-act="upItem"${it.up < cap && hasCost(uc) ? '' : ' disabled'}>Upgrade</button></div>
-      ${socketHtml(it)}
+      ${socketHtml(it)}${powerHtml(it)}
       <div class="row"><div><div class="t">Reroll affixes</div><div class="d">${it.rarity === 0 ? 'Common gear has no affixes to reroll.' : 'Keeps rarity, level and upgrades.'}</div>${it.rarity ? costChips(rc) : ''}</div><button class="btn" type="button" data-act="reroll"${it.rarity && hasCost(rc) ? '' : ' disabled'}>Reroll</button></div>`;
   }
   const sel = (q) => Panel.sel && String(Panel.sel.id) === String(q.id);
@@ -419,7 +429,7 @@ function doAct(d) {
     case 'copyCode': { const t = d.code; try { navigator.clipboard.writeText(t).then(() => toast('Code copied: ' + t, 'var(--ok)'), () => toast(t, 'var(--muted)', true)); } catch (err) { toast(t, 'var(--muted)', true); } return; }
     case 'cvBuy': caravanBuy(+d.i); break;
     case 'cvLook': Panel.cvLook = +d.i; break;
-    default: if (metaAct(d, it) === 'stop') return;
+    default: if (settingsAct(d)) break; if (metaAct(d, it) === 'stop') return;
   }
   renderPanel(); hud(); save();
 }
@@ -439,3 +449,7 @@ $('#panel').addEventListener('click', (ev) => {
   }
 });
 $('#pClose').addEventListener('click', closePanel);
+$('#panel').addEventListener('change', (ev) => { // renaming a loadout
+  const t = ev.target; if (!t.matches || !t.matches('.lo-name')) return;
+  const i = +t.dataset.k; if (S.loadouts[i]) { S.loadouts[i].name = t.value.trim().slice(0, 24) || `Loadout ${i + 1}`; save(); }
+});

@@ -142,6 +142,15 @@ const LEGENDS = [
   { name: 'Phoenix Plume', power: 'phoenix', desc: 'Once per floor, a killing blow leaves you standing at 30% health.' },
   { name: 'Midas Knuckle', power: 'midas', desc: 'Foes drop 60% more gold.' },
   { name: 'Gravewind Treads', power: 'ghost', desc: 'Rolling leaves a trail of grave-cold that chills and harms foes.' },
+  // skill-changing powers
+  { name: 'Maelstrom Sash', power: 'vortex', desc: 'Using a skill drags foes within 7 paces toward you and slows them.', skill: 1 },
+  { name: 'Earthshaker Greaves', power: 'quake', desc: 'Every roll ends in a shockwave that strikes and staggers foes around you.', skill: 1 },
+  { name: 'Horn of the Old Guard', power: 'warhorn', desc: 'Using a skill grants 15% damage for 5 seconds, stacking three times.', skill: 1 },
+  { name: 'Quiver of Ash', power: 'barrage', desc: 'Using a skill looses five seeking ember-bolts at nearby foes.', skill: 1 },
+  { name: 'Tempest Crown', power: 'storm', desc: 'Using a skill calls lightning down on up to three foes.', skill: 1 },
+  { name: 'Rimewalker Band', power: 'frostpath', desc: 'Using a skill chills every foe within 5 paces; chilled foes struck again freeze.', skill: 1 },
+  { name: 'Ring of Embers', power: 'emberring', desc: 'A ring of fire circles you, burning foes it touches.', skill: 1 },
+  { name: 'Twinstar Seal', power: 'twinstar', desc: 'Skills have a 30% chance to come straight back off cooldown.', skill: 1 },
 ];
 const TIERS = ['Rusted', 'Iron', 'Tempered', 'Steel', 'Mithril', 'Runic', 'Starforged', 'Voidwrought', 'Eternal'];
 const BASEN = { helm: ['Cap', 'Helm', 'Visage'], chest: ['Jerkin', 'Hauberk', 'Cuirass'], boots: ['Boots', 'Greaves', 'Treads'], ring: ['Band', 'Ring', 'Seal'], amulet: ['Pendant', 'Amulet', 'Talisman'] };
@@ -249,7 +258,7 @@ function newSave() {
     bossKills: 0, slain: [], best: 0, kills: 0, deaths: 0, waypoints: [1], shop: null,
     elixirs: { might: 0, stone: 0, swift: 0 }, rested: false, runs: 0,
     quest: null, questOffers: null, questsDone: 0,
-    cls: null, tal: {}, hints: {}, shards: 0, rift: { max: 1, best: {} }, arenaBest: 0, caravan: null, gems: {}, stats: {}, ach: {}, bestiary: {}, records: [], decor: {}, time: 0, pet: null, created: Date.now(),
+    cls: null, diff: 'normal', filter: 'none', loadouts: [null, null, null], learned: [], tal: {}, hints: {}, shards: 0, rift: { max: 1, best: {} }, arenaBest: 0, caravan: null, gems: {}, stats: {}, ach: {}, bestiary: {}, records: [], decor: {}, time: 0, pet: null, created: Date.now(),
   };
   return s;
 }

@@ -2,40 +2,44 @@
 const GAME_KEYS = new Set(['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 window.addEventListener('keydown', (ev) => {
   if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'TEXTAREA')) return;
+  if (captureRebind(ev)) return;
   if (dlgOn) { if (['Space', 'Enter', 'KeyE', 'Escape'].includes(ev.code)) { ev.preventDefault(); dlgNext(); } return; }
   if (!$('#share').hidden) { if (ev.code === 'Escape') $('#share').hidden = true; return; }
-  if (PHOTO.on) { keys[ev.code] = true; if (ev.code === 'Escape' || ev.code === 'KeyP') exitPhoto(); return; }
-  if (ev.code === 'KeyP' && started && $('#title').hidden && !Panel.kind && $('#death').hidden) { enterPhoto(); return; }
+  if (PHOTO.on) { keys[ev.code] = true; if (ev.code === 'Escape' || ev.code === KB.photo) exitPhoto(); return; }
+
   if (!$('#title').hidden) { if (ev.code === 'Escape' && started) resume(); return; }
   if (!$('#death').hidden) return;
   if (Panel.kind) {
-    if (ev.code === 'Escape' || ((ev.code === 'KeyI' || ev.code === 'KeyB' || ev.code === 'KeyK') && Panel.kind === 'bag') || (ev.code === 'KeyC' && Panel.kind === 'codex')) { ev.preventDefault(); closePanel(); }
+    const a = keyAction(ev.code);
+    if (ev.code === 'Escape' || ((a === 'bag' || a === 'talents') && Panel.kind === 'bag') || (a === 'codex' && Panel.kind === 'codex')) { ev.preventDefault(); closePanel(); }
     return;
   }
-  if (GAME_KEYS.has(ev.code)) ev.preventDefault();
+  if (GAME_KEYS.has(ev.code) || ev.code === KB.roll || ev.code === KB.lock) ev.preventDefault();
   if (ev.code === 'Backquote' || ev.code === 'F3') { ev.preventDefault(); perf.on = !perf.on; $('#perf').hidden = !perf.on; return; }
+  if (ev.code === 'AltLeft' || ev.code === 'AltRight') { ev.preventDefault(); document.body.classList.add('alt'); }
   if (ev.repeat) return;
   keys[ev.code] = true;
-  switch (ev.code) {
-    case 'Space': case 'ShiftLeft': case 'ShiftRight': tryDodge(); break;
-    case 'KeyE': case 'KeyF': interact(); break;
-    case 'KeyQ': usePotion(false); break;
-    case 'KeyR': usePotion(true); break;
-    case 'KeyT': useScroll(); break;
-    case 'KeyI': case 'KeyB': openPanel('bag'); break;
-    case 'KeyK': case 'KeyN': openPanel('bag', 'talents'); break;
-    case 'KeyC': openPanel('codex'); break;
-    case 'Tab': cycleLock(); break;
-    case 'KeyX': releaseLock(); break;
-    case 'Digit1': useSkill(0); break;
-    case 'Digit2': useSkill(1); break;
-    case 'Digit3': useSkill(2); break;
-    case 'Escape': showTitle(); break;
-    case 'KeyV': cycleCam(); break;
+  if (ev.code === 'Escape') { showTitle(); return; }
+  switch (keyAction(ev.code)) { // actions follow the player's key bindings (Settings, Controls)
+    case 'roll': tryDodge(); break;
+    case 'use': interact(); break;
+    case 'potion': usePotion(false); break;
+    case 'gpotion': usePotion(true); break;
+    case 'scroll': useScroll(); break;
+    case 'bag': openPanel('bag'); break;
+    case 'talents': openPanel('bag', 'talents'); break;
+    case 'codex': openPanel('codex'); break;
+    case 'lock': cycleLock(); break;
+    case 'unlock': releaseLock(); break;
+    case 'skill1': useSkill(0); break;
+    case 'skill2': useSkill(1); break;
+    case 'skill3': useSkill(2); break;
+    case 'view': cycleCam(); break;
+    case 'photo': enterPhoto(); break;
   }
 });
-window.addEventListener('keyup', (ev) => { keys[ev.code] = false; });
-window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouseDown = false; touchAtk = false; });
+window.addEventListener('keyup', (ev) => { keys[ev.code] = false; if (ev.code === 'AltLeft' || ev.code === 'AltRight') document.body.classList.remove('alt'); });
+window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouseDown = false; touchAtk = false; document.body.classList.remove('alt'); });
 canvas.addEventListener('pointerdown', (ev) => {
   if (ev.pointerType === 'touch') { setTouchMode(true); if (SET.cam !== 'top') { lookTouch = ev.pointerId; lookX = ev.clientX; lookY = ev.clientY; } return; }
   if (isPaused()) return;
@@ -105,8 +109,8 @@ function showTitle() {
     $('#menuBtns').innerHTML = `<div class="slots">${[0, 1, 2].map((i) => { const l = slotLine(i); return `<div class="slotrow${i === SET.slot && started ? ' cur' : ''}"><button class="btn${l ? '' : ' ghost'} slotb" type="button" id="mSlot${i}"><b>Slot ${i + 1}</b><span>${l ? esc(l) : 'Empty · begin a new hero'}</span></button>${l ? `<button class="btn ghost sm" type="button" id="mDel${i}" aria-label="Erase slot ${i + 1}">Erase</button>` : ''}</div>`; }).join('')}</div>`
       + (started ? '<button class="btn ghost" type="button" id="mBack">Back</button>' : '') + `<button class="btn ghost" type="button" id="mSound">${muted ? 'Sound off' : 'Sound on'}</button>`;
   }
-  $('#opts').innerHTML = optRow('View', 'cam', [['top', 'Overhead'], ['third', 'Third person'], ['first', 'First person']]) + optRow('Graphics', 'q', [['high', 'High'], ['medium', 'Medium'], ['low', 'Low']]) + optRow('Look speed', 'sens', [[0.6, 'Slow'], [1, 'Normal'], [1.6, 'Fast']])
-    + optRow('Music', 'music', [[true, 'On'], [false, 'Off']]) + optRow('Screen shake', 'shake', [[true, 'On'], [false, 'Off']]) + optRow('Hints', 'hints', [[true, 'On'], [false, 'Off']]);
+  $('#opts').innerHTML = optRow('View', 'cam', [['top', 'Overhead'], ['third', 'Third person'], ['first', 'First person']]) + optRow('Graphics', 'q', [['high', 'High'], ['medium', 'Medium'], ['low', 'Low']])
+    + '<div class="opt"><span>More</span><div class="seg"><button type="button" id="mSettings">Settings</button><button type="button" id="mAccess">Accessibility</button><button type="button" id="mKeys">Controls</button><button type="button" id="mCredits">Credits</button></div></div>';
   if (document.pointerLockElement) document.exitPointerLock();
   $('#title').hidden = false; $('#confirmNew').hidden = true; mouseDown = false;
   const b = $('#mResume') || $('#mSlot' + (SET.slot || 0)); if (b) b.focus();
@@ -114,8 +118,16 @@ function showTitle() {
 function resume() { $('#title').hidden = true; }
 function optRow(label, key, items) { return `<div class="opt"><span>${label}</span><div class="seg">${items.map(([v, n]) => `<button type="button" class="${String(SET[key]) === String(v) ? 'on' : ''}" data-opt="${key}" data-v="${v}">${n}</button>`).join('')}</div></div>`; }
 function setQuality(q) { SET.q = q; saveSettings(); applyQuality(); perf.cap = Math.min(window.devicePixelRatio || 1, Q.ratioCap); perf.ratio = Math.min(perf.ratio, perf.cap); renderer.setPixelRatio(perf.ratio); Post.setup(); warmLevel(); }
+// behind the title menu the camera drifts slowly around the village
+let flyA = 0.6;
+function titleFly(dt) {
+  flyA += dt * (calm() ? 0.02 : 0.06);
+  const r = 26, cx = P.x, cz = P.z - 4;
+  camera.position.set(cx + Math.sin(flyA) * r, 13 + Math.sin(flyA * 0.7) * 2, cz + Math.cos(flyA) * r);
+  camera.lookAt(cx, 1.5, cz);
+}
 function begin() {
-  started = true;
+  started = true; snapCamera();
   $('#title').hidden = true; $('#hud').hidden = false;
   setTouchMode(touchMode || window.matchMedia('(pointer: coarse)').matches);
   $('#touch').hidden = !touchMode;
@@ -151,6 +163,8 @@ $('#title').addEventListener('click', (ev) => {
   }
   else if (id === 'btnKeep') $('#confirmNew').hidden = true;
   else if (id === 'mSound') { toggleMute(); showTitle(); }
+  else if (id === 'mSettings' || id === 'mAccess' || id === 'mKeys') { resume(); openPanel('settings', { mSettings: 'game', mAccess: 'access', mKeys: 'keys' }[id]); }
+  else if (id === 'mCredits') { resume(); openPanel('credits'); }
   const o = ev.target.closest('[data-opt]');
   if (o) {
     if (o.dataset.opt === 'cam') setCamMode(o.dataset.v);
@@ -165,9 +179,12 @@ $('#btnMute').addEventListener('click', toggleMute);
 $('#btnMenu').addEventListener('click', showTitle);
 $('#btnView').addEventListener('click', cycleCam);
 $('#btnRevive').addEventListener('click', () => { $('#death').hidden = true; P.dead = false; returnToTown(true); });
-$('#keyList').innerHTML = [
-  ['WASD', 'Move'], ['Mouse', 'Aim or look'], ['Left click', 'Attack (hold)'], ['Space', 'Roll'], ['1 2 3', 'Skills'], ['Tab', 'Lock on / next'], ['X', 'Release lock'], ['E', 'Use, open, talk'], ['V', 'Switch view'], ['Wheel', 'Zoom'], ['Q / R', 'Draught / Greater'], ['T', 'Portal scroll'], ['I', 'Bag and character'], ['K', 'Talents'], ['C', 'Codex'], ['Esc', 'Menu'], ['`', 'Performance readout'],
-].map(([k, v]) => `<div><kbd>${k}</kbd><span>${v}</span></div>`).join('') + '<div><kbd>Touch</kbd><span>Stick moves; drag the screen to look in close views</span></div>';
+function refreshKeyList() {
+  const k = (a) => esc(keyLabel(KB[a]));
+  $('#keyList').innerHTML = [
+    [`${k('up')}${k('left')}${k('down')}${k('right')}`, 'Move'], ['Mouse', 'Aim or look'], ['Left click', 'Attack (hold)'], [k('roll'), 'Roll'], [`${k('skill1')} ${k('skill2')} ${k('skill3')}`, 'Skills'], [k('lock'), 'Lock on / next'], [k('unlock'), 'Release lock'], [k('use'), 'Use, open, talk'], [k('view'), 'Switch view'], ['Wheel', 'Zoom'], [`${k('potion')} / ${k('gpotion')}`, 'Draught / Greater'], [k('scroll'), 'Portal scroll'], [k('bag'), 'Bag and character'], [k('talents'), 'Talents'], [k('codex'), 'Codex'], [k('photo'), 'Photo mode'], ['Alt', 'Show all item names'], ['Esc', 'Menu'], ['`', 'Performance readout'],
+  ].map(([a, v]) => `<div><kbd>${a}</kbd><span>${v}</span></div>`).join('') + '<div><kbd>Touch</kbd><span>Stick moves; drag the screen to look in close views</span></div>';
+}
 
 // ================= performance readout & adaptive resolution =================
 const perf = { on: false, acc: 0, cpu: 0, n: 0, slow: 0, fast: 0, ratio: Math.min(window.devicePixelRatio || 1, Q.ratioCap), cap: Math.min(window.devicePixelRatio || 1, Q.ratioCap), ms: 0, cpuMs: 0 };
@@ -196,7 +213,7 @@ let DBG = { turbo: 0 };
 function simTick(dt) {
   let gdt = dt;
   if (hitStop > 0) { hitStop -= dt; gdt = dt * 0.06; }
-  if (slowT > 0) { slowT -= dt; gdt *= 0.3; } // the moment a boss falls
+  if (slowT > 0) { slowT -= dt; if (!calm()) gdt *= 0.3; } // the moment a boss falls
   if (!isPaused()) {
     updPlayer(gdt);
     if (LV.type === 'dungeon') {
@@ -228,12 +245,16 @@ function simTick(dt) {
     saveT += dt; if (saveT > 20) { saveT = 0; save(); }
   }
 }
+let lastFrameTs = 0;
 function frame(ts) {
+  if (SET.battery && ts - lastFrameTs < 31) return; // battery saver: about 30 frames a second
+  lastFrameTs = ts;
   timer.update(ts);
   const dt = Math.min(0.05, timer.getDelta());
   elapsed += dt; U_TIME.value = elapsed;
   renderer.info.reset();
   const t0 = performance.now();
+  loadingTick();
   if (!levelReady) { perfTick(dt, 0); return; }
   // DBG.turbo runs extra fixed simulation steps per rendered frame (used by the autoplay test bots)
   const steps = 1 + (DBG.turbo | 0);
@@ -241,9 +262,9 @@ function frame(ts) {
   const gdt = dt * (hitStop > 0 ? 0.06 : 1) * (slowT > 0 ? 0.3 : 1); // effects follow the slowed clock too
   for (const s of spinners) s.rotation.y += dt * (s.userData.spin || 1);
   updParts(gdt); updSwings(dt); updRings(dt); updTorchLights(dt); updBlobs(); updLock();
-  if (PHOTO.on) updPhoto(dt); else if (P.mesh) updCamera(dt);
+  if (PHOTO.on) updPhoto(dt); else if (!started && LV.type === 'town' && !$('#title').hidden) titleFly(dt); else if (P.mesh) updCamera(dt);
   updTrail(gdt); updFacers();
-  musicTick();
+  musicTick(); ambTick(dt);
   // shader time, point-size scale and the things that follow the camera
   const ps = renderer.domElement.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
   burstSys.pts.material.uniforms.uScale.value = ps; ambientSys.m.uniforms.uScale.value = ps;
@@ -264,6 +285,9 @@ function frame(ts) {
 
 // ================= boot =================
 function boot(data) {
+  applyA11y(); refreshKeyList();
+  // installable, offline-capable when served from a web host with the manifest (not inside claude.ai)
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && document.querySelector('link[rel=manifest]') && !window.claude) navigator.serviceWorker.register('sw.js').catch(() => {});
   applyQuality();
   renderer.setPixelRatio(perf.ratio);
   resize();
@@ -276,4 +300,4 @@ function boot(data) {
 }
 if (window.claude && window.claude.hot && window.claude.hot.snapshot) window.claude.hot.snapshot(() => ({ S, started }));
 if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(boot); else boot((window.claude && window.claude.hot && window.claude.hot.data) || {});
-return { get S() { return S; }, get RUN() { return RUN; }, get P() { return P; }, get LV() { return LV; }, enemies, renderer, startDelve, begin, freshHero, openPanel, closePanel, loadDungeon, get ready() { return levelReady; }, perf, debug: { parseRiftCode, setTouchMode, returnToTown, afterGear, DBG, stick, interacts, interact, usePotion, get skillCd() { return skillCd; }, isPaused, snapCamera, nextFloor, loadTown, rollCaravan, startRift, startArena, die, gainXP, hurtPlayer, calcStats, xpNeed, ARCH, BIOMES, genItem, makeSetItem, scene, sun, hemi, sky, walkable, spawnEnemy, bossPattern, get LVL() { return LV; }, applyTimeOfDay, get pet() { return pet; }, villagers, zones, chooseClass, checkAch, playerAttack, CAM, setCamMode, useSkill, cycleLock, get lockT() { return lockT; }, corpses, skillCd, questEvent, makeQuestOffers, claimQuest, get trail() { return trail; } } };
+return { get S() { return S; }, get RUN() { return RUN; }, get P() { return P; }, get LV() { return LV; }, enemies, renderer, startDelve, begin, freshHero, openPanel, closePanel, loadDungeon, get ready() { return levelReady; }, perf, debug: { parseRiftCode, setTouchMode, returnToTown, afterGear, DBG, stick, interacts, interact, usePotion, get skillCd() { return skillCd; }, isPaused, snapCamera, nextFloor, loadTown, rollCaravan, startRift, startArena, die, gainXP, hurtPlayer, calcStats, xpNeed, ARCH, BIOMES, genItem, makeSetItem, scene, sun, hemi, sky, walkable, spawnEnemy, bossPattern, get LVL() { return LV; }, applyTimeOfDay, get pet() { return pet; }, villagers, zones, chooseClass, checkAch, playerAttack, CAM, setCamMode, useSkill, cycleLock, get lockT() { return lockT; }, corpses, skillCd, questEvent, makeQuestOffers, claimQuest, get trail() { return trail; }, spawnDrop, bossIntro, LEGENDS, applyLoadout, get drops() { return drops; } } };

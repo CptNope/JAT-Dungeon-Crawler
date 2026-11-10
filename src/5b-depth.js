@@ -16,6 +16,8 @@ function useSkill(i) {
   if (classSkill(s) === false) return; // nothing to aim at, or no room to land
   skillCd[i] = Math.random() * 100 < 10 * tal('overflow') ? 0.4 : skillCdOf(s);
   if (skillCd[i] < 1) floatNum(P.x, 2.2, P.z, 'Overflow', 'xp');
+  else if (ST.powers.twinstar && chance(0.3)) { skillCd[i] = 0.3; floatNum(P.x, 2.2, P.z, 'Twinstar', 'crit'); burst(P.x, 1.6, P.z, 0xfff2a8, 10, 3, 0.12); }
+  legendSkillHooks();
   stat('skills');
   P.atkT = Math.max(P.atkT, 0.15); P.pend = null;
   if (s.id === 'whirl') {
@@ -31,6 +33,46 @@ function useSkill(i) {
     for (let k = 0; k < 3; k++) burst(P.x, 0.4, P.z, k ? 0xff7a2a : 0xffd06a, 18, 9, 0.22, 2.2);
     const n = withElem('fire', () => hitAround(5.0, 2.5 * ST.skillM, 7, (e) => { e.burnT = 3; e.burnD = ST.dmg * 0.4 * ST.burnM; }));
     shake(0.55); addHitStop(n ? 0.09 : 0.03); sfx('nova');
+  }
+}
+// legendary powers that change what every skill does
+function legendSkillHooks() {
+  if (!LV || LV.type !== 'dungeon') return;
+  const W = ST.powers, near = (r) => enemies.filter((e) => !e.dead && e.ai !== 'totem' && Math.hypot(e.x - P.x, e.z - P.z) < r + e.r);
+  if (W.warhorn) { P.horn = Math.min(3, (P.hornT > 0 ? P.horn || 0 : 0) + 1); P.hornT = 5; ringFx(P.x, P.z, 0.4, 2.6, 0.3, 0xffc46a, 2); }
+  if (W.vortex) {
+    ringFx(P.x, P.z, 7, 0.6, 0.35, 0x8fd0ff, 2.2);
+    for (const e of near(7)) { const dx = P.x - e.x, dz = P.z - e.z, d = Math.hypot(dx, dz) || 1; if (!e.boss) { e.kx += dx / d * Math.min(9, d * 1.6); e.kz += dz / d * Math.min(9, d * 1.6); } e.chillT = Math.max(e.chillT || 0, 1.2); }
+  }
+  if (W.frostpath) { ringFx(P.x, P.z, 0.4, 5, 0.3, 0xbfe8ff, 2.2); for (const e of near(5)) chillEnemy(e, 2.5); }
+  if (W.storm) {
+    const ts = near(10).filter((e) => e.awake && e.los !== false).sort(() => Math.random() - 0.5).slice(0, 3);
+    withElem('shock', () => { for (const e of ts) { zap(P.x, P.z, e.x, e.z, 0x9fd8ff); burst(e.x, 1, e.z, 0x9fd8ff, 10, 4, 0.12); damageEnemy(e, ST.dmg * 1.6 * ST.skillM, false, 1, 0, 0, false, 'shock'); } });
+    if (ts.length) sfx('crit');
+  }
+  if (W.barrage) {
+    const ts = near(11).filter((e) => e.awake && e.los !== false);
+    for (let k = 0; k < 5; k++) {
+      const t = ts.length ? ts[k % ts.length] : null, a = t ? Math.atan2(t.x - P.x, t.z - P.z) + rand(-0.25, 0.25) : P.face + (k - 2) * 0.35;
+      spawnProj({ x: P.x, z: P.z, a, spd: 15, owner: 'p', size: 0.2, col: 0xff9a4a, pierce: 0, mult: 0.55 * ST.skillM, life: 0.9, home: t, el: 'fire' });
+    }
+  }
+}
+function updLegends(dt) {
+  if (P.hornT > 0) { P.hornT -= dt; if (P.hornT <= 0) P.horn = 0; }
+  if (!ST.powers.emberring || !LV || LV.type !== 'dungeon') { if (P.ember) P.ember.visible = false; return; }
+  if (!P.ember) {
+    P.ember = new THREE.Group();
+    for (let k = 0; k < 6; k++) { const m = new THREE.Mesh(G.sph, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff8a2a).multiplyScalar(2.2), transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending })); m.scale.setScalar(0.22); P.ember.add(m); }
+  }
+  if (P.ember.parent !== world) world.add(P.ember);
+  P.ember.visible = true; P.emberA = (P.emberA || 0) + dt * 2.6;
+  P.ember.position.set(P.x, 0.8, P.z);
+  P.ember.children.forEach((m, k) => { const a = P.emberA + k * Math.PI / 3; m.position.set(Math.sin(a) * 2.2, Math.sin(P.emberA * 3 + k) * 0.12, Math.cos(a) * 2.2); });
+  P.emberTick = (P.emberTick || 0) - dt;
+  if (P.emberTick <= 0) {
+    P.emberTick = 0.5;
+    withElem('fire', () => { for (const e of enemies) { if (e.dead) continue; const d = Math.hypot(e.x - P.x, e.z - P.z); if (d > 1.4 + e.r && d < 3 + e.r) { damageEnemy(e, ST.dmg * 0.35, false, 0, 0, 0, false, 'fire'); e.burnT = Math.max(e.burnT || 0, 2); e.burnD = Math.max(e.burnD || 0, ST.dmg * 0.15 * ST.burnM); } } });
   }
 }
 function hitAround(radius, mult, kb, extra) {
@@ -61,7 +103,7 @@ function dashHits() {
 }
 function updSkills(dt) {
   for (let i = 0; i < 3; i++) skillCd[i] = Math.max(0, skillCd[i] - dt);
-  updClassSkills(dt);
+  updClassSkills(dt); updLegends(dt);
   if (P.spinT > 0) {
     P.spinT -= dt;
     const due = P.spinT < 0.38 && P.spinTicks === 0 ? 1 : P.spinT < 0.12 && P.spinTicks === 1 ? 2 : 0;

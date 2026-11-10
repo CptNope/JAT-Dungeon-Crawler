@@ -4,8 +4,8 @@
 let hitStop = 0, trauma = 0;
 const shakeOff = new THREE.Vector3();
 const REDUCED_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-function addHitStop(t) { hitStop = Math.max(hitStop, t); }
-function shake(a) { if (SET.shake === false) return; trauma = Math.min(1, trauma + a); }
+function addHitStop(t) { if (calm()) return; hitStop = Math.max(hitStop, t); }
+function shake(a) { if (SET.shake === false || calm()) return; trauma = Math.min(1, trauma + a); }
 function applyShake(dt) {
   trauma = Math.max(0, trauma - dt * 1.8);
   const k = trauma * trauma * (REDUCED_MOTION ? 0.35 : 1);

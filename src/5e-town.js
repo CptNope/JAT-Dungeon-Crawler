@@ -193,7 +193,7 @@ function updWeather(dt) {
   m.geometry.attributes.position.needsUpdate = true;
   startRainSound();
   thunderT -= dt;
-  if (thunderT <= 0) { thunderT = rand(14, 32); flashT = 0.35; if (AC && !muted) { noise(2.4, 0.28, AC.currentTime + 0.4, 'lowpass', 180, 60, 0.7); tone(55, 38, 2, 'sine', 0.12, AC.currentTime + 0.4); } }
+  if (thunderT <= 0) { thunderT = rand(14, 32); flashT = calm() ? 0 : 0.35; if (AC && !muted) { noise(2.4, 0.28, AC.currentTime + 0.4, 'lowpass', 180, 60, 0.7); tone(55, 38, 2, 'sine', 0.12, AC.currentTime + 0.4); } }
 }
 let flashT = 0;
 function startRainSound() {

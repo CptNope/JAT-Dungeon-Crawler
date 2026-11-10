@@ -59,6 +59,22 @@ function socketHtml(it) {
   }
   return h;
 }
+// ================= legendary powers: extract one to learn it, imprint it onto rare or epic gear =================
+const imprintCost = (it) => ({ essence: 18 + it.rarity * 6, sigil: it.rarity === 3 ? 2 : 1, gold: Math.round(400 + it.value) });
+function powerHtml(it) {
+  const learned = S.learned || [], ok = S.home.bench >= 2;
+  if (it.rarity === 4 && it.power) {
+    const known = learned.includes(it.power);
+    return `<div class="row"><div><div class="t">Extract the power<small>${known ? 'already learned' : 'destroys the item'}</small></div><div class="d">${ok ? `Learn ${esc(legendOf(it).name)}'s power for good, so you can imprint it onto rare or epic gear.` : "Needs an Artificer's Table."}</div></div><button class="btn ghost" type="button" data-act="extract"${ok && !known && !SLOTS.some((s) => S.equip[s] === it) ? '' : ' disabled'}>Extract</button></div>`;
+  }
+  if ((it.rarity === 2 || it.rarity === 3) && !it.set) {
+    const c = imprintCost(it);
+    if (!learned.length) return `<div class="row"><div><div class="t">Imprint a power</div><div class="d">Extract a legendary here first; its power can then be imprinted onto rare and epic gear.</div></div></div>`;
+    return `<div class="row"><div><div class="t">Imprint a power${it.power ? `<small>replaces ${esc(legendOf(it).name)}</small>` : ''}</div><div class="d">${ok ? 'Give this item one legendary power you have learned.' : "Needs an Artificer's Table."}</div>${ok ? costChips(c) : ''}
+      <div class="gemp">${learned.map((k) => { const L = LEGENDS.find((l) => l.power === k); return L ? `<button type="button" class="gemb" data-act="imprint" data-k="${k}" style="--gc:var(--r4)"${ok && hasCost(c) && it.power !== k ? '' : ' disabled'}><i></i>${esc(L.name)}<small>${esc(L.desc)}</small></button>` : ''; }).join('')}</div></div></div>`;
+  }
+  return '';
+}
 function gemsHtml() {
   const rows = Object.entries(GEMS).map(([g, G0]) => `<div class="row"><div><div class="t" style="color:${G0.c}">${G0.n}<small>${esc(G0.l('X').replace('X', G0.v.join(' / ')))}</small></div>
     <div class="gemrow">${[1, 2, 3].map((t) => { const k = gemKey(g, t), n = S.gems[k] || 0; return `<span class="gemc${n ? '' : ' none'}" style="--gc:${G0.c}"><i class="t${t}"></i>${GEM_TIER[t - 1]} <b>${n}</b>${t < 3 ? `<button class="btn ghost sm" type="button" data-act="fuse" data-k="${k}"${n >= 3 && S.gold >= 60 * t ? '' : ' disabled'}>Fuse 3 → 1 (${60 * t}g)</button>` : ''}</span>`; }).join('')}</div></div></div>`).join('');
@@ -144,6 +160,23 @@ function metaAct(d, it) {
       const c = drillCost(it); if (!hasCost(c)) break;
       payCost(c); it.sock = (it.sock || 0) + 1; it.gems = (it.gems || []).concat([null]); toast(`${it.name} now has ${it.sock} socket${it.sock > 1 ? 's' : ''}`, 'var(--brass-2)'); sfx('craft'); break;
     }
+    case 'extract': {
+      if (!it || it.rarity !== 4 || !it.power || S.home.bench < 2 || SLOTS.some((s) => S.equip[s] === it)) break;
+      S.learned = S.learned || []; if (S.learned.includes(it.power)) break;
+      S.learned.push(it.power); S.inv.splice(S.inv.indexOf(it), 1); Panel.sel = null;
+      toast(`Learned: ${legendOf(it).name}`, 'var(--r4)', true); sfx('shrine'); break;
+    }
+    case 'imprint': {
+      if (!it || !(it.rarity === 2 || it.rarity === 3) || it.set || S.home.bench < 2 || !(S.learned || []).includes(d.k)) break;
+      const c = imprintCost(it); if (!hasCost(c)) break;
+      payCost(c); it.power = d.k; afterGear(); toast(`${it.name} now carries ${LEGENDS.find((l) => l.power === d.k).name}`, 'var(--r4)', true); sfx('gem'); break;
+    }
+    case 'loSave': {
+      const i = +d.k; S.loadouts[i] = { name: S.loadouts[i] ? S.loadouts[i].name : `Loadout ${i + 1}`, eq: Object.fromEntries(SLOTS.map((s) => [s, S.equip[s] ? S.equip[s].id : null])), tal: Object.assign({}, S.tal), cls: S.cls };
+      toast(`Saved ${S.loadouts[i].name}`, 'var(--brass-2)'); sfx('page'); break;
+    }
+    case 'loLoad': { applyLoadout(+d.k); break; }
+    case 'loClear': S.loadouts[+d.k] = null; break;
     case 'fuse': {
       const [g, t] = gemSplit(d.k); if ((S.gems[d.k] || 0) < 3 || t >= 3 || S.gold < 60 * t) break;
       S.gems[d.k] -= 3; S.gold -= 60 * t; const nk = gemKey(g, t + 1); S.gems[nk] = (S.gems[nk] || 0) + 1;
@@ -162,4 +195,40 @@ function metaAct(d, it) {
       return 'stop';
     }
   }
+}
+
+// ================= loadouts: three saved sets of gear and talents =================
+function findOwned(id) {
+  for (const s of SLOTS) if (S.equip[s] && S.equip[s].id === id) return { where: 'equip', it: S.equip[s] };
+  let it = S.inv.find((q) => q.id === id); if (it) return { where: 'inv', it };
+  if (LV && LV.type === 'town') { it = S.stash.find((q) => q.id === id); if (it) return { where: 'stash', it }; }
+  return null;
+}
+function applyLoadout(i) {
+  const L = S.loadouts[i]; if (!L) return;
+  let missing = 0;
+  for (const s of SLOTS) {
+    const id = L.eq[s]; if (!id) continue;
+    if (S.equip[s] && S.equip[s].id === id) continue;
+    const f = findOwned(id); if (!f || f.where === 'equip') { missing++; continue; }
+    const list = f.where === 'inv' ? S.inv : S.stash, prev = S.equip[s];
+    list.splice(list.indexOf(f.it), 1); S.equip[s] = f.it; if (prev) list.push(prev);
+  }
+  let note = '';
+  if (L.cls === S.cls && JSON.stringify(L.tal) !== JSON.stringify(S.tal)) {
+    if (LV.type === 'town') S.tal = Object.assign({}, L.tal); else note = ' Talents change only in town.';
+  }
+  Panel.sel = null; afterGear(); sfx('craft');
+  toast(`${L.name} equipped.${missing ? ` ${missing} piece${missing > 1 ? 's' : ''} not found${LV.type === 'town' ? '' : ' (stash pieces load in town)'}.` : ''}${note}`, 'var(--brass-2)');
+}
+function loadoutsHtml() {
+  const rows = [0, 1, 2].map((i) => {
+    const L = S.loadouts[i];
+    if (!L) return `<div class="row"><div><div class="t">Empty slot ${i + 1}</div><div class="d">Saves what you are wearing now and how your talents are spent.</div></div><button class="btn" type="button" data-act="loSave" data-k="${i}">Save current</button></div>`;
+    const icons = SLOTS.map((s) => { const f = L.eq[s] ? findOwned(L.eq[s]) : null; return f ? `<span class="lo-i r${f.it.rarity}${f.it.set ? ' set' : ''}" title="${esc(f.it.name)}">${itemIcon(f.it)}</span>` : `<span class="lo-i none" title="${L.eq[s] ? 'Missing' : 'Empty'}">${svg(s === 'weapon' ? 'fists' : s)}</span>`; }).join('');
+    const pts = Object.values(L.tal).reduce((a, b) => a + b, 0);
+    return `<div class="row"><div style="min-width:0"><input id="loName${i}" class="lo-name" maxlength="24" value="${esc(L.name)}" aria-label="Loadout name" data-k="${i}"><div class="lo-icons">${icons}</div><div class="d">${pts} talent point${pts === 1 ? '' : 's'}${L.cls !== S.cls ? ' (another class)' : ''}</div></div>
+      <div class="acts"><button class="btn" type="button" data-act="loLoad" data-k="${i}">Equip</button><button class="btn ghost" type="button" data-act="loSave" data-k="${i}">Overwrite</button><button class="btn ghost" type="button" data-act="loClear" data-k="${i}">Clear</button></div></div>`;
+  }).join('');
+  return `<p class="hint" style="margin:0 0 12px">Swap between builds in one press. Gear from your bag works anywhere; stash gear and talent changes apply in town.</p><div class="rows">${rows}</div>`;
 }

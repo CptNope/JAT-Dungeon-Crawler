@@ -43,7 +43,7 @@ function levelUpFx(from, to) {
   for (let k = 0; k < 3; k++) burst(P.x, 0.4 + k * 0.8, P.z, 0xf2c56b, 14, 5, 0.16);
   const gains = [`+${(to - from) * 14} health`, `${to - from} talent point${to - from > 1 ? 's' : ''}`];
   if (unlocked.length) gains.push(`new skill: ${unlocked.map((k) => k.n).join(', ')}`);
-  banner(`Level ${to}`, gains.join(' · '));
+  banner(`Level ${to}`, gains.join(' · ')); haptic([30, 40, 60]);
   hint('level'); if (unlocked.length) hint('skill');
 }
 const fxLife = [];
@@ -143,4 +143,40 @@ function bossDress(g, id, h) {
     }
     default: for (let k = 0; k < 7; k++) add(G.cone4, mat(0xf2c56b, 2.5), 0.1, 0.36, 0.1, Math.sin(k * 0.9) * 0.24, h + 0.16, Math.cos(k * 0.9) * 0.24);
   }
+}
+
+// ================= boss intro card and level loading tips =================
+const BOSS_EPI = { crypt: 'Keeper of the bone-halls', fungal: 'The rot that thinks', magma: 'Heart of the deep forge', frost: 'Who wears the winter', void: 'The space between', drowned: 'Lord of the sunken stair', clock: 'Measure of all hours', blood: 'The red tithe' };
+let bossIntroId = 0;
+function bossIntro(e) {
+  const B = biomeOf(RUN.depth), el = $('#bossIntro'), id = ++bossIntroId;
+  $('#biEpi').textContent = /Hollow King/.test(e.name) ? 'The crown beneath the world' : BOSS_EPI[B.id] || B.name;
+  $('#biName').textContent = e.name;
+  $('#biWhere').textContent = `${B.name} · depth ${RUN.depth}`;
+  el.hidden = false; el.classList.remove('out'); void el.offsetWidth; el.classList.add('in');
+  setTimeout(() => { if (id === bossIntroId) { el.classList.add('out'); setTimeout(() => { if (id === bossIntroId) el.hidden = true; }, 600); } }, 2800);
+}
+const TIPS = [
+  'Roll through an attack at the last moment for a perfect roll: your next hit is a guaranteed crit.',
+  'Chill a chilled foe to freeze it solid, then hit it hard to shatter it.',
+  'Fire on a chilled foe causes thermal shock for 50% more damage.',
+  'Hold Alt to see the names of common items on the ground.',
+  'The loot filter in Settings turns low items into Arcane Essence as you pick them up.',
+  'Loadouts in your Bag swap gear and talents in one press.',
+  'An Artificer’s Table lets you extract a legendary power and imprint it onto rare or epic gear.',
+  'Every fifth floor is a boss. Beat it to open a waypoint.',
+  'Champions glow and hit harder, but drop better loot.',
+  'Leaders carry an aura that empowers foes near them. Kill them first.',
+  'Each biome resists some elements and fears others. Watch the numbers.',
+  'Portal Scrolls take you home from any depth, and back again.',
+  'Your home stash keeps gear safe between heroes in the same slot.',
+  'Rifts scale with your best clear. Share a rift code to race a friend on the same layout.',
+  'Reduce motion, colour-safe palettes and bigger text are under Settings, Accessibility.',
+];
+let loadShown = false;
+function loadingTick() {
+  const want = !levelReady && !!LV;
+  if (want === loadShown) return;
+  loadShown = want; $('#loading').hidden = !want;
+  if (want) $('#ldTip').textContent = pick(TIPS);
 }
