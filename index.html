@@ -322,6 +322,40 @@ body.touch #hint{bottom:calc(210px + env(safe-area-inset-bottom,0px))}
 /* ---- rifts and the pit ---- */
 .tierpick{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}.tierpick .tog{min-width:34px;justify-content:center;padding:4px 8px}
 #hObj.late{color:var(--bad)}
+
+/* ---- dialogue ---- */
+#dlg{position:fixed;inset:auto 0 calc(110px + env(safe-area-inset-bottom,0px)) 0;display:flex;justify-content:center;z-index:40;padding:0 max(16px,env(safe-area-inset-left,0px))}
+#dlg .dlg-in{display:grid;gap:6px;width:min(640px,100%);padding:16px 18px 14px;border:1px solid var(--brass);border-radius:6px;background:rgba(14,13,20,.94);box-shadow:0 14px 40px rgba(0,0,0,.6)}
+#dlg b{font-family:var(--f-display);font-weight:400;font-size:19px;color:var(--brass-2)}
+#dlg p{margin:0;font-size:17px;line-height:1.5}
+#dlg button{justify-self:end}
+body.touch #dlg{bottom:calc(220px + env(safe-area-inset-bottom,0px))}
+/* ---- the ending ---- */
+#ending{position:fixed;inset:0;z-index:60;display:grid;place-items:center;background:rgba(6,5,10,.92);padding:24px max(16px,env(safe-area-inset-left,0px))}
+#ending .end-in{display:grid;gap:18px;justify-items:center;max-width:620px;text-align:center}
+#ending p,#ending h2,#ending button{opacity:0;animation:endIn 1.6s forwards}
+#ending p{margin:0;font-size:19px;line-height:1.6;font-family:var(--f-display)}
+#ending h2{margin:10px 0 0;font-family:var(--f-display);font-weight:400;font-size:54px;color:var(--brass-2)}
+#ending .sub{font-family:var(--f-body);font-size:15px;color:var(--muted)}
+@keyframes endIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+/* ---- share and photo ---- */
+#share{position:fixed;inset:0;z-index:55;display:grid;place-items:center;background:rgba(6,5,10,.8);padding:16px max(16px,env(safe-area-inset-left,0px))}
+#share .share-in{display:grid;gap:10px;width:min(760px,100%);max-height:100%;overflow:auto;padding:16px;border:1px solid var(--line-2);border-radius:6px;background:var(--ink-2)}
+#share header{display:flex;justify-content:space-between;align-items:center}#share header b{font-family:var(--f-display);font-weight:400;font-size:22px}
+#share img{width:100%;height:auto;border-radius:4px;border:1px solid var(--line)}
+#share .acts{display:flex;flex-wrap:wrap;gap:8px}#share a.btn{text-decoration:none}
+body.photo #hud,body.photo #touch,body.photo #labels,body.photo .lbl,body.photo #hint,body.photo #toasts,body.photo #lockMark{display:none!important}
+#photo{position:fixed;left:0;right:0;bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:45;display:flex;justify-content:center;padding:0 max(16px,env(safe-area-inset-left,0px))}
+#photo .ph-in{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:10px 14px;border:1px solid var(--line-2);border-radius:6px;background:rgba(14,13,20,.88);max-width:100%}
+#photo .ph-t{font-family:var(--f-display);font-size:18px;color:var(--brass-2)}
+#photo .ph-f{display:flex;flex-wrap:wrap;gap:4px}#photo .ph-a{display:flex;gap:6px}
+#photo .ph-fov{display:flex;align-items:center;gap:6px;font-size:13px}
+/* ---- story codex ---- */
+.chap{margin-bottom:12px;padding:10px 12px;border:1px solid var(--line);border-radius:4px}.chap h3{margin:0 0 6px}.chap p{margin:4px 0;font-size:14px;line-height:1.45}.chap.locked{opacity:.55}
+.pages{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px}
+.pagec{padding:10px;border:1px solid color-mix(in srgb,var(--brass) 40%,var(--line));border-radius:4px;background:color-mix(in srgb,#f2e6c8 6%,var(--ink-2))}
+.pagec b{font-family:var(--f-display);font-weight:400;color:var(--brass-2)}.pagec p{margin:4px 0 0;font-size:13px;line-height:1.45;font-style:italic}.pagec.locked{opacity:.5;font-style:normal}
+input.code-in{width:100%;box-sizing:border-box;margin-top:8px;font:14px var(--f-mono);background:var(--ink);color:var(--fg);border:1px solid var(--line-2);border-radius:3px;padding:7px 9px;text-transform:uppercase}
 </style>
 </head><body>
 <canvas id="stage"></canvas>
@@ -393,6 +427,10 @@ body.touch #hint{bottom:calc(210px + env(safe-area-inset-bottom,0px))}
   </div>
 </div>
 <div id="hint" role="status" aria-live="polite"></div>
+<div id="dlg" role="dialog" aria-live="polite" hidden></div>
+<div id="ending" hidden></div>
+<div id="share" role="dialog" aria-label="Share" hidden></div>
+<div id="photo" hidden></div>
 <pre id="perf" hidden></pre>
 <script src="game.js"></script>
 <script type="module">

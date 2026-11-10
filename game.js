@@ -313,10 +313,10 @@ const SKILL_DEFS = {
   cry: { n: 'War Cry', cd: 16, d: 'Roar: foes nearby are thrown back and you gain +30% damage and +30% armor for 8 seconds. Heals 10%.' },
   volley: { n: 'Volley', cd: 5, d: 'Loose a fan of nine arrows, each dealing 70% damage. Works with any weapon.' },
   dash: { n: 'Shadow Dash', cd: 7, d: 'Dash six paces through foes, striking each for 200% damage. Nothing can hit you mid-dash.' },
-  rain: { n: 'Rain of Arrows', cd: 12, d: 'Arrows fall on a target area for two seconds, hitting every foe inside ten times for 45% damage.' },
-  nova: { n: 'Ember Nova', cd: 9, d: 'A ring of fire bursts from you for 250% damage, hurling foes back and setting them alight.' },
-  blink: { n: 'Blink', cd: 6, d: 'Fold space and step up to seven paces away. Frost bursts where you stood: 120% damage and a deep chill.' },
-  meteor: { n: 'Meteor', cd: 11, d: 'Call a falling star onto the target area: 380% damage and a burning crater.' },
+  rain: { n: 'Rain of Arrows', cd: 12, d: 'Storm-tipped arrows fall on a target area for two seconds, hitting every foe inside ten times for 45% lightning damage. Lightning on a burning foe overloads.' },
+  nova: { n: 'Ember Nova', cd: 9, d: 'A ring of fire bursts from you for 250% fire damage, hurling foes back and setting them alight. Fire on a chilled foe is a thermal shock.' },
+  blink: { n: 'Blink', cd: 6, d: 'Fold space and step up to seven paces away. Frost bursts where you stood: 120% cold damage and a deep chill. Chilling a chilled foe freezes it.' },
+  meteor: { n: 'Meteor', cd: 11, d: 'Call a falling star onto the target area: 380% fire damage and a burning crater. A critical hit shatters frozen foes.' },
 };
 const SKILL_LVL = [1, 4, 8];
 
@@ -1432,6 +1432,8 @@ function themeRooms(rooms, g, W, exitRoom) {
   }
 }
 function solid(i, j) { return i < 0 || j < 0 || i >= LV.w || j >= LV.h || LV.g[j * LV.w + i] !== 1; }
+// rock, clutter and furniture stop a shot; an open chasm does not
+function blocksShot(x, z) { const i = Math.floor(x), j = Math.floor(z); if (i < 0 || j < 0 || i >= LV.w || j >= LV.h) return true; const v = LV.g[j * LV.w + i]; return v !== 1 && v !== 5; }
 function walkable(x, z) { return !solid(Math.floor(x), Math.floor(z)); }
 
 function genDungeon(depth) {
@@ -2176,7 +2178,7 @@ function wake(e) {
 }
 function los(ax, az, bx, bz) {
   const d = Math.hypot(bx - ax, bz - az); const n = Math.ceil(d / 0.4);
-  for (let i = 1; i < n; i++) { const t = i / n; if (!walkable(lerp(ax, bx, t), lerp(az, bz, t))) return false; }
+  for (let i = 1; i < n; i++) { const t = i / n; if (blocksShot(lerp(ax, bx, t), lerp(az, bz, t))) return false; }
   return true;
 }
 function collide(o) {
@@ -2250,6 +2252,11 @@ function updEnemy(e, dt) {
   // statuses
   let spdM = 1, atkM = 1;
   if (e.chillT > 0) { e.chillT -= dt; spdM *= 0.5; atkM *= 0.7; }
+  if (e.frozenT > 0) { // frozen solid: no moving, no attacking
+    e.frozenT -= dt; e.wind = 0; e.charging = 0;
+    if (e.frozenT <= 0 && e.rim0) { e.u.uRim.value.copy(e.rim0); e.rim0 = null; }
+    else { e.mesh.position.set(e.x, 0, e.z); return; }
+  }
   if (e.burnT > 0) { e.burnT -= dt; e.hpTick = (e.hpTick || 0) + dt; if (e.hpTick > 0.5) { e.hpTick = 0; damageEnemy(e, e.burnD * 0.5, false, 0, 0, 0, false, 'burn'); if (e.dead) return; } }
   if (e.regen) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * e.regen * dt);
   if (e.wardT > 0) e.wardT -= dt;
@@ -2546,7 +2553,7 @@ function updTeles(dt) {
       burst(t.x, 0.4, t.z, t.col, 12, 5, 0.16);
       if (t.o.player) {
         for (const e of enemies) if (!e.dead && Math.hypot(e.x - t.x, e.z - t.z) < t.r + e.r) damageEnemy(e, t.dmg, false, 3, (e.x - t.x), (e.z - t.z), false);
-      } else if (Math.hypot(P.x - t.x, P.z - t.z) < t.r + P.r * 0.5) hurtPlayer(t.dmg, null);
+      } else if (Math.hypot(P.x - t.x, P.z - t.z) < t.r + P.r * 0.5) hurtPlayer(t.dmg, t);
     }
   }
 }
@@ -2565,7 +2572,7 @@ function updProjs(dt) {
   for (let i = projs.length - 1; i >= 0; i--) {
     const p = projs[i];
     p.life -= dt; p.x += p.vx * dt; p.z += p.vz * dt;
-    let dead = p.life <= 0 || !walkable(p.x, p.z);
+    let dead = p.life <= 0 || blocksShot(p.x, p.z); // shots fly over chasms, not through walls
     if (!dead && p.owner === 'p') {
       for (const e of enemies) {
         if (e.dead || p.hit.has(e.id)) continue;
@@ -2590,7 +2597,7 @@ function rollDmg(e) {
     if (e.hp < e.maxHp * 0.3) d *= 1 + 0.15 * tal('executioner');
     if (e.champ || e.leader || e.boss) d *= 1 + 0.1 * tal('huntersmark');
   }
-  const crit = Math.random() * 100 < ST.crit;
+  const crit = P.nextCrit || Math.random() * 100 < ST.crit; P.nextCrit = false; // a perfect roll or parry guarantees the next crit
   if (crit) d *= 1.5 + ST.critd / 100;
   return { d, crit };
 }
@@ -2632,10 +2639,38 @@ function resolveMelee(fin) {
   }
   if (ST.powers.split) for (const k of [-1, 1]) spawnProj({ x: P.x, z: P.z, a: a + k * 0.3, spd: 14, owner: 'p', size: 0.2, col: 0x9fe8ff, pierce: 1, mult: 0.5, life: 0.7 });
 }
+// ================= elements and combos =================
+// Each biome's foes shrug off some elements and fear others; status effects combine.
+let hitElem = null; // set around a skill's damage (see withElem)
+const withElem = (el, fn) => { const p = hitElem; hitElem = el; try { return fn(); } finally { hitElem = p; } };
+const RES = {
+  crypt: { fire: 1.25, cold: 0.75 }, fungal: { fire: 1.3, shock: 0.8 }, magma: { fire: 0.5, cold: 1.3 }, frost: { cold: 0.5, fire: 1.3 },
+  void: { arcane: 0.6, phys: 1.2 }, drowned: { fire: 0.7, shock: 1.4 }, clock: { phys: 0.75, shock: 1.4 }, blood: { fire: 1.35, arcane: 0.8 },
+};
+const ELEM_N = { phys: 'physical', fire: 'fire', cold: 'cold', shock: 'lightning', arcane: 'arcane' };
+const elemOf = (kind) => hitElem || (kind === 'burn' ? 'fire' : ST && ST.wk === 'staff' ? 'arcane' : 'phys');
+const resOf = (el) => (RUN && RES[biomeOf(RUN.depth).id] && RES[biomeOf(RUN.depth).id][el]) || 1;
+function chillEnemy(e, t) { // chilling a chilled foe freezes it solid
+  if (e.dead) return;
+  if (e.chillT > 0 && !e.boss && !(e.frozenT > 0)) { e.frozenT = e.leader ? 0.8 : 1.5; e.chillT = 0; floatNum(e.x, e.h * e.scale + 0.7, e.z, 'Frozen', 'xp'); burst(e.x, e.h * e.scale * 0.6, e.z, 0xbfe8ff, 10, 2, 0.14); if (!e.rim0) e.rim0 = e.u.uRim.value.clone(); e.u.uRim.value.setRGB(0.3, 0.6, 1.0); }
+  else if (!(e.frozenT > 0)) e.chillT = Math.max(e.chillT, t);
+}
+function comboBurst(e, r, col, mult, el) {
+  ringFx(e.x, e.z, 0.3, r, 0.3, col, 2.4); burst(e.x, 0.8, e.z, col, 16, 6, 0.16);
+  withElem(el, () => { for (const o of enemies) if (!o.dead && o !== e && Math.hypot(o.x - e.x, o.z - e.z) < r + o.r) damageEnemy(o, ST.dmg * mult, false, 2, o.x - e.x, o.z - e.z, false, 'combo'); });
+}
 function damageEnemy(e, d, crit, kb, nx, nz, proc, kind) {
   if (e.dead) return;
   wake(e);
   let m = 1 - e.arm;
+  const el = elemOf(kind), rm = resOf(el); m *= rm;
+  if (rm !== 1 && kind !== 'burn' && !e.resShown) { e.resShown = 1; floatNum(e.x, e.h * e.scale + 0.9, e.z, rm > 1 ? `Weak to ${ELEM_N[el]}` : `Resists ${ELEM_N[el]}`, rm > 1 ? 'crit' : 'xp'); }
+  let combo = null;
+  if (kind !== 'burn' && kind !== 'combo') {
+    if (e.frozenT > 0 && (crit || kb >= 4.5)) { m *= 2; combo = ['Shatter', 0xbfe8ff, 'cold', 2.4, 0.5]; e.frozenT = 0; }
+    else if (el === 'fire' && e.chillT > 0) { m *= 1.5; combo = ['Thermal shock', 0xffc8a0, 'fire', 0, 0]; e.chillT = 0; }
+    else if (el === 'shock' && e.burnT > 0) { combo = ['Overload', 0x9fd8ff, 'shock', 2.6, 0.6]; e.burnT = 0; }
+  }
   if (e.auraOn === 'ward') m *= 0.6;
   if (e.wardT > 0) m *= 0.5;
   d *= m;
@@ -2644,6 +2679,7 @@ function damageEnemy(e, d, crit, kb, nx, nz, proc, kind) {
   // heavy blows and crits stagger ordinary foes out of a wind-up
   if (proc && e.wind > 0 && !e.boss && !e.leader && (crit || kb >= 4.5)) { e.wind = 0; e.cd = Math.max(e.cd, 0.6); floatNum(e.x, e.h * e.scale + 0.6, e.z, 'Staggered', 'xp'); }
   floatNum(e.x, e.h * e.scale + 0.2, e.z, fmt(Math.max(1, d)), crit ? 'crit' : kind === 'burn' ? 'xp' : '');
+  if (combo) { floatNum(e.x, e.h * e.scale + 1.1, e.z, combo[0] + '!', 'crit'); sfx('crit'); addHitStop(0.05); if (combo[3]) comboBurst(e, combo[3], combo[1], combo[4], combo[2]); else burst(e.x, 0.9, e.z, combo[1], 12, 4, 0.14); stat('combos'); }
   if (kb && !e.boss && e.ai !== 'totem') { const k = kb * (e.arch === 'brute' || e.arch === 'warden' ? 0.4 : 1) * (e.leader ? 0.5 : 1); e.kx += nx * k * 2.2; e.kz += nz * k * 2.2; }
   ensureBar(e);
   if (proc) {
@@ -2651,8 +2687,8 @@ function damageEnemy(e, d, crit, kb, nx, nz, proc, kind) {
     sfx('hit');
     if (ST.ls > 0) healPlayer(d * ST.ls / 100, true);
     if (Math.random() * 100 < ST.burn) { e.burnT = 3; e.burnD = ST.dmg * 0.3 * ST.burnM; }
-    if (Math.random() * 100 < ST.chill) e.chillT = 2.5;
-    if (ST.powers.chain && chance(0.3)) chainLightning(e, d * 0.6);
+    if (Math.random() * 100 < ST.chill) chillEnemy(e, 2.5);
+    if (ST.powers.chain && chance(0.3)) withElem('shock', () => chainLightning(e, d * 0.6));
     if (ST.powers.frenzy) { P.frenzy = Math.min(10, P.frenzy + 1); P.frenzyT = 2; }
   }
   if (e.hp <= 0) killEnemy(e);
@@ -2690,8 +2726,26 @@ function killEnemy(e, noLoot) {
   if (e.leader) { toast(`Leader slain: ${e.name}`, 'var(--r4)'); for (const o of enemies) if (o.lead === e) o.lead = null; }
   if (e.boss) bossDefeated(e);
 }
+// a roll that slips a blow at the last moment, or a swing that meets one, earns a reward
+function perfectRoll() {
+  P.perfect = true; P.nextCrit = true; slowT = Math.max(slowT, 0.4);
+  for (let i = 0; i < 3; i++) skillCd[i] = Math.max(0, skillCd[i] - 1.5);
+  floatNum(P.x, 2.3, P.z, 'Perfect roll', 'crit'); ringFx(P.x, P.z, 0.2, 2.2, 0.25, 0x9fd4ff, 2.4); sfx('blink'); stat('perfects');
+}
+function tryParry(src) {
+  if (!src || !src.ai || !['melee', 'charger', 'leaper'].includes(src.ai) || src.boss) return false;
+  if (!(P.swingT > 0) || P.swingDur - P.swingT > 0.16 || Math.hypot(src.x - P.x, src.z - P.z) > 3.2 || WEAPONS[ST.wk].ranged) return false;
+  P.nextCrit = true; P.iframes = 0.2;
+  src.wind = 0; src.cd = Math.max(src.cd, 1.6); src.chillT = Math.max(src.chillT, 0.8);
+  const dx = src.x - P.x, dz = src.z - P.z, l = Math.hypot(dx, dz) || 1; src.kx += dx / l * 9; src.kz += dz / l * 9;
+  floatNum(src.x, src.h * src.scale + 0.7, src.z, 'Parried', 'crit'); burst((src.x + P.x) / 2, 1.1, (src.z + P.z) / 2, 0xfff2c8, 14, 5, 0.12);
+  addHitStop(0.08); shake(0.2); sfx('block'); stat('parries');
+  return true;
+}
 function hurtPlayer(d, src) {
+  if (src && P.dodgeT > 0 && !P.perfect && LV.type === 'dungeon' && !P.dead) perfectRoll();
   if (P.iframes > 0 || P.dead || LV.type !== 'dungeon') return;
+  if (tryParry(src)) return;
   if (Math.random() * 100 < ST.block) { floatNum(P.x, 2, P.z, 'Blocked', 'xp'); sfx('block'); burst(P.x + Math.sin(P.face) * 0.5, 1, P.z + Math.cos(P.face) * 0.5, 0xd8e0ff, 6, 3, 0.1); P.iframes = 0.15; return; }
   if (Math.random() * 100 < ST.evade) { floatNum(P.x, 2, P.z, 'Evaded', 'xp'); P.iframes = 0.15; return; }
   const red = ST.armor / (ST.armor + 40 + 9 * RUN.depth);
@@ -3164,6 +3218,7 @@ function loadTown() {
   releaseLock(); setMusic('town');
   P.u.uRim.value.setRGB(0.05, 0.06, 0.08);
   spawnPet(); spawnVillagers(); spawnCaravan(); applyTimeOfDay(true);
+  setTimeout(() => { if (LV && LV.type === 'town' && started && S.cls) storyOnTown(); }, 900);
   warmLevel();
 }
 // threejs-performance, "Shader compile stalls": build every program the new level needs
@@ -3199,7 +3254,8 @@ function populate() {
   };
   if (L.boss) {
     const a = L.arena;
-    spawnEnemy('grunt', a.x + a.w / 2, a.y + 6, { boss: true });
+    if (d === 40 && !story().final) spawnHollowKing(a.x + a.w / 2, a.y + 6); // the end of the story
+    else spawnEnemy('grunt', a.x + a.w / 2, a.y + 6, { boss: true });
     const ante = L.rooms[1];
     for (let k = 0; k < 3 + Math.floor(d / 10); k++) { const [x, z] = spot(ante); spawnEnemy(wpick(pool), x, z, { champ: k === 0 }); }
     addChest(...spot(ante, 1.5));
@@ -3226,6 +3282,12 @@ function populate() {
     else addStairs(er.x + er.w / 2, er.y + er.h / 2);
     placeSpecialRooms(vault);
     placeTraps();
+    maybePlacePage(L.rooms);
+    // shrines and altars claim tiles after the foes are placed: nudge anyone left standing inside one (found by the autoplay bot)
+    for (const e of enemies) {
+      if (walkable(e.x, e.z)) continue;
+      search: for (let r = 1; r <= 4; r++) for (let a = 0; a < 8; a++) { const x = e.x + Math.sin(a * 0.785) * r * 0.7, z = e.z + Math.cos(a * 0.785) * r * 0.7; if (walkable(x, z)) { e.x = x; e.z = z; e.mesh.position.set(x, 0, z); break search; } }
+    }
   }
   if (d % 5 === 1 && !RUN.rift) addPortalHome(L.start.x + 2.2, L.start.z);
   // starting room gets a herb or ore sometimes
@@ -3332,6 +3394,7 @@ function nextFloor() {
   loadDungeon(d);
 }
 function bossDefeated(e) {
+  storyBossSlain(e);
   setMusic('dng:' + biomeOf(RUN.depth).id); questEvent('boss', RUN.depth);
   S.bossKills++; S.slain.push({ n: e.name, c: e.color });
   const wp = RUN.depth + 1;
@@ -3406,7 +3469,7 @@ function tryDodge() {
   if (P.dodgeCd > 0 || P.dead || isPaused()) return;
   const mv = Math.hypot(P.mx || 0, P.mz || 0) > 0.1;
   P.dodgeDir = mv ? Math.atan2(P.mx, P.mz) : P.face;
-  P.dodgeT = 0.2; P.dodgeCd = 0.85 * ST.rollM; P.iframes = Math.max(P.iframes, 0.32); P.ghostT = 0;
+  P.dodgeT = 0.2; P.perfect = false; P.dodgeCd = 0.85 * ST.rollM; P.iframes = Math.max(P.iframes, 0.32); P.ghostT = 0;
   sfx('dodge'); burst(P.x, 0.2, P.z, 0xc8c0a8, 6, 2, 0.1);
 }
 function usePotion(greater) {
@@ -3709,8 +3772,27 @@ function drawMini() {
 // ================= persistence =================
 // three save slots; slot 1 keeps the original key so older saves load as they were
 const saveKey = () => ['hearthdeep.save.v1', 'hearthdeep.save.v1.s2', 'hearthdeep.save.v1.s3'][SET.slot || 0];
-function save() { try { if (S && started) localStorage.setItem(saveKey(), JSON.stringify(S)); } catch (err) { /* storage unavailable */ } }
-function loadSave() { try { const s = localStorage.getItem(saveKey()); return s ? JSON.parse(s) : null; } catch (err) { return null; } }
+// Every save also keeps the previous good copy as a backup; loading falls back to it if the main copy is damaged.
+let saveWarned = false, saveN = 0;
+function save() {
+  if (!S || !started) return;
+  try {
+    const json = JSON.stringify(S), k = saveKey();
+    if (++saveN % 5 === 1) { const prev = localStorage.getItem(k); if (prev && validSave(safeParse(prev))) localStorage.setItem(k + '.bak', prev); }
+    localStorage.setItem(k, json);
+  } catch (err) { if (!saveWarned) { saveWarned = true; toast('Could not save: browser storage is full or blocked.', 'var(--bad)', true); } }
+}
+const safeParse = (t) => { try { return t ? JSON.parse(t) : null; } catch (err) { return null; } };
+const validSave = (s) => !!(s && typeof s === 'object' && s.equip && typeof s.equip === 'object' && Number.isFinite(s.level) && s.level >= 1 && Array.isArray(s.inv));
+function loadSave() {
+  try {
+    const k = saveKey(), main = safeParse(localStorage.getItem(k));
+    if (validSave(main)) return main;
+    const bak = safeParse(localStorage.getItem(k + '.bak'));
+    if (validSave(bak)) { setTimeout(() => toast('Your save was damaged; restored the last backup.', 'var(--brass-2)', true), 1500); return bak; }
+    return null;
+  } catch (err) { return null; }
+}
 function fixUid() {
   let m = 0; const all = [...S.inv, ...S.stash, ...Object.values(S.equip).filter(Boolean), ...((S.shop && S.shop.items) || [])];
   for (const it of all) m = Math.max(m, it.id || 0);
@@ -3723,7 +3805,21 @@ function normalizeSave(s) {
   for (const k of ['tal', 'gems', 'stats', 'ach', 'bestiary', 'decor', 'hints']) if (!s[k] || typeof s[k] !== 'object') s[k] = {};
   if (!Array.isArray(s.records)) s.records = [];
   if (typeof s.shards !== 'number') s.shards = 0;
+  if (!s.story || typeof s.story !== 'object' || !Array.isArray(s.story.pages)) s.story = null;
+  if (!s.seedBest || typeof s.seedBest !== 'object') s.seedBest = {};
   if (!s.rift || typeof s.rift !== 'object') s.rift = { max: 1, best: {} };
+  // repair anything a bad write or an old version could have left behind
+  for (const k of ['gold', 'xp', 'kills', 'deaths', 'runs', 'best', 'bossKills', 'potions', 'gpotions', 'scrolls', 'shards', 'time']) if (!Number.isFinite(s[k]) || s[k] < 0) s[k] = d[k] || 0;
+  s.level = Math.max(1, Math.floor(s.level) || 1);
+  const okItem = (it) => it && typeof it === 'object' && SLOTS.includes(it.slot) && Array.isArray(it.aff) && Number.isFinite(it.il);
+  s.inv = (Array.isArray(s.inv) ? s.inv : []).filter(okItem);
+  s.stash = (Array.isArray(s.stash) ? s.stash : []).filter(okItem);
+  for (const sl of SLOTS) if (s.equip[sl] && !okItem(s.equip[sl])) s.equip[sl] = null;
+  for (const it of [...s.inv, ...s.stash, ...Object.values(s.equip)]) if (it && it.sock && !Array.isArray(it.gems)) it.gems = Array(it.sock).fill(null);
+  if (s.cls && !CLASSES[s.cls]) s.cls = null;
+  if (!Array.isArray(s.waypoints) || !s.waypoints.length) s.waypoints = [1];
+  if (!Array.isArray(s.slain)) s.slain = [];
+  if (s.mats && typeof s.mats === 'object') { for (const k of Object.keys(s.mats)) if (!Number.isFinite(s.mats[k])) s.mats[k] = 0; } else s.mats = {};
   return s;
 }
 // ================= skills =================
@@ -3757,7 +3853,7 @@ function useSkill(i) {
   } else if (s.id === 'nova') {
     ringFx(P.x, P.z, 0.5, 5.0, 0.38, 0xff7a2a, 3.2); ringFx(P.x, P.z, 0.3, 3.6, 0.3, 0xffd06a, 2.4);
     for (let k = 0; k < 3; k++) burst(P.x, 0.4, P.z, k ? 0xff7a2a : 0xffd06a, 18, 9, 0.22, 2.2);
-    const n = hitAround(5.0, 2.5 * ST.skillM, 7, (e) => { e.burnT = 3; e.burnD = ST.dmg * 0.4 * ST.burnM; });
+    const n = withElem('fire', () => hitAround(5.0, 2.5 * ST.skillM, 7, (e) => { e.burnT = 3; e.burnD = ST.dmg * 0.4 * ST.burnM; }));
     shake(0.55); addHitStop(n ? 0.09 : 0.03); sfx('nova');
   }
 }
@@ -4208,7 +4304,7 @@ function classSkill(s) {
       if (LV.type === 'dungeon') for (const e of enemies) {
         if (e.dead) continue; const dx = e.x - ox, dz = e.z - oz, d = Math.hypot(dx, dz);
         if (d > 3.2 + e.r) continue;
-        const q = rollDmg(e); damageEnemy(e, q.d * 1.2 * ST.skillM, q.crit, 3, dx / (d || 1), dz / (d || 1), true); if (!e.dead) e.chillT = 3.5;
+        const q = rollDmg(e); withElem('cold', () => damageEnemy(e, q.d * 1.2 * ST.skillM, q.crit, 3, dx / (d || 1), dz / (d || 1), true)); chillEnemy(e, 3.5);
       }
       P.x = r.x; P.z = r.z; P.iframes = Math.max(P.iframes, 0.3); P.face = Math.atan2(r.x - ox, r.z - oz);
       burst(P.x, 1, P.z, 0xb08cff, 18, 5, 0.16); sfx('blink');
@@ -4250,7 +4346,7 @@ function updClassSkills(dt) {
         for (let k = 0; k < 4; k++) { const a = rand(0, 6.28), r = Math.sqrt(Math.random()) * z.r; burst(z.x + Math.sin(a) * r, 0.15, z.z + Math.cos(a) * r, 0xf0e6c0, 2, 2, 0.08); }
         for (const e of enemies) {
           if (e.dead || Math.hypot(e.x - z.x, e.z - z.z) > z.r + e.r) continue;
-          const q = rollDmg(e); damageEnemy(e, q.d * 0.45 * ST.skillM, q.crit, 0.5, 0, 0, false);
+          const q = rollDmg(e); withElem('shock', () => damageEnemy(e, q.d * 0.45 * ST.skillM, q.crit, 0.5, 0, 0, false)); // storm-tipped: lightning
         }
         sfx('hit');
       }
@@ -4265,7 +4361,7 @@ function updClassSkills(dt) {
         for (const e of enemies) {
           if (e.dead) continue; const dx = e.x - z.x, dz = e.z - z.z, d = Math.hypot(dx, dz);
           if (d > z.r + e.r) continue;
-          const q = rollDmg(e); damageEnemy(e, q.d * 3.8 * ST.skillM, q.crit, 8, dx / (d || 1), dz / (d || 1), true); hit++;
+          const q = rollDmg(e); withElem('fire', () => damageEnemy(e, q.d * 3.8 * ST.skillM, q.crit, 8, dx / (d || 1), dz / (d || 1), true)); hit++;
           if (!e.dead) { e.burnT = 4; e.burnD = ST.dmg * 0.5 * ST.burnM; }
         }
         shake(0.6); addHitStop(hit ? 0.1 : 0.04); sfx('boom');
@@ -4577,13 +4673,14 @@ function weeklyDef() {
   const seed = h >>> 0;
   return withSeed(seed, () => { const keys = Object.keys(RIFT_MODS), mods = []; while (mods.length < 3) { const m = pick(keys); if (!mods.includes(m)) mods.push(m); } return { key: k, seed, tier: 6, mods }; });
 }
-function startRift(t, weekly) {
+function startRift(t, weekly, coded) {
   let mods, seed = 0;
-  if (weekly) { const W = weeklyDef(); t = W.tier; mods = W.mods; seed = W.seed; }
+  if (coded) { t = coded.tier; mods = coded.mods; seed = coded.seed; }
+  else if (weekly) { const W = weeklyDef(); t = W.tier; mods = W.mods; seed = W.seed; }
   else { const n = t >= 10 ? 3 : t >= 4 ? 2 : 1, keys = Object.keys(RIFT_MODS); mods = []; while (mods.length < n) { const m = pick(keys); if (!mods.includes(m)) mods.push(m); } }
-  startDelve(riftDepth(t), [], { mode: 'rift', rift: { tier: t, mods, floor: 1, t0: performance.now(), par: riftPar(t), weekly: !!weekly, seed } });
+  startDelve(riftDepth(t), [], { mode: 'rift', rift: { tier: t, mods, floor: 1, t0: performance.now(), par: riftPar(t), weekly: !!weekly, seed, code: coded ? coded.code : null } });
   hint('rift');
-  banner(weekly ? 'Weekly Rift' : `Rift tier ${t}`, mods.map((m) => RIFT_MODS[m].n).join(' · '));
+  banner(weekly ? 'Weekly Rift' : coded ? 'Seeded rift' : `Rift tier ${t}`, mods.map((m) => RIFT_MODS[m].n).join(' · '));
 }
 const riftTime = () => (RUN && RUN.rift ? ((RUN.rift.end || performance.now()) - RUN.rift.t0) / 1000 : 0);
 function riftStairs(x, z) { // the last floor's exit is a sealed rift until its guardian falls
@@ -4610,9 +4707,10 @@ function riftComplete(e) {
   const shards = (2 + t * 2) * (fast ? 2 : 1);
   S.shards = (S.shards || 0) + shards;
   S.rift = S.rift || { max: 1, best: {} };
-  if (fast && !R.weekly) S.rift.max = Math.max(S.rift.max || 1, t + 1);
+  if (fast && !R.weekly && !R.code) S.rift.max = Math.max(S.rift.max || 1, t + 1);
   S.rift.cleared = Math.max(S.rift.cleared || 0, t);
   if (!S.rift.best[t] || secs < S.rift.best[t]) S.rift.best[t] = secs;
+  if (R.code) { S.seedBest = S.seedBest || {}; if (!S.seedBest[R.code] || secs < S.seedBest[R.code]) S.seedBest[R.code] = secs; }
   if (R.weekly) { const k = weeklyDef().key; if (!S.weekly || S.weekly.key !== k) S.weekly = { key: k, best: null, tries: 0 }; if (!S.weekly.best || secs < S.weekly.best) S.weekly.best = secs; }
   stat('rifts');
   gainXP(80 * t + 40);
@@ -4650,7 +4748,7 @@ function arenaWave() {
   const n = Math.min(22, 4 + Math.round(A.wave * 1.6));
   for (let k = 0; k < n; k++) { const [x, z] = arenaSpot(); const e = spawnEnemy(wpick(pool), x, z, { champ: A.wave >= 4 && chance(0.06 + A.wave * 0.01) }); e.awake = true; }
   if (A.wave % 5 === 0) { const [x, z] = arenaSpot(); const L = spawnEnemy(pick(['brute', 'warden']), x, z, { leader: true }); L.awake = true; if (A.wave % 10 === 0) { L.name = 'Pit Champion'; L.hp = L.maxHp = L.maxHp * 2.5; L.scale *= 1.2; L.mesh.scale.setScalar(L.scale); if (L.label) L.label.el.textContent = L.name; } }
-  if (A.exit) { removeInteract(A.exit.i); world.remove(A.exit.g); A.exit = null; }
+  if (A.exit) { A.exit.i.dead = true; world.remove(A.exit.g); A.exit = null; } // the interact loop drops it and its label
   banner(`Wave ${A.wave}`, `${n + (A.wave % 5 === 0 ? 1 : 0)} foes · depth ${d}`); sfx('ambush'); ringFx(20, 20, 2, 14, 0.6, 0xff6a3a, 2.6);
 }
 function arenaCleared() {
@@ -4743,12 +4841,152 @@ function riftHtml() {
     <div class="row"><div><div class="t">Weekly Rift<small>${W.key} · same floors for everyone this week · tier ${W.tier}</small></div>
       <div class="d">${W.mods.map((m) => `<b>${RIFT_MODS[m].n}</b>: ${RIFT_MODS[m].d}`).join('<br>')}</div>${wk && wk.best ? `<div class="d" style="color:var(--ok)">Your best this week: ${fmtClock(wk.best)}</div>` : ''}</div>
       <button class="btn" type="button" data-act="weekly">Enter</button></div>
+    <div class="row"><div><div class="t">Daily seed<small>today's floors, the same for anyone with the code</small></div>${(() => { const c = dailyCode(), p = parseRiftCode(c), b = S.seedBest && S.seedBest[c]; return `<div class="d"><code>${c}</code> · tier ${p.tier} · ${p.mods.map((m) => RIFT_MODS[m].n).join(', ')}${b ? ` · <span style="color:var(--ok)">your best ${fmtClock(b)}</span>` : ''}</div><div class="acts"><button class="btn ghost sm" type="button" data-act="copyCode" data-code="${c}">Copy code</button></div>`; })()}</div>
+      <button class="btn" type="button" data-act="daily">Enter</button></div>
+    <div class="row"><div><div class="t">Play a code<small>a friend's rift, floor for floor</small></div><input id="seedIn" class="code-in" type="text" placeholder="HD-4-SB-1A2B3C" autocomplete="off" spellcheck="false"><div class="hint" id="seedMsg"></div></div>
+      <button class="btn ghost" type="button" data-act="seedGo">Play</button></div>
     </div>`;
 }
 function pitHtml() {
   return `<div class="purse-row"><span>Best wave: <b>${S.arenaBest || 0}</b></span><span>Starts at depth ${arenaDepthBase()}</span><span>No gold is lost if you fall in the Pit</span></div>
     <div class="rows"><div class="row"><div><div class="t">The Pit<small>endless waves</small></div><div class="d">Waves grow larger and deeper; a pack leader every fifth wave and a Pit Champion every tenth. Gold and experience after each wave, a chest and rift shards every fifth. A way out opens between waves.</div></div><button class="btn" type="button" data-act="pit">Enter the Pit</button></div></div>`;
 }
+// ================= the story =================
+// Eight chapters, one per biome's keeper, told by Elder Maren when you come home; Aldric's journal pages
+// turn up in the deep; the first time down at depth 40 the last keeper is the Hollow King himself.
+const STORY = {
+  prologue: [
+    ['Elder Maren', "So you're the one who answered the bell. I'm Maren. I keep the village, and the village keeps the hole."],
+    ['Elder Maren', 'We call it the Delve. Nobody has found the bottom. My grandfather, Aldric, went looking a hundred years ago.'],
+    ['Elder Maren', 'He never came back. But things come up out of it. More of them every winter.'],
+    ['Elder Maren', "Go down. Bring back what you find, and anything with his name on it. I'd like to know how far he got."],
+  ],
+  chapters: [
+    { n: 'The First Keeper', boss: 'crypt', lines: [
+      ['Elder Maren', 'The Bone Regent. I know that name from his stories: the keeper of the first seal.'],
+      ['Elder Maren', 'A keeper is meant to hold the dark down, not wear it like a crown. If the keepers have turned, the seals are failing.'],
+      ['Elder Maren', 'That would explain the winters. Below the crypt are the Hollows. Mind the spores.'] ] },
+    { n: 'Roots of Rot', boss: 'fungal', lines: [
+      ['Elder Maren', 'Mycelia was set to bind the walls with root, so nothing could climb. Now the rot does the climbing.'],
+      ['Elder Maren', "There's a word in Aldric's pages I can't make sense of. Hollow. He writes it with a capital, like a name."] ] },
+    { n: 'Banked Fires', boss: 'magma', lines: [
+      ['Elder Maren', 'A forge-wyrm, tamed to keep the fires lit so the cold underneath could not rise. You have let the cold in.'],
+      ['Elder Maren', "Don't look at me like that. It was always coming. Better that you meet it before it meets us."] ] },
+    { n: 'The Door of Rime', boss: 'frost', lines: [
+      ['Elder Maren', 'Aldric wrote that the Sovereign kept the door between the made halls and the Rift.'],
+      ['Elder Maren', 'Past her, he said, the deep stops pretending to be a place.'] ] },
+    { n: 'A Star That Sings', boss: 'void', lines: [
+      ['Elder Maren', "Hollow again. A star that eats light. The pages say he followed it down because it sang to him in my grandmother's voice."],
+      ['Elder Maren', 'Three keepers left, if his count was right. Then whatever waits at the bottom.'] ] },
+    { n: 'The Sea That Isn\'t', boss: 'drowned', lines: [
+      ['Elder Maren', 'He drowned down there once, he wrote, and woke up dry. I think he stopped being entirely himself after that.'],
+      ['Elder Maren', 'His handwriting changes on the next page. Smaller. Very neat. As if someone else were holding the pen.'] ] },
+    { n: 'Nothing Is Counting', boss: 'clock', lines: [
+      ['Elder Maren', 'The Orrery counted the years the Hollow sleeps. You broke it. So now nothing is counting.'],
+      ['Elder Maren', 'One keeper left: the Warren, under everything. Bring a lantern you trust. And come back up. Please.'] ] },
+    { n: 'The Hollow King', boss: 'blood', lines: [
+      ['Elder Maren', '...You found him.'],
+      ['Elder Maren', "I always thought I'd be angry. I'm not. I'm glad it was you who brought him home."],
+      ['Elder Maren', "He'd want you to keep going down. He never could stop either. The hole has no bottom, but it sleeps easier now."] ] },
+  ],
+  ending: [
+    'The Hollow King kneels. Under the crown of roots is a face you have seen before, in the portrait over Maren\'s hearth.',
+    '"Tell her," he says, "that I counted every step back up. I just never reached the last one."',
+    'The roots let go. The deep falls quiet. For the first time in a hundred years, the bell in Hearthdeep does not ring.',
+  ],
+};
+const LORE = [
+  'Day one. Maren\'s mother made me promise to be home by the first snow. I have a good lantern, a better rope, and no idea how deep this goes.',
+  'The crypt is older than the village. Older than the valley, maybe. The bones here were buried facing down, as if to keep watch on something below.',
+  'Met the first keeper. He let me pass. He said, "You will come back up this way, or you will not come back at all." Friendly sort.',
+  'The mushrooms hum when the lantern goes out. I have stopped letting the lantern go out.',
+  'Found the roots that hold the walls. They are warm. They have a pulse. I did not stay to find out whose.',
+  'The forge runs on nothing I can name. The wyrm watches me drink from my flask and seems to find it funny.',
+  'Cold, below the forge. Not winter cold. The cold of a held breath. Something down here has been holding its breath for a very long time.',
+  'The Sovereign asked my name and wrote it in the frost on her door. When I looked back from the stairs, it had melted.',
+  'There is a star in the Rift. It sings. I know it is not her. I know. I am going to follow it a little way anyway.',
+  'I drowned today. I am writing this, so I suppose I did not. The water here is not water. It remembers you.',
+  'Lost count of the days. The clockwork in the vault counts for me: so many turns of the great wheel, so many years asleep.',
+  'The wheel says the Hollow wakes soon. The keepers know it. They are frightened, and frightened keepers make poor jailers.',
+  'I understand it now. The Hollow is not a hole. It is a hunger, and the deep is just the shape it has eaten out of the world.',
+  'Somebody has to sit on the lid. I am already very far down. I am already a little hollow. It might as well be me.',
+  'If you are reading this, you came further than anyone. Tell Maren I am sorry about the snow.',
+  'The roots are kind, at first. They take the cold away. Then they take the rest. — A.',
+];
+const story = () => (S.story = S.story || { ch: 0, told: 0, pages: [], final: false, intro: false });
+const pageAvailable = (d) => Math.min(LORE.length, 1 + Math.floor((d - 1) / 2.5)); // pages unlock roughly two per biome, in order
+function storyBossSlain(e) {
+  const St = story(), bi = BIOMES.findIndex((B) => B === biomeOf(RUN.depth));
+  if (e.hollowKing) { St.final = true; St.ch = 8; setTimeout(() => playEnding(), 2200); return; }
+  if (bi >= 0 && bi < 7 && St.ch < bi + 1) St.ch = bi + 1;
+}
+function storyOnTown() {
+  const St = story();
+  if (!St.intro && S.cls) { St.intro = true; dialogue(STORY.prologue); return; }
+  if (St.told < St.ch) { const c = STORY.chapters[St.ch - 1]; St.told = St.ch; dialogue([['', `Chapter ${St.ch}: ${c.n}`]].concat(c.lines)); }
+}
+// a journal page on some floors, in order
+function maybePlacePage(rooms) {
+  const St = story(), next = St.pages.length;
+  if (next >= pageAvailable(LV.depth) || RUN.mode || !chance(0.6)) return;
+  const r = pick(rooms.slice(1)); if (!r) return;
+  for (let t = 0; t < 30; t++) {
+    const x = rand(r.x + 1, r.x + r.w - 1), z = rand(r.y + 1, r.y + r.h - 1);
+    if (!walkable(x, z)) continue;
+    const g = new THREE.Group();
+    const pg = mesh(G.box, mat(0xf2e6c8, 1.6), 0.36, 0.02, 0.46, 0, 0.5, 0); pg.rotation.set(-0.5, 0.3, 0.15); g.add(pg);
+    const beam = new THREE.Mesh(G.cyl, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffe8b0).multiplyScalar(1.4), transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending }));
+    beam.scale.set(0.3, 4, 0.3); beam.position.y = 2; g.add(beam); levelDisp.push(beam.material);
+    g.position.set(x, 0, z); g.userData.spin = 0.8; world.add(g); spinners.push(g);
+    const o = addInteract({ x, z, r: 1.4, kind: 'page', label: 'A journal page', ly: 1.6, cls: '', verb: 'Read the page', act: () => {
+      const n = St.pages.length; if (n >= LORE.length) return;
+      St.pages.push(n); o.dead = true; world.remove(g); sfx('page');
+      dialogue([[`Aldric's journal · page ${n + 1} of ${LORE.length}`, LORE[n]]]);
+      stat('pages');
+    } });
+    return;
+  }
+}
+// ================= dialogue overlay =================
+let dlgQ = [], dlgOn = false;
+function dialogue(lines) { dlgQ = dlgQ.concat(lines); if (!dlgOn) dlgNext(); }
+function dlgNext() {
+  const el = $('#dlg');
+  if (!dlgQ.length) { dlgOn = false; el.hidden = true; return; }
+  dlgOn = true; el.hidden = false; mouseDown = false; touchAtk = false;
+  const [who, text] = dlgQ.shift();
+  el.innerHTML = `<div class="dlg-in">${who ? `<b>${esc(who)}</b>` : ''}<p>${esc(text)}</p><button type="button" class="btn sm" id="dlgNext">${dlgQ.length ? 'Next' : 'Close'}</button></div>`;
+  setTimeout(() => { const b = $('#dlgNext'); if (b) b.focus(); }, 30);
+}
+// ================= the Hollow King =================
+function spawnHollowKing(x, z) {
+  const e = spawnEnemy('grunt', x, z, { boss: true });
+  e.hollowKing = 1; e.name = 'The Hollow King'; $('#bossName').textContent = e.name;
+  e.hp = e.maxHp = e.maxHp * 1.6; e.dmg *= 1.1;
+  e.patterns = ['beam', 'whirlpool', 'roots', 'summon', 'wave', 'meteor'];
+  e.mats[0].emissive.setHex(0x8a5aff).multiplyScalar(0.3);
+  bossDress(e.mesh, 'void', e.h); bossDress(e.mesh, 'crown', e.h); // the Warren's antlers are already on the body
+  return e;
+}
+function playEnding() {
+  const el = $('#ending');
+  el.innerHTML = `<div class="end-in">${STORY.ending.map((t, i) => `<p style="animation-delay:${0.6 + i * 2.6}s">${esc(t)}</p>`).join('')}
+    <h2 style="animation-delay:${0.6 + STORY.ending.length * 2.6}s">The End</h2>
+    <p class="sub" style="animation-delay:${1.6 + STORY.ending.length * 2.6}s">...but the Delve has no bottom. Every floor below is still new.</p>
+    <button class="btn" type="button" id="endOk" style="animation-delay:${2.4 + STORY.ending.length * 2.6}s">Keep delving</button></div>`;
+  el.hidden = false; setMusic(null); sfx('quest');
+  stat('endings');
+}
+function storyHtml() {
+  const St = story();
+  const ch = STORY.chapters.map((c, i) => (i < St.ch ? `<section class="chap"><h3>Chapter ${i + 1}: ${esc(c.n)}</h3>${c.lines.map(([w, t]) => `<p><b>${esc(w)}:</b> ${esc(t)}</p>`).join('')}</section>` : `<section class="chap locked"><h3>Chapter ${i + 1}: ???</h3><p class="hint">Slay the keeper of ${esc(BIOMES[i].name)} (depth ${i * 5 + 5}).</p></section>`)).join('');
+  const pages = LORE.map((t, i) => (St.pages.includes(i) ? `<div class="pagec"><b>Page ${i + 1}</b><p>${esc(t)}</p></div>` : `<div class="pagec locked"><b>Page ${i + 1}</b><p class="hint">Not yet found${i >= pageAvailable(S.best || 1) ? ` (lies deeper than depth ${S.best || 1})` : ''}.</p></div>`)).join('');
+  return `<p class="hint" style="margin:0 0 12px">${St.final ? 'You reached the bottom of the story. The deep goes on.' : `Chapter ${St.ch} of ${STORY.chapters.length}. ${St.pages.length} of ${LORE.length} journal pages found.`}</p>${ch}<h3 style="margin-top:16px">Aldric's journal</h3><div class="pages">${pages}</div>`;
+}
+document.addEventListener('click', (ev) => {
+  if (ev.target && ev.target.id === 'dlgNext') dlgNext();
+  else if (ev.target && ev.target.id === 'endOk') { $('#ending').hidden = true; setMusic('dng:' + biomeOf(RUN ? RUN.depth : 1).id); }
+});
 // ================= icons =================
 const IC = {
   sword: '<path d="M18.5 4.5 20 4l-.5 1.5L9 16l-1-1z"/><path d="M6 13l5 5"/><path d="M7.5 16.5 4 20"/>',
@@ -4841,7 +5079,7 @@ function hud() {
     if (LV.boss) o = bossRef ? `Slay ${bossRef.name}` : enemies.some((e) => e.boss && !e.dead) ? 'Something vast waits beyond the antechamber' : 'Take the stairs down or the way home';
     else o = 'Find the stairs down';
     if (LV.depth % 5 === 1 && !RUN.rift) o += ' · A way home stands in the first room';
-    if (RUN && RUN.rift) { const R = RUN.rift, t = riftTime(); $('#hLoc').textContent = `${R.weekly ? 'Weekly Rift' : 'Rift tier ' + R.tier} · floor ${Math.min(R.floor, RIFT_FLOORS)}/${RIFT_FLOORS} · ${B.name}`; o = `${fmtClock(t)} / par ${fmtClock(R.par)} · ${R.mods.map((m) => RIFT_MODS[m].n).join(', ')}${R.floor >= RIFT_FLOORS ? (R.done ? ' · The seal is open' : ' · Slay the Rift Guardian') : ''}`; $('#hObj').classList.toggle('late', t > R.par && !R.done); }
+    if (RUN && RUN.rift) { const R = RUN.rift, t = riftTime(); $('#hLoc').textContent = `${R.weekly ? 'Weekly Rift' : R.code ? 'Seeded rift ' + R.code : 'Rift tier ' + R.tier} · floor ${Math.min(R.floor, RIFT_FLOORS)}/${RIFT_FLOORS} · ${B.name}`; o = `${fmtClock(t)} / par ${fmtClock(R.par)} · ${R.mods.map((m) => RIFT_MODS[m].n).join(', ')}${R.floor >= RIFT_FLOORS ? (R.done ? ' · The seal is open' : ' · Slay the Rift Guardian') : ''}`; $('#hObj').classList.toggle('late', t > R.par && !R.done); }
     else if (RUN && RUN.arena) { const A = RUN.arena, left = enemies.filter((e) => !e.dead).length; $('#hLoc').textContent = `The Pit · wave ${A.wave} · depth ${LV.depth}`; o = left ? `${left} foe${left > 1 ? 's' : ''} left · best wave ${S.arenaBest || 0}` : A.exit ? 'Next wave soon. Step into the portal to leave.' : 'The gates are opening...'; }
     else $('#hObj').classList.remove('late');
     $('#hObj').textContent = o;
@@ -4873,7 +5111,7 @@ function hud() {
 
 // ================= panels =================
 const Panel = { kind: null, tab: null, sel: null, forge: {}, elix: {} };
-function isPaused() { return !started || Panel.kind !== null || !$('#title').hidden || !$('#death').hidden; }
+function isPaused() { return !started || Panel.kind !== null || !$('#title').hidden || !$('#death').hidden || dlgOn || PHOTO.on || !$('#ending').hidden || !$('#share').hidden; }
 function openPanel(kind, tab) {
   Panel.kind = kind; Panel.sel = null;
   Panel.tab = tab || { bag: 'gear', home: 'home', smith: 'buy', trader: 'buy', alch: 'buy', delve: 'delve', elder: 'tasks', class: 'class', codex: 'ach' }[kind];
@@ -5019,7 +5257,7 @@ function renderPanel() {
     }
     case 'codex': {
       title = 'Codex'; sub = `${Object.keys(S.ach).length}/${ACH.length} achievements · ${fmtTime(S.time || 0)} played`;
-      tabs = [['ach', 'Achievements'], ['beasts', 'Bestiary'], ['records', 'Records'], ['save', 'Save file']];
+      tabs = [['ach', 'Achievements'], ['story', 'Story'], ['beasts', 'Bestiary'], ['records', 'Records'], ['save', 'Save file']];
       body = codexHtml(p.tab);
       break;
     }
@@ -5165,6 +5403,9 @@ function doAct(d) {
     case 'weekly': startRift(0, true); return;
     case 'riftT': Panel.riftT = +d.t; break;
     case 'pit': startArena(); return;
+    case 'daily': { const c = parseRiftCode(dailyCode()); if (c) startRift(0, false, c); return; }
+    case 'seedGo': { const inp = $('#seedIn'), c = parseRiftCode(inp && inp.value); if (!c) { const m = $('#seedMsg'); if (m) m.textContent = 'That is not a rift code. Codes look like HD-4-SB-1A2B3C.'; return; } startRift(0, false, c); return; }
+    case 'copyCode': { const t = d.code; try { navigator.clipboard.writeText(t).then(() => toast('Code copied: ' + t, 'var(--ok)'), () => toast(t, 'var(--muted)', true)); } catch (err) { toast(t, 'var(--muted)', true); } return; }
     case 'cvBuy': caravanBuy(+d.i); break;
     case 'cvLook': Panel.cvLook = +d.i; break;
     default: if (metaAct(d, it) === 'stop') return;
@@ -5199,6 +5440,7 @@ function rebuildHero() {
   if (P.mesh) { scene.remove(P.mesh); P.mesh.traverse((o) => { if (o.material && o.material.dispose) o.material.dispose(); }); }
   P.mesh = null; P.wkind = null; placePlayerMesh();
 }
+function chooseClassThen() { if (LV && LV.type === 'town') storyOnTown(); }
 function chooseClass(k) {
   const fresh = !S.runs && !S.kills;
   S.cls = k; S.tal = {};
@@ -5208,6 +5450,7 @@ function chooseClass(k) {
   closePanel(); save();
   toast(`You walk the ${CLASSES[k].n}'s path.`, 'var(--brass-2)', true); sfx('level');
   if (fresh) hint('move');
+  setTimeout(chooseClassThen, 400);
 }
 
 // ================= talents =================
@@ -5273,9 +5516,11 @@ function codexHtml(tab) {
       return `<section class="beasts"><h3>${B.name}<small>depths ${bi * 5 + 1} to ${bi * 5 + 5} · ${known}/${kinds.length + 1}</small></h3><div class="bgrid">${kinds.map(([n, c]) => `<div class="beast${seen(n) ? '' : ' unk'}"><i style="background:#${c.toString(16).padStart(6, '0')}"></i><span>${seen(n) ? esc(n) : '???'}</span><b>${seen(n) || ''}</b></div>`).join('')}<div class="beast boss${seen(B.boss.name) ? '' : ' unk'}"><i style="background:#${B.boss.color.toString(16).padStart(6, '0')}"></i><span>${seen(B.boss.name) ? esc(B.boss.name) : 'A boss, unseen'}</span><b>${seen(B.boss.name) || ''}</b></div></div></section>`;
     }).join('')}`;
   }
+  if (tab === 'story') return storyHtml();
   if (tab === 'records') {
     const R = S.records || [];
     return `<div class="stats" style="margin-bottom:14px">${[['Deepest depth', S.best], ['Foes slain', fmt(S.kills)], ['Bosses slain', S.bossKills], ['Leaders slain', S.stats.leaders || 0], ['Champions slain', S.stats.champs || 0], ['Descents', S.runs], ['Most floors in one trip', S.stats.longest || 0], ['Times fallen', S.deaths], ['Skills used', fmt(S.stats.skills || 0)], ['Things crafted', S.stats.crafts || 0], ['Tasks done', S.questsDone || 0], ['Highest rift sealed', (S.rift && S.rift.cleared) || 0], ['Best Pit wave', S.arenaBest || 0], ['Rift shards', S.shards || 0], ['Time played', fmtTime(S.time || 0)]].map(([a, b]) => `<div class="stat"><span>${a}</span><b>${b}</b></div>`).join('')}</div>
+      <div class="acts" style="margin-bottom:12px"><button class="btn" type="button" id="runCard">Make a run card</button><span class="hint">An image of your hero and records to share.</span></div>
       <h3>Best descents</h3>${R.length ? `<div class="recs"><div class="rec hd"><span>#</span><span>Reached</span><span>Floors</span><span>Gold</span><span>Hero</span><span>Ended</span></div>${R.map((r, i) => `<div class="rec"><span>${i + 1}</span><span>Depth ${r.deep}${r.from > 1 ? ` <small>from ${r.from}</small>` : ''}</span><span>${r.floors}</span><span>${fmt(r.gold)}</span><span>${r.cls ? CLASSES[r.cls].n : 'Delver'} ${r.lvl}</span><span>${r.died ? 'Fell' : 'Home'} · ${fmtDate(r.at)}</span></div>`).join('')}</div>` : '<p class="hint">No descents yet. Every trip below is recorded here.</p>'}`;
   }
   if (tab === 'save') {
@@ -5289,13 +5534,13 @@ function codexHtml(tab) {
 
 // ================= save slots, export and import =================
 const SLOT_KEYS = ['hearthdeep.save.v1', 'hearthdeep.save.v1.s2', 'hearthdeep.save.v1.s3'];
-function peekSlot(i) { try { const s = localStorage.getItem(SLOT_KEYS[i]); return s ? JSON.parse(s) : null; } catch (err) { return null; } }
+function peekSlot(i) { try { const m = safeParse(localStorage.getItem(SLOT_KEYS[i])); return validSave(m) ? m : (validSave(safeParse(localStorage.getItem(SLOT_KEYS[i] + '.bak'))) ? safeParse(localStorage.getItem(SLOT_KEYS[i] + '.bak')) : null); } catch (err) { return null; } }
 function exportCode() { try { return 'HD1.' + btoa(unescape(encodeURIComponent(JSON.stringify(S)))); } catch (err) { return ''; } }
 function importCode(txt) {
   const t = String(txt || '').trim().replace(/\s+/g, '');
   if (!t.startsWith('HD1.')) throw new Error('That does not look like a Hearthdeep save code.');
   const s = JSON.parse(decodeURIComponent(escape(atob(t.slice(4)))));
-  if (!s || typeof s !== 'object' || !s.equip || typeof s.level !== 'number') throw new Error('The code is damaged or incomplete.');
+  if (!validSave(s)) throw new Error('The code is damaged or incomplete.');
   return s;
 }
 function switchToSave(s) {
@@ -5357,7 +5602,7 @@ const pad = { on: false, atk: false, aim: null, prev: [], navT: 0, idx: -1 };
 const DEAD = 0.22;
 const dz = (v) => (Math.abs(v) < DEAD ? 0 : (v - Math.sign(v) * DEAD) / (1 - DEAD));
 function padFocusables() {
-  const root = !$('#panel').hidden ? $('#panel') : !$('#title').hidden ? $('#title') : !$('#death').hidden ? $('#death') : null;
+  const root = !$('#dlg').hidden ? $('#dlg') : !$('#share').hidden ? $('#share') : !$('#ending').hidden ? $('#ending') : !$('#panel').hidden ? $('#panel') : !$('#title').hidden ? $('#title') : !$('#death').hidden ? $('#death') : PHOTO.on ? $('#photo') : null;
   if (!root) return [];
   return [...root.querySelectorAll('button:not([disabled]), [data-act]:not([disabled]), input, textarea')].filter((b) => b.offsetParent !== null);
 }
@@ -5390,7 +5635,7 @@ function pollPad(dt) {
   const any = b.some(Boolean) || lx || ly || rx || ry;
   if (any && !pad.on) { pad.on = true; if (touchMode) setTouchMode(false); }
   if (!pad.on) { pad.prev = b; return; }
-  const ui = !$('#panel').hidden || !$('#title').hidden || !$('#death').hidden;
+  const ui = !$('#panel').hidden || !$('#title').hidden || !$('#death').hidden || !$('#dlg').hidden || !$('#share').hidden || !$('#ending').hidden || PHOTO.on;
   if (ui) {
     pad.atk = false; stick.x = stick.y = 0;
     pad.navT -= dt;
@@ -5399,7 +5644,7 @@ function pollPad(dt) {
     if ((mx || my) && pad.navT <= 0) { padMove(mx, my); pad.navT = was.some(Boolean) && pad.navT > -0.05 ? 0.12 : 0.28; }
     if (!mx && !my) pad.navT = 0;
     if (hit(0)) { const f = document.activeElement; if (f && f !== document.body && f.click) f.click(); else { const l = padFocusables(); if (l[0]) l[0].focus(); } }
-    if (hit(1)) { if (!$('#panel').hidden) closePanel(); else if (!$('#title').hidden && started) resume(); }
+    if (hit(1)) { if (!$('#dlg').hidden) dlgNext(); else if (!$('#share').hidden) $('#share').hidden = true; else if (PHOTO.on) exitPhoto(); else if (!$('#panel').hidden) closePanel(); else if (!$('#title').hidden && started) resume(); }
     if (hit(4)) padTab(-1); if (hit(5)) padTab(1);
     if (hit(9) && !$('#title').hidden && started) resume();
     pad.prev = b; return;
@@ -5423,10 +5668,162 @@ function pollPad(dt) {
 }
 window.addEventListener('gamepadconnected', () => toast('Controller connected', 'var(--ok)'));
 document.addEventListener('click', (ev) => { if (ev.target && ev.target.id === 'hintOk') dismissHint(); });
+// ================= sharing: frame capture, run card, photo mode =================
+function captureFrame() { Post.render(); try { return renderer.domElement.toDataURL('image/png'); } catch (err) { return null; } }
+const loadImg = (src) => new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+function wrapText(ctx, text, x, y, maxW, lh) {
+  const words = text.split(' '); let line = '';
+  for (const w of words) { const t = line ? line + ' ' + w : w; if (ctx.measureText(t).width > maxW && line) { ctx.fillText(line, x, y); line = w; y += lh; } else line = t; }
+  if (line) ctx.fillText(line, x, y); return y + lh;
+}
+// a portrait: the camera steps round in front of the hero for one frame, then goes back where it was
+function heroPortrait() {
+  const pos = camera.position.clone(), q = camera.quaternion.clone(), fov = camera.fov, vis = P.mesh.visible;
+  const a = P.face + 0.5;
+  camera.position.set(P.x + Math.sin(a) * 3.3, 1.75, P.z + Math.cos(a) * 3.3); camera.lookAt(P.x, 1.0, P.z);
+  camera.fov = 38; camera.updateProjectionMatrix(); P.mesh.visible = true; if (viewmodel.g) viewmodel.g.visible = false;
+  const url = captureFrame();
+  camera.position.copy(pos); camera.quaternion.copy(q); camera.fov = fov; camera.updateProjectionMatrix(); P.mesh.visible = vis;
+  return url;
+}
+async function makeRunCard() {
+  const shot = await loadImg(heroPortrait());
+  const C = clsOf(), W = 1200, H = 630, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const x = cv.getContext('2d'), col = '#' + C.col.toString(16).padStart(6, '0');
+  const bg = x.createLinearGradient(0, 0, W, H); bg.addColorStop(0, '#15131c'); bg.addColorStop(1, '#0c0b10'); x.fillStyle = bg; x.fillRect(0, 0, W, H);
+  if (shot) { // square crop from the middle of the current view
+    const s = Math.min(shot.width, shot.height); x.drawImage(shot, (shot.width - s) / 2, (shot.height - s) / 2, s, s, 0, 0, H, H);
+    const fade = x.createLinearGradient(H - 160, 0, H, 0); fade.addColorStop(0, 'rgba(12,11,16,0)'); fade.addColorStop(1, 'rgba(12,11,16,1)'); x.fillStyle = fade; x.fillRect(H - 160, 0, 160, H);
+  }
+  x.fillStyle = col; x.fillRect(H, 0, 6, H);
+  const L = H + 48;
+  x.fillStyle = '#f2c56b'; x.font = '28px Georgia, serif'; x.fillText('HEARTHDEEP', L, 70);
+  x.fillStyle = '#efe8da'; x.font = '64px Georgia, serif'; x.fillText(`${C.n}, level ${S.level}`, L, 150);
+  x.fillStyle = '#a49f96'; x.font = '22px system-ui, sans-serif';
+  const St = S.story || {}; x.fillText(St.final ? 'Freed the Hollow King' : `Story chapter ${St.ch || 0} of 8`, L, 188);
+  const stats = [['Deepest depth', S.best || 0], ['Bosses slain', S.bossKills], ['Foes slain', fmt(S.kills)], ['Best rift', (S.rift && S.rift.cleared) || 0], ['Best Pit wave', S.arenaBest || 0], ['Achievements', `${Object.keys(S.ach || {}).length}/${ACH.length}`]];
+  stats.forEach(([k, v], i) => {
+    const cx = L + (i % 2) * 250, cy = 250 + Math.floor(i / 2) * 92;
+    x.fillStyle = '#7d786e'; x.font = '16px system-ui, sans-serif'; x.fillText(k.toUpperCase(), cx, cy);
+    x.fillStyle = '#efe8da'; x.font = '600 40px system-ui, sans-serif'; x.fillText(String(v), cx, cy + 44);
+  });
+  const w = S.equip.weapon; x.font = '20px system-ui, sans-serif'; x.fillStyle = w && w.set ? '#5fd38a' : w ? ['#bdb7a7', '#74c269', '#5c8ff2', '#b56ff2', '#f19a33'][w.rarity] : '#a49f96';
+  wrapText(x, w ? `Wielding ${w.name}` : 'Fighting bare-handed', L, 548, W - L - 40, 26);
+  x.fillStyle = '#5a564e'; x.font = '15px system-ui, sans-serif'; x.fillText(`${fmtTime(S.time || 0)} played`, L, 596);
+  return cv.toDataURL('image/png');
+}
+function runSummary() {
+  return `Hearthdeep: ${clsOf().n} level ${S.level}, deepest depth ${S.best || 0}, ${S.bossKills} bosses, ${fmt(S.kills)} foes, best rift ${(S.rift && S.rift.cleared) || 0}, best Pit wave ${S.arenaBest || 0}.`;
+}
+function showShare(url, title, note) {
+  const el = $('#share');
+  el.innerHTML = `<div class="share-in"><header><b>${esc(title)}</b><button class="x" type="button" id="shareX">Close</button></header>
+    <img src="${url}" alt="${esc(title)}"><p class="hint">${esc(note || 'If your browser blocks saving, right-click or long-press the image to save it.')}</p>
+    <div class="acts"><button class="btn" type="button" id="shareCopy">Copy image</button><a class="btn ghost" id="shareSave" download="hearthdeep.png" href="${url}">Save image</a><button class="btn ghost" type="button" id="shareText">Copy summary</button></div></div>`;
+  el.hidden = false; el.dataset.url = url;
+}
+async function copyImage(url) {
+  try { const b = await (await fetch(url)).blob(); await navigator.clipboard.write([new ClipboardItem({ 'image/png': b })]); toast('Image copied.', 'var(--ok)'); }
+  catch (err) { toast('Copying images is blocked here. Save it instead.', 'var(--muted)'); }
+}
+document.addEventListener('click', async (ev) => {
+  const id = ev.target && ev.target.id;
+  if (id === 'shareX') $('#share').hidden = true;
+  else if (id === 'shareCopy') copyImage($('#share').dataset.url);
+  else if (id === 'shareText') { try { await navigator.clipboard.writeText(runSummary()); toast('Summary copied.', 'var(--ok)'); } catch (err) { toast(runSummary(), 'var(--muted)', true); } }
+  else if (id === 'runCard') { const u = await makeRunCard(); showShare(u, 'Run card'); }
+  else if (id === 'mPhoto') { resume(); setTimeout(enterPhoto, 50); }
+});
+
+// ================= photo mode =================
+const PHOTO = { on: false, yaw: 0, pitch: 0.3, dist: 6, tx: 0, ty: 1.2, tz: 0, fov: 50, filter: 'natural', drag: null };
+const FILTERS = {
+  natural: null,
+  warm: [[1.0, 0.9, 0.8], [1.12, 1.0, 0.82], 1.15, 0.35, 0.9, 1.0],
+  cold: [[0.8, 0.92, 1.15], [0.92, 1.0, 1.12], 0.9, 0.4, 0.9, 1.0],
+  noir: [[0.9, 0.9, 0.9], [1.05, 1.05, 1.05], 0.0, 0.6, 1.0, 0.95],
+  vivid: [[0.92, 0.96, 1.05], [1.05, 1.0, 0.95], 1.45, 0.25, 0.8, 1.05],
+};
+function enterPhoto() {
+  if (!started || P.dead || PHOTO.on) return;
+  PHOTO.on = true; PHOTO.tx = P.x; PHOTO.tz = P.z; PHOTO.ty = 1.1;
+  PHOTO.yaw = Math.atan2(camera.position.x - P.x, camera.position.z - P.z); PHOTO.dist = clamp(Math.hypot(camera.position.x - P.x, camera.position.z - P.z), 3, 14);
+  PHOTO.pitch = 0.6; PHOTO.dist = 6; PHOTO.fov = 50; PHOTO.filter = 'natural';
+  document.body.classList.add('photo'); mouseDown = false;
+  if (document.pointerLockElement) document.exitPointerLock();
+  renderPhotoBar(); $('#photo').hidden = false;
+}
+function exitPhoto() {
+  if (!PHOTO.on) return;
+  PHOTO.on = false; document.body.classList.remove('photo'); $('#photo').hidden = true;
+  applyFilter('natural'); updateFov(); snapCamera();
+}
+function applyFilter(k) {
+  PHOTO.filter = k;
+  if (FILTERS[k]) Post.grade(...FILTERS[k]);
+  else if (LV && LV.type === 'town') applyTimeOfDay(true);
+  else Post.grade([0.88, 0.94, 1.12], [1.08, 1.0, 0.9], 1.06, 0.5, 1.0, 0.9);
+  renderPhotoBar();
+}
+function renderPhotoBar() {
+  $('#photo').innerHTML = `<div class="ph-in"><span class="ph-t">Photo mode</span><div class="ph-f">${Object.keys(FILTERS).map((k) => `<button type="button" class="tog${PHOTO.filter === k ? ' on' : ''}" data-ph="${k}">${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}</div>
+    <label class="ph-fov">Lens <input type="range" min="20" max="90" value="${PHOTO.fov}" id="phFov"></label>
+    <div class="ph-a"><button class="btn" type="button" id="phShot">Capture</button><button class="btn ghost" type="button" id="phExit">Done</button></div>
+    <span class="hint">Drag to orbit · wheel to zoom · WASD to move</span></div>`;
+}
+function updPhoto(dt) {
+  const k = 4 * dt;
+  if (keys.KeyW) { PHOTO.tx -= Math.sin(PHOTO.yaw) * k; PHOTO.tz -= Math.cos(PHOTO.yaw) * k; }
+  if (keys.KeyS) { PHOTO.tx += Math.sin(PHOTO.yaw) * k; PHOTO.tz += Math.cos(PHOTO.yaw) * k; }
+  if (keys.KeyA) { PHOTO.tx -= Math.cos(PHOTO.yaw) * k; PHOTO.tz += Math.sin(PHOTO.yaw) * k; }
+  if (keys.KeyD) { PHOTO.tx += Math.cos(PHOTO.yaw) * k; PHOTO.tz -= Math.sin(PHOTO.yaw) * k; }
+  if (keys.KeyQ) PHOTO.ty = Math.max(0.2, PHOTO.ty - k * 0.5); if (keys.KeyE) PHOTO.ty = Math.min(8, PHOTO.ty + k * 0.5);
+  const cp = Math.cos(PHOTO.pitch);
+  camera.position.set(PHOTO.tx + Math.sin(PHOTO.yaw) * cp * PHOTO.dist, PHOTO.ty + Math.sin(PHOTO.pitch) * PHOTO.dist, PHOTO.tz + Math.cos(PHOTO.yaw) * cp * PHOTO.dist);
+  camera.lookAt(PHOTO.tx, PHOTO.ty, PHOTO.tz);
+  if (camera.fov !== PHOTO.fov) { camera.fov = PHOTO.fov; camera.updateProjectionMatrix(); }
+}
+document.addEventListener('click', async (ev) => {
+  const t = ev.target; if (!t) return;
+  if (t.dataset && t.dataset.ph) applyFilter(t.dataset.ph);
+  else if (t.id === 'phExit') exitPhoto();
+  else if (t.id === 'phShot') { const u = captureFrame(); if (u) { sfx('page'); showShare(u, 'Photo'); } }
+});
+document.addEventListener('input', (ev) => { if (ev.target && ev.target.id === 'phFov') PHOTO.fov = +ev.target.value; });
+window.addEventListener('pointerdown', (ev) => { if (PHOTO.on && ev.target === renderer.domElement) PHOTO.drag = { x: ev.clientX, y: ev.clientY }; });
+window.addEventListener('pointermove', (ev) => {
+  if (!PHOTO.on || !PHOTO.drag) return;
+  PHOTO.yaw -= (ev.clientX - PHOTO.drag.x) * 0.006; PHOTO.pitch = clamp(PHOTO.pitch + (ev.clientY - PHOTO.drag.y) * 0.005, -0.3, 1.45);
+  PHOTO.drag = { x: ev.clientX, y: ev.clientY };
+});
+window.addEventListener('pointerup', () => { PHOTO.drag = null; });
+window.addEventListener('wheel', (ev) => { if (PHOTO.on) PHOTO.dist = clamp(PHOTO.dist * (ev.deltaY > 0 ? 1.1 : 0.9), 1.2, 30); }, { passive: true });
+
+// ================= seed codes (daily and shared rifts) =================
+const MOD_L = { swift: 'S', brutal: 'B', horde: 'H', elite: 'E', glass: 'G', dark: 'L', volatile: 'V', drain: 'D', frenzy: 'F' };
+const riftCode = (tier, mods, seed) => `HD-${tier}-${mods.map((m) => MOD_L[m]).join('')}-${(seed >>> 0).toString(36).toUpperCase()}`;
+function parseRiftCode(code) {
+  const m = String(code || '').trim().toUpperCase().match(/^HD-(\d{1,2})-([SBHEGLVDF]{1,3})-([0-9A-Z]{1,8})$/);
+  if (!m) return null;
+  const inv = Object.fromEntries(Object.entries(MOD_L).map(([k, v]) => [v, k]));
+  const mods = [...new Set(m[2].split('').map((c) => inv[c]))];
+  const tier = clamp(+m[1], 1, 30), seed = parseInt(m[3], 36) >>> 0;
+  return seed ? { tier, mods, seed, code: riftCode(tier, mods, seed) } : null;
+}
+function dailyCode() {
+  const d = new Date(), key = `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
+  let h = 2166136261; for (const c of key + 'daily') h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  const seed = h >>> 0;
+  return withSeed(seed, () => { const keys = Object.keys(RIFT_MODS), mods = []; while (mods.length < 2) { const q = pick(keys); if (!mods.includes(q)) mods.push(q); } return riftCode(4, mods, seed); });
+}
 // ================= input =================
 const GAME_KEYS = new Set(['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 window.addEventListener('keydown', (ev) => {
   if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'TEXTAREA')) return;
+  if (dlgOn) { if (['Space', 'Enter', 'KeyE', 'Escape'].includes(ev.code)) { ev.preventDefault(); dlgNext(); } return; }
+  if (!$('#share').hidden) { if (ev.code === 'Escape') $('#share').hidden = true; return; }
+  if (PHOTO.on) { keys[ev.code] = true; if (ev.code === 'Escape' || ev.code === 'KeyP') exitPhoto(); return; }
+  if (ev.code === 'KeyP' && started && $('#title').hidden && !Panel.kind && $('#death').hidden) { enterPhoto(); return; }
   if (!$('#title').hidden) { if (ev.code === 'Escape' && started) resume(); return; }
   if (!$('#death').hidden) return;
   if (Panel.kind) {
@@ -5520,7 +5917,7 @@ function slotLine(i) {
 }
 function showTitle() {
   if (started && !titleSlots) {
-    $('#menuBtns').innerHTML = '<button class="btn" type="button" id="mResume">Resume</button><button class="btn ghost" type="button" id="mCodex">Codex</button><button class="btn ghost" type="button" id="mSlots">Change hero</button>'
+    $('#menuBtns').innerHTML = '<button class="btn" type="button" id="mResume">Resume</button><button class="btn ghost" type="button" id="mCodex">Codex</button><button class="btn ghost" type="button" id="mPhoto">Photo mode</button><button class="btn ghost" type="button" id="mSlots">Change hero</button>'
       + `<button class="btn ghost" type="button" id="mSound">${muted ? 'Sound off' : 'Sound on'}</button>`;
   } else {
     $('#menuBtns').innerHTML = `<div class="slots">${[0, 1, 2].map((i) => { const l = slotLine(i); return `<div class="slotrow${i === SET.slot && started ? ' cur' : ''}"><button class="btn${l ? '' : ' ghost'} slotb" type="button" id="mSlot${i}"><b>Slot ${i + 1}</b><span>${l ? esc(l) : 'Empty · begin a new hero'}</span></button>${l ? `<button class="btn ghost sm" type="button" id="mDel${i}" aria-label="Erase slot ${i + 1}">Erase</button>` : ''}</div>`; }).join('')}</div>`
@@ -5566,7 +5963,7 @@ $('#title').addEventListener('click', (ev) => {
     titleSlots = false; begin();
   } else if (id && id.startsWith('mDel')) { eraseSlot = +id.slice(4); $('#confirmNew').hidden = false; $('#confirmNew span').textContent = `Erase slot ${eraseSlot + 1}? That hero is gone for good.`; $('#btnWipe').focus(); }
   else if (id === 'btnWipe') {
-    try { localStorage.removeItem(SLOT_KEYS[eraseSlot]); } catch (err) { /* ignore */ }
+    try { localStorage.removeItem(SLOT_KEYS[eraseSlot]); localStorage.removeItem(SLOT_KEYS[eraseSlot] + '.bak'); } catch (err) { /* ignore */ }
     if (eraseSlot === SET.slot) { started = false; freshHero(); $('#hud').hidden = true; $('#touch').hidden = true; }
     eraseSlot = -1; titleSlots = !started ? false : titleSlots; showTitle();
   }
@@ -5613,13 +6010,8 @@ function perfTick(dt, cpuMs) {
 const timer = new THREE.Timer();
 timer.connect(document);
 let hudT = 0, miniT = 0, saveT = 0, achT = 0;
-function frame(ts) {
-  timer.update(ts);
-  const dt = Math.min(0.05, timer.getDelta());
-  elapsed += dt; U_TIME.value = elapsed;
-  renderer.info.reset();
-  const t0 = performance.now();
-  if (!levelReady) { perfTick(dt, 0); return; }
+let DBG = { turbo: 0 };
+function simTick(dt) {
   let gdt = dt;
   if (hitStop > 0) { hitStop -= dt; gdt = dt * 0.06; }
   if (slowT > 0) { slowT -= dt; gdt *= 0.3; } // the moment a boss falls
@@ -5653,9 +6045,21 @@ function frame(ts) {
     updInteract();
     saveT += dt; if (saveT > 20) { saveT = 0; save(); }
   }
+}
+function frame(ts) {
+  timer.update(ts);
+  const dt = Math.min(0.05, timer.getDelta());
+  elapsed += dt; U_TIME.value = elapsed;
+  renderer.info.reset();
+  const t0 = performance.now();
+  if (!levelReady) { perfTick(dt, 0); return; }
+  // DBG.turbo runs extra fixed simulation steps per rendered frame (used by the autoplay test bots)
+  const steps = 1 + (DBG.turbo | 0);
+  for (let st = 0; st < steps; st++) simTick(st ? 0.05 : dt);
+  const gdt = dt * (hitStop > 0 ? 0.06 : 1) * (slowT > 0 ? 0.3 : 1); // effects follow the slowed clock too
   for (const s of spinners) s.rotation.y += dt * (s.userData.spin || 1);
   updParts(gdt); updSwings(dt); updRings(dt); updTorchLights(dt); updBlobs(); updLock();
-  if (P.mesh) updCamera(dt);
+  if (PHOTO.on) updPhoto(dt); else if (P.mesh) updCamera(dt);
   updTrail(gdt); updFacers();
   musicTick();
   // shader time, point-size scale and the things that follow the camera
@@ -5690,5 +6094,5 @@ function boot(data) {
 }
 if (window.claude && window.claude.hot && window.claude.hot.snapshot) window.claude.hot.snapshot(() => ({ S, started }));
 if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(boot); else boot((window.claude && window.claude.hot && window.claude.hot.data) || {});
-return { get S() { return S; }, get RUN() { return RUN; }, get P() { return P; }, get LV() { return LV; }, enemies, renderer, startDelve, begin, freshHero, openPanel, closePanel, loadDungeon, get ready() { return levelReady; }, perf, debug: { snapCamera, nextFloor, loadTown, rollCaravan, startRift, startArena, die, gainXP, hurtPlayer, calcStats, xpNeed, ARCH, BIOMES, genItem, makeSetItem, scene, sun, hemi, sky, walkable, spawnEnemy, bossPattern, get LVL() { return LV; }, applyTimeOfDay, get pet() { return pet; }, villagers, zones, chooseClass, checkAch, playerAttack, CAM, setCamMode, useSkill, cycleLock, get lockT() { return lockT; }, corpses, skillCd, questEvent, makeQuestOffers, claimQuest, get trail() { return trail; } } };
+return { get S() { return S; }, get RUN() { return RUN; }, get P() { return P; }, get LV() { return LV; }, enemies, renderer, startDelve, begin, freshHero, openPanel, closePanel, loadDungeon, get ready() { return levelReady; }, perf, debug: { parseRiftCode, setTouchMode, returnToTown, afterGear, DBG, stick, interacts, interact, usePotion, get skillCd() { return skillCd; }, isPaused, snapCamera, nextFloor, loadTown, rollCaravan, startRift, startArena, die, gainXP, hurtPlayer, calcStats, xpNeed, ARCH, BIOMES, genItem, makeSetItem, scene, sun, hemi, sky, walkable, spawnEnemy, bossPattern, get LVL() { return LV; }, applyTimeOfDay, get pet() { return pet; }, villagers, zones, chooseClass, checkAch, playerAttack, CAM, setCamMode, useSkill, cycleLock, get lockT() { return lockT; }, corpses, skillCd, questEvent, makeQuestOffers, claimQuest, get trail() { return trail; } } };
 };

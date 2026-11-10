@@ -90,7 +90,7 @@ function hud() {
     if (LV.boss) o = bossRef ? `Slay ${bossRef.name}` : enemies.some((e) => e.boss && !e.dead) ? 'Something vast waits beyond the antechamber' : 'Take the stairs down or the way home';
     else o = 'Find the stairs down';
     if (LV.depth % 5 === 1 && !RUN.rift) o += ' · A way home stands in the first room';
-    if (RUN && RUN.rift) { const R = RUN.rift, t = riftTime(); $('#hLoc').textContent = `${R.weekly ? 'Weekly Rift' : 'Rift tier ' + R.tier} · floor ${Math.min(R.floor, RIFT_FLOORS)}/${RIFT_FLOORS} · ${B.name}`; o = `${fmtClock(t)} / par ${fmtClock(R.par)} · ${R.mods.map((m) => RIFT_MODS[m].n).join(', ')}${R.floor >= RIFT_FLOORS ? (R.done ? ' · The seal is open' : ' · Slay the Rift Guardian') : ''}`; $('#hObj').classList.toggle('late', t > R.par && !R.done); }
+    if (RUN && RUN.rift) { const R = RUN.rift, t = riftTime(); $('#hLoc').textContent = `${R.weekly ? 'Weekly Rift' : R.code ? 'Seeded rift ' + R.code : 'Rift tier ' + R.tier} · floor ${Math.min(R.floor, RIFT_FLOORS)}/${RIFT_FLOORS} · ${B.name}`; o = `${fmtClock(t)} / par ${fmtClock(R.par)} · ${R.mods.map((m) => RIFT_MODS[m].n).join(', ')}${R.floor >= RIFT_FLOORS ? (R.done ? ' · The seal is open' : ' · Slay the Rift Guardian') : ''}`; $('#hObj').classList.toggle('late', t > R.par && !R.done); }
     else if (RUN && RUN.arena) { const A = RUN.arena, left = enemies.filter((e) => !e.dead).length; $('#hLoc').textContent = `The Pit · wave ${A.wave} · depth ${LV.depth}`; o = left ? `${left} foe${left > 1 ? 's' : ''} left · best wave ${S.arenaBest || 0}` : A.exit ? 'Next wave soon. Step into the portal to leave.' : 'The gates are opening...'; }
     else $('#hObj').classList.remove('late');
     $('#hObj').textContent = o;
@@ -122,7 +122,7 @@ function hud() {
 
 // ================= panels =================
 const Panel = { kind: null, tab: null, sel: null, forge: {}, elix: {} };
-function isPaused() { return !started || Panel.kind !== null || !$('#title').hidden || !$('#death').hidden; }
+function isPaused() { return !started || Panel.kind !== null || !$('#title').hidden || !$('#death').hidden || dlgOn || PHOTO.on || !$('#ending').hidden || !$('#share').hidden; }
 function openPanel(kind, tab) {
   Panel.kind = kind; Panel.sel = null;
   Panel.tab = tab || { bag: 'gear', home: 'home', smith: 'buy', trader: 'buy', alch: 'buy', delve: 'delve', elder: 'tasks', class: 'class', codex: 'ach' }[kind];
@@ -268,7 +268,7 @@ function renderPanel() {
     }
     case 'codex': {
       title = 'Codex'; sub = `${Object.keys(S.ach).length}/${ACH.length} achievements · ${fmtTime(S.time || 0)} played`;
-      tabs = [['ach', 'Achievements'], ['beasts', 'Bestiary'], ['records', 'Records'], ['save', 'Save file']];
+      tabs = [['ach', 'Achievements'], ['story', 'Story'], ['beasts', 'Bestiary'], ['records', 'Records'], ['save', 'Save file']];
       body = codexHtml(p.tab);
       break;
     }
@@ -414,6 +414,9 @@ function doAct(d) {
     case 'weekly': startRift(0, true); return;
     case 'riftT': Panel.riftT = +d.t; break;
     case 'pit': startArena(); return;
+    case 'daily': { const c = parseRiftCode(dailyCode()); if (c) startRift(0, false, c); return; }
+    case 'seedGo': { const inp = $('#seedIn'), c = parseRiftCode(inp && inp.value); if (!c) { const m = $('#seedMsg'); if (m) m.textContent = 'That is not a rift code. Codes look like HD-4-SB-1A2B3C.'; return; } startRift(0, false, c); return; }
+    case 'copyCode': { const t = d.code; try { navigator.clipboard.writeText(t).then(() => toast('Code copied: ' + t, 'var(--ok)'), () => toast(t, 'var(--muted)', true)); } catch (err) { toast(t, 'var(--muted)', true); } return; }
     case 'cvBuy': caravanBuy(+d.i); break;
     case 'cvLook': Panel.cvLook = +d.i; break;
     default: if (metaAct(d, it) === 'stop') return;

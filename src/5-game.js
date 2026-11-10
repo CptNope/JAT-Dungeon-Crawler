@@ -38,6 +38,7 @@ function loadTown() {
   releaseLock(); setMusic('town');
   P.u.uRim.value.setRGB(0.05, 0.06, 0.08);
   spawnPet(); spawnVillagers(); spawnCaravan(); applyTimeOfDay(true);
+  setTimeout(() => { if (LV && LV.type === 'town' && started && S.cls) storyOnTown(); }, 900);
   warmLevel();
 }
 // threejs-performance, "Shader compile stalls": build every program the new level needs
@@ -73,7 +74,8 @@ function populate() {
   };
   if (L.boss) {
     const a = L.arena;
-    spawnEnemy('grunt', a.x + a.w / 2, a.y + 6, { boss: true });
+    if (d === 40 && !story().final) spawnHollowKing(a.x + a.w / 2, a.y + 6); // the end of the story
+    else spawnEnemy('grunt', a.x + a.w / 2, a.y + 6, { boss: true });
     const ante = L.rooms[1];
     for (let k = 0; k < 3 + Math.floor(d / 10); k++) { const [x, z] = spot(ante); spawnEnemy(wpick(pool), x, z, { champ: k === 0 }); }
     addChest(...spot(ante, 1.5));
@@ -100,6 +102,12 @@ function populate() {
     else addStairs(er.x + er.w / 2, er.y + er.h / 2);
     placeSpecialRooms(vault);
     placeTraps();
+    maybePlacePage(L.rooms);
+    // shrines and altars claim tiles after the foes are placed: nudge anyone left standing inside one (found by the autoplay bot)
+    for (const e of enemies) {
+      if (walkable(e.x, e.z)) continue;
+      search: for (let r = 1; r <= 4; r++) for (let a = 0; a < 8; a++) { const x = e.x + Math.sin(a * 0.785) * r * 0.7, z = e.z + Math.cos(a * 0.785) * r * 0.7; if (walkable(x, z)) { e.x = x; e.z = z; e.mesh.position.set(x, 0, z); break search; } }
+    }
   }
   if (d % 5 === 1 && !RUN.rift) addPortalHome(L.start.x + 2.2, L.start.z);
   // starting room gets a herb or ore sometimes
@@ -206,6 +214,7 @@ function nextFloor() {
   loadDungeon(d);
 }
 function bossDefeated(e) {
+  storyBossSlain(e);
   setMusic('dng:' + biomeOf(RUN.depth).id); questEvent('boss', RUN.depth);
   S.bossKills++; S.slain.push({ n: e.name, c: e.color });
   const wp = RUN.depth + 1;
@@ -280,7 +289,7 @@ function tryDodge() {
   if (P.dodgeCd > 0 || P.dead || isPaused()) return;
   const mv = Math.hypot(P.mx || 0, P.mz || 0) > 0.1;
   P.dodgeDir = mv ? Math.atan2(P.mx, P.mz) : P.face;
-  P.dodgeT = 0.2; P.dodgeCd = 0.85 * ST.rollM; P.iframes = Math.max(P.iframes, 0.32); P.ghostT = 0;
+  P.dodgeT = 0.2; P.perfect = false; P.dodgeCd = 0.85 * ST.rollM; P.iframes = Math.max(P.iframes, 0.32); P.ghostT = 0;
   sfx('dodge'); burst(P.x, 0.2, P.z, 0xc8c0a8, 6, 2, 0.1);
 }
 function usePotion(greater) {
@@ -583,8 +592,27 @@ function drawMini() {
 // ================= persistence =================
 // three save slots; slot 1 keeps the original key so older saves load as they were
 const saveKey = () => ['hearthdeep.save.v1', 'hearthdeep.save.v1.s2', 'hearthdeep.save.v1.s3'][SET.slot || 0];
-function save() { try { if (S && started) localStorage.setItem(saveKey(), JSON.stringify(S)); } catch (err) { /* storage unavailable */ } }
-function loadSave() { try { const s = localStorage.getItem(saveKey()); return s ? JSON.parse(s) : null; } catch (err) { return null; } }
+// Every save also keeps the previous good copy as a backup; loading falls back to it if the main copy is damaged.
+let saveWarned = false, saveN = 0;
+function save() {
+  if (!S || !started) return;
+  try {
+    const json = JSON.stringify(S), k = saveKey();
+    if (++saveN % 5 === 1) { const prev = localStorage.getItem(k); if (prev && validSave(safeParse(prev))) localStorage.setItem(k + '.bak', prev); }
+    localStorage.setItem(k, json);
+  } catch (err) { if (!saveWarned) { saveWarned = true; toast('Could not save: browser storage is full or blocked.', 'var(--bad)', true); } }
+}
+const safeParse = (t) => { try { return t ? JSON.parse(t) : null; } catch (err) { return null; } };
+const validSave = (s) => !!(s && typeof s === 'object' && s.equip && typeof s.equip === 'object' && Number.isFinite(s.level) && s.level >= 1 && Array.isArray(s.inv));
+function loadSave() {
+  try {
+    const k = saveKey(), main = safeParse(localStorage.getItem(k));
+    if (validSave(main)) return main;
+    const bak = safeParse(localStorage.getItem(k + '.bak'));
+    if (validSave(bak)) { setTimeout(() => toast('Your save was damaged; restored the last backup.', 'var(--brass-2)', true), 1500); return bak; }
+    return null;
+  } catch (err) { return null; }
+}
 function fixUid() {
   let m = 0; const all = [...S.inv, ...S.stash, ...Object.values(S.equip).filter(Boolean), ...((S.shop && S.shop.items) || [])];
   for (const it of all) m = Math.max(m, it.id || 0);
@@ -597,6 +625,20 @@ function normalizeSave(s) {
   for (const k of ['tal', 'gems', 'stats', 'ach', 'bestiary', 'decor', 'hints']) if (!s[k] || typeof s[k] !== 'object') s[k] = {};
   if (!Array.isArray(s.records)) s.records = [];
   if (typeof s.shards !== 'number') s.shards = 0;
+  if (!s.story || typeof s.story !== 'object' || !Array.isArray(s.story.pages)) s.story = null;
+  if (!s.seedBest || typeof s.seedBest !== 'object') s.seedBest = {};
   if (!s.rift || typeof s.rift !== 'object') s.rift = { max: 1, best: {} };
+  // repair anything a bad write or an old version could have left behind
+  for (const k of ['gold', 'xp', 'kills', 'deaths', 'runs', 'best', 'bossKills', 'potions', 'gpotions', 'scrolls', 'shards', 'time']) if (!Number.isFinite(s[k]) || s[k] < 0) s[k] = d[k] || 0;
+  s.level = Math.max(1, Math.floor(s.level) || 1);
+  const okItem = (it) => it && typeof it === 'object' && SLOTS.includes(it.slot) && Array.isArray(it.aff) && Number.isFinite(it.il);
+  s.inv = (Array.isArray(s.inv) ? s.inv : []).filter(okItem);
+  s.stash = (Array.isArray(s.stash) ? s.stash : []).filter(okItem);
+  for (const sl of SLOTS) if (s.equip[sl] && !okItem(s.equip[sl])) s.equip[sl] = null;
+  for (const it of [...s.inv, ...s.stash, ...Object.values(s.equip)]) if (it && it.sock && !Array.isArray(it.gems)) it.gems = Array(it.sock).fill(null);
+  if (s.cls && !CLASSES[s.cls]) s.cls = null;
+  if (!Array.isArray(s.waypoints) || !s.waypoints.length) s.waypoints = [1];
+  if (!Array.isArray(s.slain)) s.slain = [];
+  if (s.mats && typeof s.mats === 'object') { for (const k of Object.keys(s.mats)) if (!Number.isFinite(s.mats[k])) s.mats[k] = 0; } else s.mats = {};
   return s;
 }

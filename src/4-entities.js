@@ -176,7 +176,7 @@ function wake(e) {
 }
 function los(ax, az, bx, bz) {
   const d = Math.hypot(bx - ax, bz - az); const n = Math.ceil(d / 0.4);
-  for (let i = 1; i < n; i++) { const t = i / n; if (!walkable(lerp(ax, bx, t), lerp(az, bz, t))) return false; }
+  for (let i = 1; i < n; i++) { const t = i / n; if (blocksShot(lerp(ax, bx, t), lerp(az, bz, t))) return false; }
   return true;
 }
 function collide(o) {
@@ -250,6 +250,11 @@ function updEnemy(e, dt) {
   // statuses
   let spdM = 1, atkM = 1;
   if (e.chillT > 0) { e.chillT -= dt; spdM *= 0.5; atkM *= 0.7; }
+  if (e.frozenT > 0) { // frozen solid: no moving, no attacking
+    e.frozenT -= dt; e.wind = 0; e.charging = 0;
+    if (e.frozenT <= 0 && e.rim0) { e.u.uRim.value.copy(e.rim0); e.rim0 = null; }
+    else { e.mesh.position.set(e.x, 0, e.z); return; }
+  }
   if (e.burnT > 0) { e.burnT -= dt; e.hpTick = (e.hpTick || 0) + dt; if (e.hpTick > 0.5) { e.hpTick = 0; damageEnemy(e, e.burnD * 0.5, false, 0, 0, 0, false, 'burn'); if (e.dead) return; } }
   if (e.regen) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * e.regen * dt);
   if (e.wardT > 0) e.wardT -= dt;
@@ -546,7 +551,7 @@ function updTeles(dt) {
       burst(t.x, 0.4, t.z, t.col, 12, 5, 0.16);
       if (t.o.player) {
         for (const e of enemies) if (!e.dead && Math.hypot(e.x - t.x, e.z - t.z) < t.r + e.r) damageEnemy(e, t.dmg, false, 3, (e.x - t.x), (e.z - t.z), false);
-      } else if (Math.hypot(P.x - t.x, P.z - t.z) < t.r + P.r * 0.5) hurtPlayer(t.dmg, null);
+      } else if (Math.hypot(P.x - t.x, P.z - t.z) < t.r + P.r * 0.5) hurtPlayer(t.dmg, t);
     }
   }
 }
@@ -565,7 +570,7 @@ function updProjs(dt) {
   for (let i = projs.length - 1; i >= 0; i--) {
     const p = projs[i];
     p.life -= dt; p.x += p.vx * dt; p.z += p.vz * dt;
-    let dead = p.life <= 0 || !walkable(p.x, p.z);
+    let dead = p.life <= 0 || blocksShot(p.x, p.z); // shots fly over chasms, not through walls
     if (!dead && p.owner === 'p') {
       for (const e of enemies) {
         if (e.dead || p.hit.has(e.id)) continue;
@@ -590,7 +595,7 @@ function rollDmg(e) {
     if (e.hp < e.maxHp * 0.3) d *= 1 + 0.15 * tal('executioner');
     if (e.champ || e.leader || e.boss) d *= 1 + 0.1 * tal('huntersmark');
   }
-  const crit = Math.random() * 100 < ST.crit;
+  const crit = P.nextCrit || Math.random() * 100 < ST.crit; P.nextCrit = false; // a perfect roll or parry guarantees the next crit
   if (crit) d *= 1.5 + ST.critd / 100;
   return { d, crit };
 }
@@ -632,10 +637,38 @@ function resolveMelee(fin) {
   }
   if (ST.powers.split) for (const k of [-1, 1]) spawnProj({ x: P.x, z: P.z, a: a + k * 0.3, spd: 14, owner: 'p', size: 0.2, col: 0x9fe8ff, pierce: 1, mult: 0.5, life: 0.7 });
 }
+// ================= elements and combos =================
+// Each biome's foes shrug off some elements and fear others; status effects combine.
+let hitElem = null; // set around a skill's damage (see withElem)
+const withElem = (el, fn) => { const p = hitElem; hitElem = el; try { return fn(); } finally { hitElem = p; } };
+const RES = {
+  crypt: { fire: 1.25, cold: 0.75 }, fungal: { fire: 1.3, shock: 0.8 }, magma: { fire: 0.5, cold: 1.3 }, frost: { cold: 0.5, fire: 1.3 },
+  void: { arcane: 0.6, phys: 1.2 }, drowned: { fire: 0.7, shock: 1.4 }, clock: { phys: 0.75, shock: 1.4 }, blood: { fire: 1.35, arcane: 0.8 },
+};
+const ELEM_N = { phys: 'physical', fire: 'fire', cold: 'cold', shock: 'lightning', arcane: 'arcane' };
+const elemOf = (kind) => hitElem || (kind === 'burn' ? 'fire' : ST && ST.wk === 'staff' ? 'arcane' : 'phys');
+const resOf = (el) => (RUN && RES[biomeOf(RUN.depth).id] && RES[biomeOf(RUN.depth).id][el]) || 1;
+function chillEnemy(e, t) { // chilling a chilled foe freezes it solid
+  if (e.dead) return;
+  if (e.chillT > 0 && !e.boss && !(e.frozenT > 0)) { e.frozenT = e.leader ? 0.8 : 1.5; e.chillT = 0; floatNum(e.x, e.h * e.scale + 0.7, e.z, 'Frozen', 'xp'); burst(e.x, e.h * e.scale * 0.6, e.z, 0xbfe8ff, 10, 2, 0.14); if (!e.rim0) e.rim0 = e.u.uRim.value.clone(); e.u.uRim.value.setRGB(0.3, 0.6, 1.0); }
+  else if (!(e.frozenT > 0)) e.chillT = Math.max(e.chillT, t);
+}
+function comboBurst(e, r, col, mult, el) {
+  ringFx(e.x, e.z, 0.3, r, 0.3, col, 2.4); burst(e.x, 0.8, e.z, col, 16, 6, 0.16);
+  withElem(el, () => { for (const o of enemies) if (!o.dead && o !== e && Math.hypot(o.x - e.x, o.z - e.z) < r + o.r) damageEnemy(o, ST.dmg * mult, false, 2, o.x - e.x, o.z - e.z, false, 'combo'); });
+}
 function damageEnemy(e, d, crit, kb, nx, nz, proc, kind) {
   if (e.dead) return;
   wake(e);
   let m = 1 - e.arm;
+  const el = elemOf(kind), rm = resOf(el); m *= rm;
+  if (rm !== 1 && kind !== 'burn' && !e.resShown) { e.resShown = 1; floatNum(e.x, e.h * e.scale + 0.9, e.z, rm > 1 ? `Weak to ${ELEM_N[el]}` : `Resists ${ELEM_N[el]}`, rm > 1 ? 'crit' : 'xp'); }
+  let combo = null;
+  if (kind !== 'burn' && kind !== 'combo') {
+    if (e.frozenT > 0 && (crit || kb >= 4.5)) { m *= 2; combo = ['Shatter', 0xbfe8ff, 'cold', 2.4, 0.5]; e.frozenT = 0; }
+    else if (el === 'fire' && e.chillT > 0) { m *= 1.5; combo = ['Thermal shock', 0xffc8a0, 'fire', 0, 0]; e.chillT = 0; }
+    else if (el === 'shock' && e.burnT > 0) { combo = ['Overload', 0x9fd8ff, 'shock', 2.6, 0.6]; e.burnT = 0; }
+  }
   if (e.auraOn === 'ward') m *= 0.6;
   if (e.wardT > 0) m *= 0.5;
   d *= m;
@@ -644,6 +677,7 @@ function damageEnemy(e, d, crit, kb, nx, nz, proc, kind) {
   // heavy blows and crits stagger ordinary foes out of a wind-up
   if (proc && e.wind > 0 && !e.boss && !e.leader && (crit || kb >= 4.5)) { e.wind = 0; e.cd = Math.max(e.cd, 0.6); floatNum(e.x, e.h * e.scale + 0.6, e.z, 'Staggered', 'xp'); }
   floatNum(e.x, e.h * e.scale + 0.2, e.z, fmt(Math.max(1, d)), crit ? 'crit' : kind === 'burn' ? 'xp' : '');
+  if (combo) { floatNum(e.x, e.h * e.scale + 1.1, e.z, combo[0] + '!', 'crit'); sfx('crit'); addHitStop(0.05); if (combo[3]) comboBurst(e, combo[3], combo[1], combo[4], combo[2]); else burst(e.x, 0.9, e.z, combo[1], 12, 4, 0.14); stat('combos'); }
   if (kb && !e.boss && e.ai !== 'totem') { const k = kb * (e.arch === 'brute' || e.arch === 'warden' ? 0.4 : 1) * (e.leader ? 0.5 : 1); e.kx += nx * k * 2.2; e.kz += nz * k * 2.2; }
   ensureBar(e);
   if (proc) {
@@ -651,8 +685,8 @@ function damageEnemy(e, d, crit, kb, nx, nz, proc, kind) {
     sfx('hit');
     if (ST.ls > 0) healPlayer(d * ST.ls / 100, true);
     if (Math.random() * 100 < ST.burn) { e.burnT = 3; e.burnD = ST.dmg * 0.3 * ST.burnM; }
-    if (Math.random() * 100 < ST.chill) e.chillT = 2.5;
-    if (ST.powers.chain && chance(0.3)) chainLightning(e, d * 0.6);
+    if (Math.random() * 100 < ST.chill) chillEnemy(e, 2.5);
+    if (ST.powers.chain && chance(0.3)) withElem('shock', () => chainLightning(e, d * 0.6));
     if (ST.powers.frenzy) { P.frenzy = Math.min(10, P.frenzy + 1); P.frenzyT = 2; }
   }
   if (e.hp <= 0) killEnemy(e);
@@ -690,8 +724,26 @@ function killEnemy(e, noLoot) {
   if (e.leader) { toast(`Leader slain: ${e.name}`, 'var(--r4)'); for (const o of enemies) if (o.lead === e) o.lead = null; }
   if (e.boss) bossDefeated(e);
 }
+// a roll that slips a blow at the last moment, or a swing that meets one, earns a reward
+function perfectRoll() {
+  P.perfect = true; P.nextCrit = true; slowT = Math.max(slowT, 0.4);
+  for (let i = 0; i < 3; i++) skillCd[i] = Math.max(0, skillCd[i] - 1.5);
+  floatNum(P.x, 2.3, P.z, 'Perfect roll', 'crit'); ringFx(P.x, P.z, 0.2, 2.2, 0.25, 0x9fd4ff, 2.4); sfx('blink'); stat('perfects');
+}
+function tryParry(src) {
+  if (!src || !src.ai || !['melee', 'charger', 'leaper'].includes(src.ai) || src.boss) return false;
+  if (!(P.swingT > 0) || P.swingDur - P.swingT > 0.16 || Math.hypot(src.x - P.x, src.z - P.z) > 3.2 || WEAPONS[ST.wk].ranged) return false;
+  P.nextCrit = true; P.iframes = 0.2;
+  src.wind = 0; src.cd = Math.max(src.cd, 1.6); src.chillT = Math.max(src.chillT, 0.8);
+  const dx = src.x - P.x, dz = src.z - P.z, l = Math.hypot(dx, dz) || 1; src.kx += dx / l * 9; src.kz += dz / l * 9;
+  floatNum(src.x, src.h * src.scale + 0.7, src.z, 'Parried', 'crit'); burst((src.x + P.x) / 2, 1.1, (src.z + P.z) / 2, 0xfff2c8, 14, 5, 0.12);
+  addHitStop(0.08); shake(0.2); sfx('block'); stat('parries');
+  return true;
+}
 function hurtPlayer(d, src) {
+  if (src && P.dodgeT > 0 && !P.perfect && LV.type === 'dungeon' && !P.dead) perfectRoll();
   if (P.iframes > 0 || P.dead || LV.type !== 'dungeon') return;
+  if (tryParry(src)) return;
   if (Math.random() * 100 < ST.block) { floatNum(P.x, 2, P.z, 'Blocked', 'xp'); sfx('block'); burst(P.x + Math.sin(P.face) * 0.5, 1, P.z + Math.cos(P.face) * 0.5, 0xd8e0ff, 6, 3, 0.1); P.iframes = 0.15; return; }
   if (Math.random() * 100 < ST.evade) { floatNum(P.x, 2, P.z, 'Evaded', 'xp'); P.iframes = 0.15; return; }
   const red = ST.armor / (ST.armor + 40 + 9 * RUN.depth);

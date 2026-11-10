@@ -7,7 +7,7 @@ const pad = { on: false, atk: false, aim: null, prev: [], navT: 0, idx: -1 };
 const DEAD = 0.22;
 const dz = (v) => (Math.abs(v) < DEAD ? 0 : (v - Math.sign(v) * DEAD) / (1 - DEAD));
 function padFocusables() {
-  const root = !$('#panel').hidden ? $('#panel') : !$('#title').hidden ? $('#title') : !$('#death').hidden ? $('#death') : null;
+  const root = !$('#dlg').hidden ? $('#dlg') : !$('#share').hidden ? $('#share') : !$('#ending').hidden ? $('#ending') : !$('#panel').hidden ? $('#panel') : !$('#title').hidden ? $('#title') : !$('#death').hidden ? $('#death') : PHOTO.on ? $('#photo') : null;
   if (!root) return [];
   return [...root.querySelectorAll('button:not([disabled]), [data-act]:not([disabled]), input, textarea')].filter((b) => b.offsetParent !== null);
 }
@@ -40,7 +40,7 @@ function pollPad(dt) {
   const any = b.some(Boolean) || lx || ly || rx || ry;
   if (any && !pad.on) { pad.on = true; if (touchMode) setTouchMode(false); }
   if (!pad.on) { pad.prev = b; return; }
-  const ui = !$('#panel').hidden || !$('#title').hidden || !$('#death').hidden;
+  const ui = !$('#panel').hidden || !$('#title').hidden || !$('#death').hidden || !$('#dlg').hidden || !$('#share').hidden || !$('#ending').hidden || PHOTO.on;
   if (ui) {
     pad.atk = false; stick.x = stick.y = 0;
     pad.navT -= dt;
@@ -49,7 +49,7 @@ function pollPad(dt) {
     if ((mx || my) && pad.navT <= 0) { padMove(mx, my); pad.navT = was.some(Boolean) && pad.navT > -0.05 ? 0.12 : 0.28; }
     if (!mx && !my) pad.navT = 0;
     if (hit(0)) { const f = document.activeElement; if (f && f !== document.body && f.click) f.click(); else { const l = padFocusables(); if (l[0]) l[0].focus(); } }
-    if (hit(1)) { if (!$('#panel').hidden) closePanel(); else if (!$('#title').hidden && started) resume(); }
+    if (hit(1)) { if (!$('#dlg').hidden) dlgNext(); else if (!$('#share').hidden) $('#share').hidden = true; else if (PHOTO.on) exitPhoto(); else if (!$('#panel').hidden) closePanel(); else if (!$('#title').hidden && started) resume(); }
     if (hit(4)) padTab(-1); if (hit(5)) padTab(1);
     if (hit(9) && !$('#title').hidden && started) resume();
     pad.prev = b; return;

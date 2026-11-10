@@ -14,10 +14,10 @@ const SKILL_DEFS = {
   cry: { n: 'War Cry', cd: 16, d: 'Roar: foes nearby are thrown back and you gain +30% damage and +30% armor for 8 seconds. Heals 10%.' },
   volley: { n: 'Volley', cd: 5, d: 'Loose a fan of nine arrows, each dealing 70% damage. Works with any weapon.' },
   dash: { n: 'Shadow Dash', cd: 7, d: 'Dash six paces through foes, striking each for 200% damage. Nothing can hit you mid-dash.' },
-  rain: { n: 'Rain of Arrows', cd: 12, d: 'Arrows fall on a target area for two seconds, hitting every foe inside ten times for 45% damage.' },
-  nova: { n: 'Ember Nova', cd: 9, d: 'A ring of fire bursts from you for 250% damage, hurling foes back and setting them alight.' },
-  blink: { n: 'Blink', cd: 6, d: 'Fold space and step up to seven paces away. Frost bursts where you stood: 120% damage and a deep chill.' },
-  meteor: { n: 'Meteor', cd: 11, d: 'Call a falling star onto the target area: 380% damage and a burning crater.' },
+  rain: { n: 'Rain of Arrows', cd: 12, d: 'Storm-tipped arrows fall on a target area for two seconds, hitting every foe inside ten times for 45% lightning damage. Lightning on a burning foe overloads.' },
+  nova: { n: 'Ember Nova', cd: 9, d: 'A ring of fire bursts from you for 250% fire damage, hurling foes back and setting them alight. Fire on a chilled foe is a thermal shock.' },
+  blink: { n: 'Blink', cd: 6, d: 'Fold space and step up to seven paces away. Frost bursts where you stood: 120% cold damage and a deep chill. Chilling a chilled foe freezes it.' },
+  meteor: { n: 'Meteor', cd: 11, d: 'Call a falling star onto the target area: 380% fire damage and a burning crater. A critical hit shatters frozen foes.' },
 };
 const SKILL_LVL = [1, 4, 8];
 

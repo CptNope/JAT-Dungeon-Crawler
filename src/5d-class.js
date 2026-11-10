@@ -71,7 +71,7 @@ function classSkill(s) {
       if (LV.type === 'dungeon') for (const e of enemies) {
         if (e.dead) continue; const dx = e.x - ox, dz = e.z - oz, d = Math.hypot(dx, dz);
         if (d > 3.2 + e.r) continue;
-        const q = rollDmg(e); damageEnemy(e, q.d * 1.2 * ST.skillM, q.crit, 3, dx / (d || 1), dz / (d || 1), true); if (!e.dead) e.chillT = 3.5;
+        const q = rollDmg(e); withElem('cold', () => damageEnemy(e, q.d * 1.2 * ST.skillM, q.crit, 3, dx / (d || 1), dz / (d || 1), true)); chillEnemy(e, 3.5);
       }
       P.x = r.x; P.z = r.z; P.iframes = Math.max(P.iframes, 0.3); P.face = Math.atan2(r.x - ox, r.z - oz);
       burst(P.x, 1, P.z, 0xb08cff, 18, 5, 0.16); sfx('blink');
@@ -113,7 +113,7 @@ function updClassSkills(dt) {
         for (let k = 0; k < 4; k++) { const a = rand(0, 6.28), r = Math.sqrt(Math.random()) * z.r; burst(z.x + Math.sin(a) * r, 0.15, z.z + Math.cos(a) * r, 0xf0e6c0, 2, 2, 0.08); }
         for (const e of enemies) {
           if (e.dead || Math.hypot(e.x - z.x, e.z - z.z) > z.r + e.r) continue;
-          const q = rollDmg(e); damageEnemy(e, q.d * 0.45 * ST.skillM, q.crit, 0.5, 0, 0, false);
+          const q = rollDmg(e); withElem('shock', () => damageEnemy(e, q.d * 0.45 * ST.skillM, q.crit, 0.5, 0, 0, false)); // storm-tipped: lightning
         }
         sfx('hit');
       }
@@ -128,7 +128,7 @@ function updClassSkills(dt) {
         for (const e of enemies) {
           if (e.dead) continue; const dx = e.x - z.x, dz = e.z - z.z, d = Math.hypot(dx, dz);
           if (d > z.r + e.r) continue;
-          const q = rollDmg(e); damageEnemy(e, q.d * 3.8 * ST.skillM, q.crit, 8, dx / (d || 1), dz / (d || 1), true); hit++;
+          const q = rollDmg(e); withElem('fire', () => damageEnemy(e, q.d * 3.8 * ST.skillM, q.crit, 8, dx / (d || 1), dz / (d || 1), true)); hit++;
           if (!e.dead) { e.burnT = 4; e.burnD = ST.dmg * 0.5 * ST.burnM; }
         }
         shake(0.6); addHitStop(hit ? 0.1 : 0.04); sfx('boom');

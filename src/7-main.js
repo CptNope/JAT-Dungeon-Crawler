@@ -2,6 +2,10 @@
 const GAME_KEYS = new Set(['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 window.addEventListener('keydown', (ev) => {
   if (ev.target && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'TEXTAREA')) return;
+  if (dlgOn) { if (['Space', 'Enter', 'KeyE', 'Escape'].includes(ev.code)) { ev.preventDefault(); dlgNext(); } return; }
+  if (!$('#share').hidden) { if (ev.code === 'Escape') $('#share').hidden = true; return; }
+  if (PHOTO.on) { keys[ev.code] = true; if (ev.code === 'Escape' || ev.code === 'KeyP') exitPhoto(); return; }
+  if (ev.code === 'KeyP' && started && $('#title').hidden && !Panel.kind && $('#death').hidden) { enterPhoto(); return; }
   if (!$('#title').hidden) { if (ev.code === 'Escape' && started) resume(); return; }
   if (!$('#death').hidden) return;
   if (Panel.kind) {
@@ -95,7 +99,7 @@ function slotLine(i) {
 }
 function showTitle() {
   if (started && !titleSlots) {
-    $('#menuBtns').innerHTML = '<button class="btn" type="button" id="mResume">Resume</button><button class="btn ghost" type="button" id="mCodex">Codex</button><button class="btn ghost" type="button" id="mSlots">Change hero</button>'
+    $('#menuBtns').innerHTML = '<button class="btn" type="button" id="mResume">Resume</button><button class="btn ghost" type="button" id="mCodex">Codex</button><button class="btn ghost" type="button" id="mPhoto">Photo mode</button><button class="btn ghost" type="button" id="mSlots">Change hero</button>'
       + `<button class="btn ghost" type="button" id="mSound">${muted ? 'Sound off' : 'Sound on'}</button>`;
   } else {
     $('#menuBtns').innerHTML = `<div class="slots">${[0, 1, 2].map((i) => { const l = slotLine(i); return `<div class="slotrow${i === SET.slot && started ? ' cur' : ''}"><button class="btn${l ? '' : ' ghost'} slotb" type="button" id="mSlot${i}"><b>Slot ${i + 1}</b><span>${l ? esc(l) : 'Empty · begin a new hero'}</span></button>${l ? `<button class="btn ghost sm" type="button" id="mDel${i}" aria-label="Erase slot ${i + 1}">Erase</button>` : ''}</div>`; }).join('')}</div>`
@@ -141,7 +145,7 @@ $('#title').addEventListener('click', (ev) => {
     titleSlots = false; begin();
   } else if (id && id.startsWith('mDel')) { eraseSlot = +id.slice(4); $('#confirmNew').hidden = false; $('#confirmNew span').textContent = `Erase slot ${eraseSlot + 1}? That hero is gone for good.`; $('#btnWipe').focus(); }
   else if (id === 'btnWipe') {
-    try { localStorage.removeItem(SLOT_KEYS[eraseSlot]); } catch (err) { /* ignore */ }
+    try { localStorage.removeItem(SLOT_KEYS[eraseSlot]); localStorage.removeItem(SLOT_KEYS[eraseSlot] + '.bak'); } catch (err) { /* ignore */ }
     if (eraseSlot === SET.slot) { started = false; freshHero(); $('#hud').hidden = true; $('#touch').hidden = true; }
     eraseSlot = -1; titleSlots = !started ? false : titleSlots; showTitle();
   }
@@ -188,13 +192,8 @@ function perfTick(dt, cpuMs) {
 const timer = new THREE.Timer();
 timer.connect(document);
 let hudT = 0, miniT = 0, saveT = 0, achT = 0;
-function frame(ts) {
-  timer.update(ts);
-  const dt = Math.min(0.05, timer.getDelta());
-  elapsed += dt; U_TIME.value = elapsed;
-  renderer.info.reset();
-  const t0 = performance.now();
-  if (!levelReady) { perfTick(dt, 0); return; }
+let DBG = { turbo: 0 };
+function simTick(dt) {
   let gdt = dt;
   if (hitStop > 0) { hitStop -= dt; gdt = dt * 0.06; }
   if (slowT > 0) { slowT -= dt; gdt *= 0.3; } // the moment a boss falls
@@ -228,9 +227,21 @@ function frame(ts) {
     updInteract();
     saveT += dt; if (saveT > 20) { saveT = 0; save(); }
   }
+}
+function frame(ts) {
+  timer.update(ts);
+  const dt = Math.min(0.05, timer.getDelta());
+  elapsed += dt; U_TIME.value = elapsed;
+  renderer.info.reset();
+  const t0 = performance.now();
+  if (!levelReady) { perfTick(dt, 0); return; }
+  // DBG.turbo runs extra fixed simulation steps per rendered frame (used by the autoplay test bots)
+  const steps = 1 + (DBG.turbo | 0);
+  for (let st = 0; st < steps; st++) simTick(st ? 0.05 : dt);
+  const gdt = dt * (hitStop > 0 ? 0.06 : 1) * (slowT > 0 ? 0.3 : 1); // effects follow the slowed clock too
   for (const s of spinners) s.rotation.y += dt * (s.userData.spin || 1);
   updParts(gdt); updSwings(dt); updRings(dt); updTorchLights(dt); updBlobs(); updLock();
-  if (P.mesh) updCamera(dt);
+  if (PHOTO.on) updPhoto(dt); else if (P.mesh) updCamera(dt);
   updTrail(gdt); updFacers();
   musicTick();
   // shader time, point-size scale and the things that follow the camera
@@ -265,4 +276,4 @@ function boot(data) {
 }
 if (window.claude && window.claude.hot && window.claude.hot.snapshot) window.claude.hot.snapshot(() => ({ S, started }));
 if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(boot); else boot((window.claude && window.claude.hot && window.claude.hot.data) || {});
-return { get S() { return S; }, get RUN() { return RUN; }, get P() { return P; }, get LV() { return LV; }, enemies, renderer, startDelve, begin, freshHero, openPanel, closePanel, loadDungeon, get ready() { return levelReady; }, perf, debug: { snapCamera, nextFloor, loadTown, rollCaravan, startRift, startArena, die, gainXP, hurtPlayer, calcStats, xpNeed, ARCH, BIOMES, genItem, makeSetItem, scene, sun, hemi, sky, walkable, spawnEnemy, bossPattern, get LVL() { return LV; }, applyTimeOfDay, get pet() { return pet; }, villagers, zones, chooseClass, checkAch, playerAttack, CAM, setCamMode, useSkill, cycleLock, get lockT() { return lockT; }, corpses, skillCd, questEvent, makeQuestOffers, claimQuest, get trail() { return trail; } } };
+return { get S() { return S; }, get RUN() { return RUN; }, get P() { return P; }, get LV() { return LV; }, enemies, renderer, startDelve, begin, freshHero, openPanel, closePanel, loadDungeon, get ready() { return levelReady; }, perf, debug: { parseRiftCode, setTouchMode, returnToTown, afterGear, DBG, stick, interacts, interact, usePotion, get skillCd() { return skillCd; }, isPaused, snapCamera, nextFloor, loadTown, rollCaravan, startRift, startArena, die, gainXP, hurtPlayer, calcStats, xpNeed, ARCH, BIOMES, genItem, makeSetItem, scene, sun, hemi, sky, walkable, spawnEnemy, bossPattern, get LVL() { return LV; }, applyTimeOfDay, get pet() { return pet; }, villagers, zones, chooseClass, checkAch, playerAttack, CAM, setCamMode, useSkill, cycleLock, get lockT() { return lockT; }, corpses, skillCd, questEvent, makeQuestOffers, claimQuest, get trail() { return trail; } } };

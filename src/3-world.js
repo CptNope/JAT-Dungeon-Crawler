@@ -303,6 +303,8 @@ function themeRooms(rooms, g, W, exitRoom) {
   }
 }
 function solid(i, j) { return i < 0 || j < 0 || i >= LV.w || j >= LV.h || LV.g[j * LV.w + i] !== 1; }
+// rock, clutter and furniture stop a shot; an open chasm does not
+function blocksShot(x, z) { const i = Math.floor(x), j = Math.floor(z); if (i < 0 || j < 0 || i >= LV.w || j >= LV.h) return true; const v = LV.g[j * LV.w + i]; return v !== 1 && v !== 5; }
 function walkable(x, z) { return !solid(Math.floor(x), Math.floor(z)); }
 
 function genDungeon(depth) {

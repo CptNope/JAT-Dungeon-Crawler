@@ -10,6 +10,7 @@ function rebuildHero() {
   if (P.mesh) { scene.remove(P.mesh); P.mesh.traverse((o) => { if (o.material && o.material.dispose) o.material.dispose(); }); }
   P.mesh = null; P.wkind = null; placePlayerMesh();
 }
+function chooseClassThen() { if (LV && LV.type === 'town') storyOnTown(); }
 function chooseClass(k) {
   const fresh = !S.runs && !S.kills;
   S.cls = k; S.tal = {};
@@ -19,6 +20,7 @@ function chooseClass(k) {
   closePanel(); save();
   toast(`You walk the ${CLASSES[k].n}'s path.`, 'var(--brass-2)', true); sfx('level');
   if (fresh) hint('move');
+  setTimeout(chooseClassThen, 400);
 }
 
 // ================= talents =================
@@ -84,9 +86,11 @@ function codexHtml(tab) {
       return `<section class="beasts"><h3>${B.name}<small>depths ${bi * 5 + 1} to ${bi * 5 + 5} · ${known}/${kinds.length + 1}</small></h3><div class="bgrid">${kinds.map(([n, c]) => `<div class="beast${seen(n) ? '' : ' unk'}"><i style="background:#${c.toString(16).padStart(6, '0')}"></i><span>${seen(n) ? esc(n) : '???'}</span><b>${seen(n) || ''}</b></div>`).join('')}<div class="beast boss${seen(B.boss.name) ? '' : ' unk'}"><i style="background:#${B.boss.color.toString(16).padStart(6, '0')}"></i><span>${seen(B.boss.name) ? esc(B.boss.name) : 'A boss, unseen'}</span><b>${seen(B.boss.name) || ''}</b></div></div></section>`;
     }).join('')}`;
   }
+  if (tab === 'story') return storyHtml();
   if (tab === 'records') {
     const R = S.records || [];
     return `<div class="stats" style="margin-bottom:14px">${[['Deepest depth', S.best], ['Foes slain', fmt(S.kills)], ['Bosses slain', S.bossKills], ['Leaders slain', S.stats.leaders || 0], ['Champions slain', S.stats.champs || 0], ['Descents', S.runs], ['Most floors in one trip', S.stats.longest || 0], ['Times fallen', S.deaths], ['Skills used', fmt(S.stats.skills || 0)], ['Things crafted', S.stats.crafts || 0], ['Tasks done', S.questsDone || 0], ['Highest rift sealed', (S.rift && S.rift.cleared) || 0], ['Best Pit wave', S.arenaBest || 0], ['Rift shards', S.shards || 0], ['Time played', fmtTime(S.time || 0)]].map(([a, b]) => `<div class="stat"><span>${a}</span><b>${b}</b></div>`).join('')}</div>
+      <div class="acts" style="margin-bottom:12px"><button class="btn" type="button" id="runCard">Make a run card</button><span class="hint">An image of your hero and records to share.</span></div>
       <h3>Best descents</h3>${R.length ? `<div class="recs"><div class="rec hd"><span>#</span><span>Reached</span><span>Floors</span><span>Gold</span><span>Hero</span><span>Ended</span></div>${R.map((r, i) => `<div class="rec"><span>${i + 1}</span><span>Depth ${r.deep}${r.from > 1 ? ` <small>from ${r.from}</small>` : ''}</span><span>${r.floors}</span><span>${fmt(r.gold)}</span><span>${r.cls ? CLASSES[r.cls].n : 'Delver'} ${r.lvl}</span><span>${r.died ? 'Fell' : 'Home'} · ${fmtDate(r.at)}</span></div>`).join('')}</div>` : '<p class="hint">No descents yet. Every trip below is recorded here.</p>'}`;
   }
   if (tab === 'save') {
@@ -100,13 +104,13 @@ function codexHtml(tab) {
 
 // ================= save slots, export and import =================
 const SLOT_KEYS = ['hearthdeep.save.v1', 'hearthdeep.save.v1.s2', 'hearthdeep.save.v1.s3'];
-function peekSlot(i) { try { const s = localStorage.getItem(SLOT_KEYS[i]); return s ? JSON.parse(s) : null; } catch (err) { return null; } }
+function peekSlot(i) { try { const m = safeParse(localStorage.getItem(SLOT_KEYS[i])); return validSave(m) ? m : (validSave(safeParse(localStorage.getItem(SLOT_KEYS[i] + '.bak'))) ? safeParse(localStorage.getItem(SLOT_KEYS[i] + '.bak')) : null); } catch (err) { return null; } }
 function exportCode() { try { return 'HD1.' + btoa(unescape(encodeURIComponent(JSON.stringify(S)))); } catch (err) { return ''; } }
 function importCode(txt) {
   const t = String(txt || '').trim().replace(/\s+/g, '');
   if (!t.startsWith('HD1.')) throw new Error('That does not look like a Hearthdeep save code.');
   const s = JSON.parse(decodeURIComponent(escape(atob(t.slice(4)))));
-  if (!s || typeof s !== 'object' || !s.equip || typeof s.level !== 'number') throw new Error('The code is damaged or incomplete.');
+  if (!validSave(s)) throw new Error('The code is damaged or incomplete.');
   return s;
 }
 function switchToSave(s) {

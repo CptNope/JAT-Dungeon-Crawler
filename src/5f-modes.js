@@ -27,13 +27,14 @@ function weeklyDef() {
   const seed = h >>> 0;
   return withSeed(seed, () => { const keys = Object.keys(RIFT_MODS), mods = []; while (mods.length < 3) { const m = pick(keys); if (!mods.includes(m)) mods.push(m); } return { key: k, seed, tier: 6, mods }; });
 }
-function startRift(t, weekly) {
+function startRift(t, weekly, coded) {
   let mods, seed = 0;
-  if (weekly) { const W = weeklyDef(); t = W.tier; mods = W.mods; seed = W.seed; }
+  if (coded) { t = coded.tier; mods = coded.mods; seed = coded.seed; }
+  else if (weekly) { const W = weeklyDef(); t = W.tier; mods = W.mods; seed = W.seed; }
   else { const n = t >= 10 ? 3 : t >= 4 ? 2 : 1, keys = Object.keys(RIFT_MODS); mods = []; while (mods.length < n) { const m = pick(keys); if (!mods.includes(m)) mods.push(m); } }
-  startDelve(riftDepth(t), [], { mode: 'rift', rift: { tier: t, mods, floor: 1, t0: performance.now(), par: riftPar(t), weekly: !!weekly, seed } });
+  startDelve(riftDepth(t), [], { mode: 'rift', rift: { tier: t, mods, floor: 1, t0: performance.now(), par: riftPar(t), weekly: !!weekly, seed, code: coded ? coded.code : null } });
   hint('rift');
-  banner(weekly ? 'Weekly Rift' : `Rift tier ${t}`, mods.map((m) => RIFT_MODS[m].n).join(' · '));
+  banner(weekly ? 'Weekly Rift' : coded ? 'Seeded rift' : `Rift tier ${t}`, mods.map((m) => RIFT_MODS[m].n).join(' · '));
 }
 const riftTime = () => (RUN && RUN.rift ? ((RUN.rift.end || performance.now()) - RUN.rift.t0) / 1000 : 0);
 function riftStairs(x, z) { // the last floor's exit is a sealed rift until its guardian falls
@@ -60,9 +61,10 @@ function riftComplete(e) {
   const shards = (2 + t * 2) * (fast ? 2 : 1);
   S.shards = (S.shards || 0) + shards;
   S.rift = S.rift || { max: 1, best: {} };
-  if (fast && !R.weekly) S.rift.max = Math.max(S.rift.max || 1, t + 1);
+  if (fast && !R.weekly && !R.code) S.rift.max = Math.max(S.rift.max || 1, t + 1);
   S.rift.cleared = Math.max(S.rift.cleared || 0, t);
   if (!S.rift.best[t] || secs < S.rift.best[t]) S.rift.best[t] = secs;
+  if (R.code) { S.seedBest = S.seedBest || {}; if (!S.seedBest[R.code] || secs < S.seedBest[R.code]) S.seedBest[R.code] = secs; }
   if (R.weekly) { const k = weeklyDef().key; if (!S.weekly || S.weekly.key !== k) S.weekly = { key: k, best: null, tries: 0 }; if (!S.weekly.best || secs < S.weekly.best) S.weekly.best = secs; }
   stat('rifts');
   gainXP(80 * t + 40);
@@ -100,7 +102,7 @@ function arenaWave() {
   const n = Math.min(22, 4 + Math.round(A.wave * 1.6));
   for (let k = 0; k < n; k++) { const [x, z] = arenaSpot(); const e = spawnEnemy(wpick(pool), x, z, { champ: A.wave >= 4 && chance(0.06 + A.wave * 0.01) }); e.awake = true; }
   if (A.wave % 5 === 0) { const [x, z] = arenaSpot(); const L = spawnEnemy(pick(['brute', 'warden']), x, z, { leader: true }); L.awake = true; if (A.wave % 10 === 0) { L.name = 'Pit Champion'; L.hp = L.maxHp = L.maxHp * 2.5; L.scale *= 1.2; L.mesh.scale.setScalar(L.scale); if (L.label) L.label.el.textContent = L.name; } }
-  if (A.exit) { removeInteract(A.exit.i); world.remove(A.exit.g); A.exit = null; }
+  if (A.exit) { A.exit.i.dead = true; world.remove(A.exit.g); A.exit = null; } // the interact loop drops it and its label
   banner(`Wave ${A.wave}`, `${n + (A.wave % 5 === 0 ? 1 : 0)} foes · depth ${d}`); sfx('ambush'); ringFx(20, 20, 2, 14, 0.6, 0xff6a3a, 2.6);
 }
 function arenaCleared() {
@@ -193,6 +195,10 @@ function riftHtml() {
     <div class="row"><div><div class="t">Weekly Rift<small>${W.key} · same floors for everyone this week · tier ${W.tier}</small></div>
       <div class="d">${W.mods.map((m) => `<b>${RIFT_MODS[m].n}</b>: ${RIFT_MODS[m].d}`).join('<br>')}</div>${wk && wk.best ? `<div class="d" style="color:var(--ok)">Your best this week: ${fmtClock(wk.best)}</div>` : ''}</div>
       <button class="btn" type="button" data-act="weekly">Enter</button></div>
+    <div class="row"><div><div class="t">Daily seed<small>today's floors, the same for anyone with the code</small></div>${(() => { const c = dailyCode(), p = parseRiftCode(c), b = S.seedBest && S.seedBest[c]; return `<div class="d"><code>${c}</code> · tier ${p.tier} · ${p.mods.map((m) => RIFT_MODS[m].n).join(', ')}${b ? ` · <span style="color:var(--ok)">your best ${fmtClock(b)}</span>` : ''}</div><div class="acts"><button class="btn ghost sm" type="button" data-act="copyCode" data-code="${c}">Copy code</button></div>`; })()}</div>
+      <button class="btn" type="button" data-act="daily">Enter</button></div>
+    <div class="row"><div><div class="t">Play a code<small>a friend's rift, floor for floor</small></div><input id="seedIn" class="code-in" type="text" placeholder="HD-4-SB-1A2B3C" autocomplete="off" spellcheck="false"><div class="hint" id="seedMsg"></div></div>
+      <button class="btn ghost" type="button" data-act="seedGo">Play</button></div>
     </div>`;
 }
 function pitHtml() {
