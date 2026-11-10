@@ -49,8 +49,21 @@ function showShare(url, title, note) {
   const el = $('#share');
   el.innerHTML = `<div class="share-in"><header><b>${esc(title)}</b><button class="x" type="button" id="shareX">Close</button></header>
     <img src="${url}" alt="${esc(title)}"><p class="hint">${esc(note || 'If your browser blocks saving, right-click or long-press the image to save it.')}</p>
-    <div class="acts"><button class="btn" type="button" id="shareCopy">Copy image</button><a class="btn ghost" id="shareSave" download="hearthdeep.png" href="${url}">Save image</a><button class="btn ghost" type="button" id="shareText">Copy summary</button></div></div>`;
+    <div class="acts"><button class="btn" type="button" id="shareCopy">Copy image</button><button class="btn ghost" type="button" id="shareSave">Save image</button><button class="btn ghost" type="button" id="shareText">Copy summary</button></div></div>`;
   el.hidden = false; el.dataset.url = url;
+}
+// Saving: inside claude.ai the page asks the viewer through the downloads capability; elsewhere a plain download.
+let dlNS = null;
+try { if (window.claude && window.claude.use) window.claude.use('downloads').then((n) => { dlNS = n; }, () => {}); } catch (err) { /* not hosted in claude.ai */ }
+async function saveImage(url) {
+  const blob = await (await fetch(url)).blob(), name = `hearthdeep-${Date.now()}.png`;
+  if (dlNS) {
+    try { await dlNS.save({ filename: name, data: blob }); toast('Image saved.', 'var(--ok)'); }
+    catch (err) { if (err && err.code === 'declined') return; toast('Saving is unavailable here. Right-click or long-press the image instead.', 'var(--muted)', true); }
+    return;
+  }
+  if (window.claude && window.claude.use) { toast('Saving is unavailable here. Right-click or long-press the image instead.', 'var(--muted)', true); return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
 async function copyImage(url) {
   try { const b = await (await fetch(url)).blob(); await navigator.clipboard.write([new ClipboardItem({ 'image/png': b })]); toast('Image copied.', 'var(--ok)'); }
@@ -60,6 +73,7 @@ document.addEventListener('click', async (ev) => {
   const id = ev.target && ev.target.id;
   if (id === 'shareX') $('#share').hidden = true;
   else if (id === 'shareCopy') copyImage($('#share').dataset.url);
+  else if (id === 'shareSave') saveImage($('#share').dataset.url);
   else if (id === 'shareText') { try { await navigator.clipboard.writeText(runSummary()); toast('Summary copied.', 'var(--ok)'); } catch (err) { toast(runSummary(), 'var(--muted)', true); } }
   else if (id === 'runCard') { const u = await makeRunCard(); showShare(u, 'Run card'); }
   else if (id === 'mPhoto') { resume(); setTimeout(enterPhoto, 50); }
