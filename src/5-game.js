@@ -23,6 +23,7 @@ function loadTown() {
   clearWorld(); spinners = [];
   LV = genTown(); bossRef = null; $('#bossBar').hidden = true;
   setTownLights();
+  caravanHere();
   buildTownVisuals();
   world.traverse((o) => { if (o.userData && o.userData.spin) spinners.push(o); });
   addInteract({ x: 8.5, z: 11.6, r: 1.7, label: 'Your Home', ly: 5.4, verb: 'Go inside', act: () => openPanel('home') });
@@ -36,7 +37,7 @@ function loadTown() {
   placePlayerMesh(); resetMini(); snapCamera();
   releaseLock(); setMusic('town');
   P.u.uRim.value.setRGB(0.05, 0.06, 0.08);
-  spawnPet(); spawnVillagers(); applyTimeOfDay(true);
+  spawnPet(); spawnVillagers(); spawnCaravan(); applyTimeOfDay(true);
   warmLevel();
 }
 // threejs-performance, "Shader compile stalls": build every program the new level needs
@@ -60,6 +61,7 @@ function warmLevel() {
 }
 function populate() {
   const L = LV, d = L.depth, B = biomeOf(d);
+  if (L.pit) return; // the Pit fills itself, wave by wave
   const pool = Object.entries(ARCH).filter(([, a]) => d >= a.from).map(([k, a]) => [k, a.w]);
   const spot = (r, pad) => {
     pad = pad || 1;
@@ -80,31 +82,33 @@ function populate() {
     for (const r of L.rooms.slice(1)) {
       const area = r.w * r.h;
       let n = Math.min(area > 60 ? 9 : 7, randi(2, 4) + Math.floor(d / 5) + (area > 60 ? 2 : 0)); // deep floors get tougher foes, not endless crowds
+      if (riftMod('horde')) n = Math.round(n * 1.4);
       let lead = null;
       if (d >= 2 && chance(Math.min(0.38, 0.14 + d * 0.012))) {
         const [x, z] = spot(r, 2);
         lead = spawnEnemy(pick(['grunt', 'brute', 'caster', 'warden'].filter((k) => d >= ARCH[k].from)), x, z, { leader: true });
         n += 2;
       }
-      for (let k = 0; k < n; k++) { const [x, z] = spot(r); const e = spawnEnemy(wpick(pool), x, z, { champ: chance(0.05 + d * 0.004) }); if (lead) e.lead = lead; }
+      for (let k = 0; k < n; k++) { const [x, z] = spot(r); const e = spawnEnemy(wpick(pool), x, z, { champ: chance((0.05 + d * 0.004) * (riftMod('elite') ? 3 : 1)) }); if (lead) e.lead = lead; }
       if (chance(0.22) || r === vault) addChest(...spot(r, 1.5));
       if (r === vault) addChest(...spot(r, 1.5));
       const nn = randi(0, 2);
       for (let k = 0; k < nn; k++) addNode(...spot(r, 1), pick(['iron', 'iron', 'herb', B.mats[0], B.mats[1]]));
     }
     const er = L.exitRoom;
-    addStairs(er.x + er.w / 2, er.y + er.h / 2);
+    if (RUN.rift && RUN.rift.floor >= RIFT_FLOORS) { riftStairs(er.x + er.w / 2, er.y + er.h / 2); riftGuardian(er); }
+    else addStairs(er.x + er.w / 2, er.y + er.h / 2);
     placeSpecialRooms(vault);
     placeTraps();
   }
-  if (d % 5 === 1) addPortalHome(L.start.x + 2.2, L.start.z);
+  if (d % 5 === 1 && !RUN.rift) addPortalHome(L.start.x + 2.2, L.start.z);
   // starting room gets a herb or ore sometimes
   if (chance(0.5)) addNode(L.start.x - 2, L.start.z + 1.5, 'herb');
 }
 function loadDungeon(depth) {
   clearWorld(); spinners = [];
   bossRef = null; $('#bossBar').hidden = true;
-  LV = genDungeon(depth); RUN.depth = depth; RUN.phoenixUsed = false; RUN.shrine = null; RUN.ambush = null;
+  LV = RUN.mode === 'arena' ? genArena(depth) : seededLevel(() => genDungeon(depth)); RUN.depth = depth; RUN.phoenixUsed = false; RUN.shrine = null; RUN.ambush = null;
   releaseLock();
   S.best = Math.max(S.best, depth);
   const B = biomeOf(depth);
@@ -118,7 +122,7 @@ function loadDungeon(depth) {
   Post.grade([0.88, 0.94, 1.12], [1.08, 1.0, 0.9], 1.06, 0.5, 1.0, 0.9);
   buildDungeonVisuals();
   P.x = LV.start.x; P.z = LV.start.z; P.kx = P.kz = 0;
-  populate();
+  seededLevel(() => populate());
   lightForView(); setMusic('dng:' + B.id); questEvent('depth', depth);
   P.u.uRim.value.set(B.torch).multiplyScalar(0.12);
   const before = ST ? ST.maxHp : 0;
@@ -197,6 +201,7 @@ function addPortalHome(x, z) {
 }
 function nextFloor() {
   const d = RUN.depth + 1;
+  if (RUN.rift) RUN.rift.floor++;
   RUN.floors++; S.stats.longest = Math.max(S.stats.longest || 0, RUN.floors);
   loadDungeon(d);
 }
@@ -208,6 +213,10 @@ function bossDefeated(e) {
   S.waypoints.sort((a, b) => a - b);
   bossRef = null; $('#bossBar').hidden = true;
   banner(`${e.name} falls`, `Waypoint opened at depth ${wp}`);
+  slowT = 1.2; shake(0.7);
+  const pil = new THREE.Mesh(G.cyl, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff0c0).multiplyScalar(2.4), transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending }));
+  pil.scale.set(2.4, 18, 2.4); pil.position.set(e.x, 9, e.z); world.add(pil); levelDisp.push(pil.material); fxLife.push({ m: pil, t: 2.4, T: 2.4, kind: 'pillar' });
+  for (let k = 0; k < 4; k++) setTimeout(() => ringFx(e.x, e.z, 0.5, 6 + k * 2, 0.6, k % 2 ? 0xffd890 : 0xfff2c8, 3), k * 160);
   sfx('level');
   const a = LV.arena;
   addStairs(a.x + a.w / 2 + 2.5, a.y + a.h / 2);
@@ -216,8 +225,9 @@ function bossDefeated(e) {
   ST = calcStats();
   save();
 }
-function startDelve(depth, elix) {
-  RUN = { depth, start: depth, buffs: {}, rested: S.rested, phoenixUsed: false, gold: 0, items: 0, floors: 1, fresh: true };
+function startDelve(depth, elix, mode) {
+  RUN = { depth, start: depth, buffs: {}, rested: S.rested, phoenixUsed: false, gold: 0, items: 0, floors: 1, fresh: true, t0: performance.now(), kills: 0, taken: 0 };
+  if (mode) Object.assign(RUN, mode);
   for (const k of elix) if (S.elixirs[k] > 0) { S.elixirs[k]--; RUN.buffs[k] = 1; }
   S.rested = false; S.runs++;
   closePanel();
@@ -225,7 +235,8 @@ function startDelve(depth, elix) {
   if (RUN.rested) toast('Well rested: bonus health this descent.', 'var(--ok)');
 }
 function returnToTown(died) {
-  const summary = RUN ? `Back home from depth ${RUN.depth} with ${RUN.gold} gold and ${RUN.items} item${RUN.items === 1 ? '' : 's'}.` : '';
+  if (RUN) setTimeout(() => hint('home'), 1200);
+  const summary = !RUN ? '' : RUN.arena ? `Back from the Pit: ${RUN.arena.wave - (RUN.arena.exit ? 0 : 1)} waves won, ${fmt(RUN.gold)} gold.` : RUN.rift ? `Back from the rift${RUN.rift.done ? ` (sealed in ${fmtClock(riftTime())})` : ''} with ${RUN.gold} gold.` : `Back home from depth ${RUN.depth} with ${RUN.gold} gold and ${RUN.items} item${RUN.items === 1 ? '' : 's'}.`;
   const gl = S.home.garden;
   let grew = '';
   if (gl) { addMat('herb', [0, 2, 4, 7][gl] + (S.decor && S.decor.flowers ? 2 : 0)); if (gl >= 2) addMat('essence', gl - 1); if (gl >= 3) addMat('spore', 2); grew = 'Your garden yielded fresh Bitterleaf.'; }
@@ -234,6 +245,7 @@ function returnToTown(died) {
     S.records.sort((a, b) => b.deep - a.deep || b.floors - a.floors); S.records.length = Math.min(S.records.length, 12);
   }
   S.tod = ((S.tod || 0.42) + 0.17) % 1; // time passes while you are below
+  rollWeather();
   S.shop = null; S.questOffers = null;
   RUN = null;
   loadTown();
@@ -243,11 +255,16 @@ function returnToTown(died) {
 }
 function die() {
   P.dead = true; P.hp = 0;
-  const lost = Math.floor(S.gold * 0.25);
+  const lost = RUN.mode === 'arena' ? 0 : Math.floor(S.gold * 0.25);
+  if (RUN.arena) S.arenaBest = Math.max(S.arenaBest || 0, RUN.arena.wave - 1);
   S.gold -= lost; S.deaths++;
   P.mesh.rotation.z = Math.PI / 2; P.mesh.position.y = 0.3; P.mesh.visible = true; viewmodel.g.visible = false;
   releaseLock(); setMusic(null); shake(0.6);
-  $('#deathText').textContent = `${biomeOf(RUN.depth).name}, depth ${RUN.depth}. You dropped ${fmt(lost)} gold in the dark, but your gear and materials came home with you.`;
+  const secs = Math.round((performance.now() - (RUN.t0 || performance.now())) / 1000);
+  const tips = ['Roll through red circles: you cannot be hurt mid-roll.', 'Drink a draught before your health runs low, not after.', 'Pull packs back into a corridor so only one or two can reach you.', 'Champions glow; their affixes are named over their heads.', 'Upgrade gear at your Home workbench before pushing deeper.', 'Talents (K) and gems add up fast. Check them before a hard depth.'];
+  $('#deathText').innerHTML = `<span class="killer">${RUN.lastHit ? `Slain by ${esc(RUN.lastHit)}` : 'Your wounds were too many'} · ${esc(biomeOf(RUN.depth).name)}, depth ${RUN.depth}</span>
+    <span class="recap">${[['Floors this trip', RUN.floors], ['Foes slain', RUN.kills || 0], ['Gold found', fmt(RUN.gold)], ['Items found', RUN.items], ['Damage taken', fmt(RUN.taken || 0)], ['Time below', fmtTime(secs).replace('0m', '<1m')]].map(([a, b]) => `<span><em>${a}</em><b>${b}</b></span>`).join('')}</span>
+    <span>You dropped ${fmt(lost)} gold in the dark, but your gear and materials came home with you.</span><span class="tip">${esc(pick(tips))}</span>`;
   setTimeout(() => { $('#death').hidden = false; $('#btnRevive').focus(); }, 900);
   sfx('die');
   save();
@@ -273,7 +290,7 @@ function usePotion(greater) {
   const k = greater ? 'gpotions' : 'potions';
   if (S[k] <= 0) { toast(greater ? 'No Greater Draughts left.' : 'No Healing Draughts left.', 'var(--bad)'); return; }
   S[k]--; potCd = 0.8;
-  healPlayer(ST.maxHp * (greater ? 0.75 : 0.4));
+  healPlayer(ST.maxHp * (greater ? 0.75 : 0.4) * (riftMod('drain') ? 0.5 : 1));
   sfx('drink'); burst(P.x, 1, P.z, 0xe0473b, 10, 2, 0.1);
 }
 function useScroll() {
@@ -379,6 +396,7 @@ function lightForView() {
   if (!LV || LV.type !== 'dungeon') return;
   const top = SET.cam === 'top';
   torch.intensity = top ? 85 : 30; torch.distance = top ? 32 : 22;
+  if (riftMod('dark')) { torch.distance *= 0.55; torch.intensity *= 0.75; }
   hemi.intensity = top ? 3.0 : 2.4;
   // overhead, the lantern is high and its shadows barely show, while its six-sided shadow pass is the costliest
   // thing in the frame; contact shadows carry the overhead look instead. Toggling it rebuilds shaders, so warm them.
@@ -405,7 +423,9 @@ function updPlayer(dt) {
   if (P.frenzyT > 0) { P.frenzyT -= dt; if (P.frenzyT <= 0) P.frenzy = 0; }
   if (P.chillT > 0) P.chillT -= dt;
   if (P.burnT > 0) { P.burnT -= dt; P.hp -= P.burnD * dt; if (P.hp <= 0 && LV.type === 'dungeon') { P.hp = 0.01; hurtPlayer(9999, null); } }
-  const spd = 5.3 * (1 + ST.move / 100) * (P.chillT > 0 ? 0.6 : 1);
+  const wet = LV.type === 'dungeon' && inFlood(P.x, P.z); // wading slows you
+  const spd = 5.3 * (1 + ST.move / 100) * (P.chillT > 0 ? 0.6 : 1) * (wet ? 0.8 : 1);
+  if (wet && il > 0.1 && Math.random() < dt * 8) burst(P.x + rand(-0.3, 0.3), 0.15, P.z + rand(-0.3, 0.3), 0xbfe8ff, 3, 2, 0.08);
   let vx = ix * spd, vz = iz * spd;
   if (P.dashT > 0) { P.dashT -= dt; vx = Math.sin(P.dashDir) * 30; vz = Math.cos(P.dashDir) * 30; dashHits(); }
   else if (P.dodgeT > 0) {
@@ -419,13 +439,14 @@ function updPlayer(dt) {
   if (P.pend) { P.pend.t -= dt; if (P.pend.t <= 0) { const f = P.pend.fin; P.pend = null; resolveMelee(f); } }
   updSkills(dt);
   // aim
-  const wantsAtk = mouseDown || touchAtk || keys.KeyJ;
+  const wantsAtk = mouseDown || touchAtk || keys.KeyJ || pad.atk;
   const moving = il > 0.1 || P.dodgeT > 0 || P.dashT > 0;
   const la = lockAngle();
   if (la !== null && P.spinT <= 0) P.face = SET.cam === 'top' ? la : P.face + angDiff(la, P.face) * Math.min(1, dt * 16);
   else if (P.spinT > 0) { /* spinning */ }
   else if (SET.cam === 'top') {
-    if (touchMode) {
+    if (pad.on && pad.aim !== null) P.face = pad.aim;
+    else if (touchMode || pad.on) {
       let best = null, bd = 9;
       if (LV.type === 'dungeon') for (const e of enemies) { if (e.dead || !e.awake) continue; const d = Math.hypot(e.x - P.x, e.z - P.z); if (d < bd) { bd = d; best = e; } }
       if (best && (wantsAtk || il < 0.1)) P.face = Math.atan2(best.x - P.x, best.z - P.z);
@@ -573,7 +594,9 @@ function normalizeSave(s) {
   const d = newSave();
   for (const k of Object.keys(d)) if (s[k] === undefined) s[k] = d[k];
   s.home = Object.assign(d.home, s.home); s.elixirs = Object.assign(d.elixirs, s.elixirs); s.equip = Object.assign(d.equip, s.equip);
-  for (const k of ['tal', 'gems', 'stats', 'ach', 'bestiary', 'decor']) if (!s[k] || typeof s[k] !== 'object') s[k] = {};
+  for (const k of ['tal', 'gems', 'stats', 'ach', 'bestiary', 'decor', 'hints']) if (!s[k] || typeof s[k] !== 'object') s[k] = {};
   if (!Array.isArray(s.records)) s.records = [];
+  if (typeof s.shards !== 'number') s.shards = 0;
+  if (!s.rift || typeof s.rift !== 'object') s.rift = { max: 1, best: {} };
   return s;
 }

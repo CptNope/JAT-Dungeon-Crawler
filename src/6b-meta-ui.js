@@ -18,7 +18,7 @@ function chooseClass(k) {
   ST = calcStats(); P.hp = ST.maxHp; rebuildHero();
   closePanel(); save();
   toast(`You walk the ${CLASSES[k].n}'s path.`, 'var(--brass-2)', true); sfx('level');
-  if (fresh) setTimeout(() => toast('Walk to the glowing gate at the south of town to begin your first descent.', 'var(--brass-2)', true), 900);
+  if (fresh) hint('move');
 }
 
 // ================= talents =================
@@ -86,7 +86,7 @@ function codexHtml(tab) {
   }
   if (tab === 'records') {
     const R = S.records || [];
-    return `<div class="stats" style="margin-bottom:14px">${[['Deepest depth', S.best], ['Foes slain', fmt(S.kills)], ['Bosses slain', S.bossKills], ['Leaders slain', S.stats.leaders || 0], ['Champions slain', S.stats.champs || 0], ['Descents', S.runs], ['Most floors in one trip', S.stats.longest || 0], ['Times fallen', S.deaths], ['Skills used', fmt(S.stats.skills || 0)], ['Things crafted', S.stats.crafts || 0], ['Tasks done', S.questsDone || 0], ['Time played', fmtTime(S.time || 0)]].map(([a, b]) => `<div class="stat"><span>${a}</span><b>${b}</b></div>`).join('')}</div>
+    return `<div class="stats" style="margin-bottom:14px">${[['Deepest depth', S.best], ['Foes slain', fmt(S.kills)], ['Bosses slain', S.bossKills], ['Leaders slain', S.stats.leaders || 0], ['Champions slain', S.stats.champs || 0], ['Descents', S.runs], ['Most floors in one trip', S.stats.longest || 0], ['Times fallen', S.deaths], ['Skills used', fmt(S.stats.skills || 0)], ['Things crafted', S.stats.crafts || 0], ['Tasks done', S.questsDone || 0], ['Highest rift sealed', (S.rift && S.rift.cleared) || 0], ['Best Pit wave', S.arenaBest || 0], ['Rift shards', S.shards || 0], ['Time played', fmtTime(S.time || 0)]].map(([a, b]) => `<div class="stat"><span>${a}</span><b>${b}</b></div>`).join('')}</div>
       <h3>Best descents</h3>${R.length ? `<div class="recs"><div class="rec hd"><span>#</span><span>Reached</span><span>Floors</span><span>Gold</span><span>Hero</span><span>Ended</span></div>${R.map((r, i) => `<div class="rec"><span>${i + 1}</span><span>Depth ${r.deep}${r.from > 1 ? ` <small>from ${r.from}</small>` : ''}</span><span>${r.floors}</span><span>${fmt(r.gold)}</span><span>${r.cls ? CLASSES[r.cls].n : 'Delver'} ${r.lvl}</span><span>${r.died ? 'Fell' : 'Home'} · ${fmtDate(r.at)}</span></div>`).join('')}</div>` : '<p class="hint">No descents yet. Every trip below is recorded here.</p>'}`;
   }
   if (tab === 'save') {

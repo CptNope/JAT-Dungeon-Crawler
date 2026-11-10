@@ -270,11 +270,43 @@ const viewmodel = (() => {
 // ================= level generation =================
 let LV = null;
 function tidx(x, z) { return Math.floor(z) * LV.w + Math.floor(x); }
+// Themed rooms. Tile values: 0 rock, 1 floor, 3 furniture (solid, floor beneath), 5 chasm (no floor at all).
+// Every theme keeps a walkable band along the room's edges, so corridors into the room stay connected.
+const ROOM_THEMES = ['library', 'flooded', 'chasm', 'hall', 'tomb'];
+function themeRooms(rooms, g, W, exitRoom) {
+  const cands = rooms.slice(1).filter((r) => r !== exitRoom && r.w >= 7 && r.h >= 6);
+  const n = Math.min(cands.length, randi(1, 3));
+  for (let k = 0; k < n; k++) {
+    const r = cands.splice(randi(0, cands.length - 1), 1)[0];
+    const opts = ROOM_THEMES.filter((t) => (t !== 'chasm' && t !== 'hall') || (r.w >= 9 && r.h >= 8));
+    r.theme = pick(opts);
+    const at = (i, j) => g[j * W + i], set = (i, j, v) => { if (at(i, j) === 1) g[j * W + i] = v; };
+    const x0 = r.x, y0 = r.y, x1 = r.x + r.w - 1, y1 = r.y + r.h - 1;
+    if (r.theme === 'library') { // shelves against solid stretches of wall only, never across a doorway
+      r.shelves = [];
+      const wallAt = (i, j) => at(i, j) === 0;
+      for (let i = x0 + 1; i < x1; i += 1) {
+        if (i % 3 === 0) continue;
+        if (wallAt(i, y0 - 1) && wallAt(i - 1, y0 - 1) && wallAt(i + 1, y0 - 1)) { set(i, y0, 3); r.shelves.push([i, y0, 0]); }
+        if (wallAt(i, y1 + 1) && wallAt(i - 1, y1 + 1) && wallAt(i + 1, y1 + 1)) { set(i, y1, 3); r.shelves.push([i, y1, 2]); }
+      }
+      if (r.w >= 9) for (let j = y0 + 2; j < y1 - 1; j++) if (j % 2) { set(x0 + Math.floor(r.w / 2), j, 3); r.shelves.push([x0 + Math.floor(r.w / 2), j, 1]); }
+    } else if (r.theme === 'chasm') { // a pit with a two-tile ledge round it and a cross of bridges
+      const mx = x0 + Math.floor(r.w / 2) - 1, my = y0 + Math.floor(r.h / 2) - 1;
+      for (let j = y0 + 2; j <= y1 - 2; j++) for (let i = x0 + 2; i <= x1 - 2; i++) if (i !== mx && i !== mx + 1 && j !== my && j !== my + 1) set(i, j, 5);
+    } else if (r.theme === 'hall') { // rows of columns
+      for (let j = y0 + 2; j <= y1 - 2; j += 3) for (let i = x0 + 2; i <= x1 - 2; i += 3) if (Math.abs(i + 0.5 - (x0 + r.w / 2)) > 1.2) set(i, j, 0);
+    } else if (r.theme === 'tomb') { // stone coffins in the middle of the floor
+      r.coffins = [];
+      for (let j = y0 + 2; j <= y1 - 2; j += 3) for (let i = x0 + 2; i <= x1 - 3; i += 4) { set(i, j, 3); set(i + 1, j, 3); r.coffins.push([i + 1, j + 0.5]); }
+    }
+  }
+}
 function solid(i, j) { return i < 0 || j < 0 || i >= LV.w || j >= LV.h || LV.g[j * LV.w + i] !== 1; }
 function walkable(x, z) { return !solid(Math.floor(x), Math.floor(z)); }
 
 function genDungeon(depth) {
-  const boss = depth % 5 === 0;
+  const boss = depth % 5 === 0 && !(RUN && RUN.mode); // rifts and the Pit have no boss floors
   const W = boss ? 46 : 60, H = boss ? 50 : 60;
   const g = new Uint8Array(W * H);
   const rooms = [];
@@ -330,6 +362,7 @@ function genDungeon(depth) {
   }
   let exitRoom = rooms[rooms.length - 1], bestD = -1;
   if (!boss) for (const r of rooms.slice(1)) { const d = dist[cy(r) * W + cx(r)]; if (d > bestD) { bestD = d; exitRoom = r; } }
+  if (!boss) themeRooms(rooms, g, W, exitRoom);
   return { type: 'dungeon', depth, boss, w: W, h: H, g, rooms, arena, exitRoom, start: { x: cx(s) + 0.5, z: cy(s) + 0.5 }, explored: new Uint8Array(W * H) };
 }
 

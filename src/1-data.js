@@ -249,7 +249,7 @@ function newSave() {
     bossKills: 0, slain: [], best: 0, kills: 0, deaths: 0, waypoints: [1], shop: null,
     elixirs: { might: 0, stone: 0, swift: 0 }, rested: false, runs: 0,
     quest: null, questOffers: null, questsDone: 0,
-    cls: null, tal: {}, gems: {}, stats: {}, ach: {}, bestiary: {}, records: [], decor: {}, time: 0, pet: null, created: Date.now(),
+    cls: null, tal: {}, hints: {}, shards: 0, rift: { max: 1, best: {} }, arenaBest: 0, caravan: null, gems: {}, stats: {}, ach: {}, bestiary: {}, records: [], decor: {}, time: 0, pet: null, created: Date.now(),
   };
   return s;
 }
@@ -291,6 +291,7 @@ function calcStats() {
   s.maxHp = Math.round(s.maxHp);
   s.crit = Math.min(75, s.crit);
   if (P.cryT > 0) { s.dmg *= 1.3; s.armor *= 1.3; } // War Cry
+  if (RUN && RUN.rift && LV && LV.type === 'dungeon') { if (RUN.rift.mods.includes('glass')) s.dmg *= 2; if (RUN.rift.mods.includes('drain')) s.regen = 0; }
   return s;
 }
 let ST = null;

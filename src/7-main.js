@@ -60,7 +60,7 @@ window.addEventListener('pointermove', (ev) => {
 canvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
 function setTouchMode(on) {
   if (touchMode === on) return;
-  touchMode = on;
+  touchMode = on; document.body.classList.toggle("touch", on);
   $('#touch').hidden = !on || !started;
   $('#actionBar').hidden = on;
   nearI = undefined;
@@ -102,7 +102,7 @@ function showTitle() {
       + (started ? '<button class="btn ghost" type="button" id="mBack">Back</button>' : '') + `<button class="btn ghost" type="button" id="mSound">${muted ? 'Sound off' : 'Sound on'}</button>`;
   }
   $('#opts').innerHTML = optRow('View', 'cam', [['top', 'Overhead'], ['third', 'Third person'], ['first', 'First person']]) + optRow('Graphics', 'q', [['high', 'High'], ['medium', 'Medium'], ['low', 'Low']]) + optRow('Look speed', 'sens', [[0.6, 'Slow'], [1, 'Normal'], [1.6, 'Fast']])
-    + optRow('Music', 'music', [[true, 'On'], [false, 'Off']]) + optRow('Screen shake', 'shake', [[true, 'On'], [false, 'Off']]);
+    + optRow('Music', 'music', [[true, 'On'], [false, 'Off']]) + optRow('Screen shake', 'shake', [[true, 'On'], [false, 'Off']]) + optRow('Hints', 'hints', [[true, 'On'], [false, 'Off']]);
   if (document.pointerLockElement) document.exitPointerLock();
   $('#title').hidden = false; $('#confirmNew').hidden = true; mouseDown = false;
   const b = $('#mResume') || $('#mSlot' + (SET.slot || 0)); if (b) b.focus();
@@ -117,7 +117,7 @@ function begin() {
   $('#touch').hidden = !touchMode;
   hud(); save();
   if (!S.cls) openPanel('class');
-  else if (S.runs === 0 && S.kills === 0) setTimeout(() => toast('Walk to the glowing gate at the south of town to begin your first descent.', 'var(--brass-2)', true), 600);
+  else if (S.runs === 0 && S.kills === 0) hint('move');
 }
 function freshHero() {
   S = newSave(); uid = 1; RUN = null; P.dead = false;
@@ -151,7 +151,7 @@ $('#title').addEventListener('click', (ev) => {
   if (o) {
     if (o.dataset.opt === 'cam') setCamMode(o.dataset.v);
     else if (o.dataset.opt === 'q') setQuality(o.dataset.v);
-    else if (o.dataset.opt === 'music' || o.dataset.opt === 'shake') { SET[o.dataset.opt] = o.dataset.v === 'true'; saveSettings(); if (musBus) musBus.gain.value = SET.music === false ? 0 : 0.5; }
+    else if (o.dataset.opt === 'music' || o.dataset.opt === 'shake' || o.dataset.opt === 'hints') { SET[o.dataset.opt] = o.dataset.v === 'true'; saveSettings(); if (musBus) musBus.gain.value = SET.music === false ? 0 : 0.5; }
     else { SET.sens = +o.dataset.v; saveSettings(); }
     showTitle();
   }
@@ -197,6 +197,7 @@ function frame(ts) {
   if (!levelReady) { perfTick(dt, 0); return; }
   let gdt = dt;
   if (hitStop > 0) { hitStop -= dt; gdt = dt * 0.06; }
+  if (slowT > 0) { slowT -= dt; gdt *= 0.3; } // the moment a boss falls
   if (!isPaused()) {
     updPlayer(gdt);
     if (LV.type === 'dungeon') {
@@ -220,8 +221,9 @@ function frame(ts) {
       revealT -= dt; if (revealT <= 0) { revealT = 0.2; reveal(); }
     }
     updProjs(gdt);
-    updCorpses(gdt); updPet(gdt);
+    updCorpses(gdt); updPet(gdt); updFxLife(gdt); updArena(gdt);
     if (LV.type === 'town') { updVillagers(gdt); updTimeOfDay(gdt); }
+    updWeather(dt);
     S.time = (S.time || 0) + dt;
     updInteract();
     saveT += dt; if (saveT > 20) { saveT = 0; save(); }
@@ -243,6 +245,7 @@ function frame(ts) {
   }
   Post.render();
   updOverlays(dt); updLockMark();
+  pollPad(dt); updHints(dt);
   hudT -= dt; if (hudT <= 0) { hudT = 0.1; hud(); achT -= 1; if (achT <= 0) { achT = 10; checkAch(); } }
   miniT -= dt; if (miniT <= 0 && LV) { miniT = 0.1; drawMini(); }
   perfTick(dt, performance.now() - t0);
@@ -262,4 +265,4 @@ function boot(data) {
 }
 if (window.claude && window.claude.hot && window.claude.hot.snapshot) window.claude.hot.snapshot(() => ({ S, started }));
 if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(boot); else boot((window.claude && window.claude.hot && window.claude.hot.data) || {});
-return { get S() { return S; }, get P() { return P; }, get LV() { return LV; }, enemies, renderer, startDelve, begin, freshHero, openPanel, closePanel, loadDungeon, get ready() { return levelReady; }, perf, debug: { genItem, makeSetItem, scene, sun, hemi, sky, walkable, spawnEnemy, bossPattern, get LVL() { return LV; }, applyTimeOfDay, get pet() { return pet; }, villagers, zones, chooseClass, checkAch, playerAttack, CAM, setCamMode, useSkill, cycleLock, get lockT() { return lockT; }, corpses, skillCd, questEvent, makeQuestOffers, claimQuest, get trail() { return trail; } } };
+return { get S() { return S; }, get RUN() { return RUN; }, get P() { return P; }, get LV() { return LV; }, enemies, renderer, startDelve, begin, freshHero, openPanel, closePanel, loadDungeon, get ready() { return levelReady; }, perf, debug: { snapCamera, nextFloor, loadTown, rollCaravan, startRift, startArena, die, gainXP, hurtPlayer, calcStats, xpNeed, ARCH, BIOMES, genItem, makeSetItem, scene, sun, hemi, sky, walkable, spawnEnemy, bossPattern, get LVL() { return LV; }, applyTimeOfDay, get pet() { return pet; }, villagers, zones, chooseClass, checkAch, playerAttack, CAM, setCamMode, useSkill, cycleLock, get lockT() { return lockT; }, corpses, skillCd, questEvent, makeQuestOffers, claimQuest, get trail() { return trail; } } };

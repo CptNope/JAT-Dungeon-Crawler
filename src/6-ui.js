@@ -82,14 +82,17 @@ function hud() {
   if (RUN && RUN.shrine) buffs.push(SHRINES[RUN.shrine].n.replace('Shrine of ', ''));
   if (P.chillT > 0) buffs.push('Chilled'); if (P.burnT > 0) buffs.push('Burning');
   $('#hBuffs').innerHTML = (tp ? `<span class="buff tp">${tp} talent point${tp > 1 ? 's' : ''} · K</span>` : '') + buffs.map((b) => `<span class="buff">${b}</span>`).join('');
-  if (LV.type === 'town') { $('#hLoc').textContent = 'Hearthdeep · ' + todName(); $('#hObj').textContent = 'Shops restock each time you return. The Delve waits at the south gate.'; }
+  if (LV.type === 'town') { $('#hLoc').textContent = 'Hearthdeep · ' + todName() + (weatherName() ? ' · ' + weatherName() : ''); $('#hObj').textContent = 'Shops restock each time you return. The Delve waits at the south gate.'; }
   else {
     const B = biomeOf(LV.depth);
     $('#hLoc').textContent = `Depth ${LV.depth} · ${B.name}`;
     let o;
     if (LV.boss) o = bossRef ? `Slay ${bossRef.name}` : enemies.some((e) => e.boss && !e.dead) ? 'Something vast waits beyond the antechamber' : 'Take the stairs down or the way home';
     else o = 'Find the stairs down';
-    if (LV.depth % 5 === 1) o += ' · A way home stands in the first room';
+    if (LV.depth % 5 === 1 && !RUN.rift) o += ' · A way home stands in the first room';
+    if (RUN && RUN.rift) { const R = RUN.rift, t = riftTime(); $('#hLoc').textContent = `${R.weekly ? 'Weekly Rift' : 'Rift tier ' + R.tier} · floor ${Math.min(R.floor, RIFT_FLOORS)}/${RIFT_FLOORS} · ${B.name}`; o = `${fmtClock(t)} / par ${fmtClock(R.par)} · ${R.mods.map((m) => RIFT_MODS[m].n).join(', ')}${R.floor >= RIFT_FLOORS ? (R.done ? ' · The seal is open' : ' · Slay the Rift Guardian') : ''}`; $('#hObj').classList.toggle('late', t > R.par && !R.done); }
+    else if (RUN && RUN.arena) { const A = RUN.arena, left = enemies.filter((e) => !e.dead).length; $('#hLoc').textContent = `The Pit · wave ${A.wave} · depth ${LV.depth}`; o = left ? `${left} foe${left > 1 ? 's' : ''} left · best wave ${S.arenaBest || 0}` : A.exit ? 'Next wave soon. Step into the portal to leave.' : 'The gates are opening...'; }
+    else $('#hObj').classList.remove('late');
     $('#hObj').textContent = o;
   }
   if (bossRef) $('#bossFill').style.width = clamp(bossRef.hp / bossRef.maxHp, 0, 1) * 100 + '%';
@@ -197,7 +200,7 @@ function detailFor(it, ctx) {
     const p = buyPrice(it);
     acts += `<button class="btn" type="button" data-act="buy"${S.gold < p || S.inv.length >= BAG_CAP ? ' disabled' : ''}>Buy for ${fmt(p)}g</button>`;
   }
-  return `${itemCard(it, src === 'equip' ? null : eq)}<div class="acts">${acts}</div>${src !== 'equip' && eq ? `<div class="hint">Currently worn:</div>${itemCard(eq)}` : ''}`;
+  return `${itemCard(it, src === 'equip' ? null : eq)}${src !== 'equip' ? gearDelta(it) : ''}<div class="acts">${acts}</div>${src !== 'equip' && eq ? `<div class="hint">Currently worn:</div>${itemCard(eq)}` : ''}`;
 }
 function renderPanel() {
   const p = Panel; if (!p.kind) return;
@@ -253,6 +256,11 @@ function renderPanel() {
       body = p.tab === 'skills' ? skillsHtml() : elderHtml();
       break;
     }
+    case 'caravan': {
+      title = "Sabine's Caravan"; sub = 'Rare goods from the far roads';
+      body = caravanHtml();
+      break;
+    }
     case 'class': {
       title = 'Choose your path'; sub = S.runs || S.kills ? 'Your gear stays with you; talents start fresh' : 'You can change your talents later, but not your class';
       body = classHtml();
@@ -266,8 +274,8 @@ function renderPanel() {
     }
     case 'delve': {
       title = 'The Delve'; sub = `Deepest reached: ${S.best || 'none yet'} · Bosses slain: ${S.bossKills}`;
-      tabs = [['delve', 'Descend']];
-      body = delveHtml();
+      tabs = [['delve', 'Descend'], ['rift', 'Rift Trials'], ['pit', 'The Pit']];
+      body = p.tab === 'rift' ? riftHtml() : p.tab === 'pit' ? pitHtml() : delveHtml();
       break;
     }
   }
@@ -402,6 +410,12 @@ function doAct(d) {
     case 'qAbandonNo': Panel.abandon = false; break;
     case 'qAbandonYes': S.quest = null; Panel.abandon = false; S.questOffers = makeQuestOffers(); break;
     case 'delve': { const el = Object.keys(Panel.elix).filter((k) => Panel.elix[k]); Panel.elix = {}; startDelve(+d.d, el); return; }
+    case 'rift': startRift(Math.min(Panel.riftT || riftMax(), riftMax()), false); return;
+    case 'weekly': startRift(0, true); return;
+    case 'riftT': Panel.riftT = +d.t; break;
+    case 'pit': startArena(); return;
+    case 'cvBuy': caravanBuy(+d.i); break;
+    case 'cvLook': Panel.cvLook = +d.i; break;
     default: if (metaAct(d, it) === 'stop') return;
   }
   renderPanel(); hud(); save();

@@ -31,6 +31,7 @@ python3 -m http.server 8000   # then open http://localhost:8000
 | C | Codex: achievements, bestiary, records, save backup |
 | Esc | Menu |
 | `` ` `` or F3 | Performance readout |
+| Gamepad | Left stick moves, right stick aims or looks; A attack, B roll, X use, Y draught; LB / RB / LT skills; R3 or d-pad left lock on; d-pad up greater draught, down portal scroll, right view; Start menu, Back bag. In menus the d-pad moves, A presses, B closes, LB / RB change tabs |
 | Touch | Left stick moves; drag the screen to look in close views; Strike aims for you; skill, lock and utility buttons around the thumbs |
 
 ## What's in it
@@ -48,6 +49,14 @@ python3 -m http.server 8000   # then open http://localhost:8000
 - **Dungeon events**: spike traps, shrines (Fury, Stone, Fortune, Haste, Life) that bless the rest of the run, and cursed altars that summon three ambush waves guarding a rich chest. Rooms are dressed with barrels, crates and biome-coloured banners.
 - **Quests**: Elder Maren by the well offers three tasks each visit (slay a kind of foe, hunt leaders or champions, reach a depth, gather materials, silence an altar, fell a boss) for gold, essence, experience and gear; the active task shows under the minimap.
 - **Music**: a procedural score — town chords, a drone per biome, and a driving rhythm for boss fights (toggle in the menu).
+- **Rift Trials**: three-floor timed runs from the Delve with one to three modifiers (Swift, Brutal, Horde, Elite, Glass, Lightless, Volatile, Draining, Frenzied) and a Rift Guardian sealing the last floor. Beat par to unlock the next tier and double the rift shards.
+- **Weekly Rift**: the same seeded floors and modifiers for everyone each week, with your best time recorded.
+- **The Pit**: endless arena waves that grow deeper, with a pack leader every fifth wave and a Pit Champion every tenth; leave between waves to keep your winnings, and falling there costs no gold.
+- **Sabine's Caravan**: turns up in the village now and then with set pieces, a legendary, socketed gear, gems and sealed caches, paid in gold or rift shards.
+- **Themed rooms**: libraries lined with shelves, flooded halls that slow you, chasms crossed by bridges, columned halls, and tombs of stone coffins.
+- **Bosses with their own silhouettes**: orbiting skulls, a mushroom cap, horns and embers, an ice crown, a void halo, tentacles and coral, turning gears, antlers of bark.
+- **Weather**: rain with thunder, fog and snow in the village, on top of the day and night cycle.
+- **Game feel**: a light pillar and summary on level up, a slow-motion moment and pillar of light when a boss falls, loot beams for rare drops, gear comparison that shows exactly how each stat would change, a death recap (what killed you, floors, foes, gold, time) with a tip, and first-time hints for new players (can be turned off in the menu).
 - **Overworld town**: Orla's Anvil (gear, restocks every trip), Bramble & Vial (draughts, scrolls, elixirs), Copper Lantern (materials, buys anything), and your Home.
 - **Upgradable home**: House (Leaky Shack → Hearth Keep; stash size and Rested bonus), Workbench (recipe tiers, upgrade cap), Garden (herbs and essence each return), Kennel (a hound, then a dire wolf, that fights beside you), Trophy Hall (permanent bonuses per boss slain). The house model changes as you build.
 - **The yard**: lantern posts, flower beds, banners in your class colours, a training dummy, a fountain and a statue of you, each with a small bonus.
@@ -81,6 +90,10 @@ Applied from the `threejs-performance` skill in [CloudAI-X/threejs-skills](https
 
 Draw calls are counted across every render pass in a frame (shadow maps, scene, bloom). Foes past the fog are not drawn, and only foes near the lantern cast shadows. Typical counts in headless testing on High: 70–150 in dungeons overhead (the lantern skips its shadow pass when seen from above), 150–280 in the close views with a room full of foes, about 120 in town.
 
+## Balance
+
+Enemy scaling was tuned against a simulated climb (one pass from depth 1, killing most of each floor, wearing rare gear of the current depth, no talents, gems or upgrades). With those assumptions a normal foe takes one or two hits to kill early and three to five by depth 40, a player survives about 25 hits from a common foe at depth 1 and about nine at depth 37, and a boss takes 15 to 25 seconds of plain attacks to kill up to depth 25. Talents, sets, gems and upgrades are the margin for going deeper. Past depth 25 an extra ramp builds steadily instead of jumping at once.
+
 ## Layout
 
 ```
@@ -92,12 +105,15 @@ src/            game source (edit these)
   3b-visuals.js dungeon and town construction, torch lights
   4-entities.js enemies, AI, bosses, projectiles, telegraphs, combat, loot
   4b-feel.js    hit-stop, shake, corpses, weapon trails, rings, lock-on, portals
+  4c-juice.js   first-time hints, level-up moment, gear deltas, boss dressing
   5-game.js     level flow, player, camera modes, minimap, saving
   5b-depth.js   skills, traps, shrines, altar ambushes, quests
   5c-audio.js   sound effects and the procedural music sequencer
   5d-class.js   class skills, ground effects, the companion
-  5e-town.js    day and night, villagers, yard decorations
+  5e-town.js    day and night, weather, villagers, yard decorations
+  5f-modes.js   rift trials, weekly rift, the Pit, the caravan
   6b-meta-ui.js class choice, talents, gems and sockets, yard, codex, save slots and export
+  6c-pad.js     gamepad play and menu navigation
   6-ui.js       HUD and all panels (shops, home, crafting, bag)
   7-main.js     input, look controls, settings, loop, adaptive quality, boot
   head.html / body.html

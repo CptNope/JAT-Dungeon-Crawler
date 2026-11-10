@@ -16,6 +16,7 @@ const mixHex = (a, b, k, out) => out.set(_ca.setHex(a).lerp(_cb.setHex(b), k));
 let nightK = 0, todT = 0;
 const LAMPS = [[6, 14.2], [16, 14.2], [27, 14.2], [38, 14.2], [19, 24], [25, 24], [19.2, 29.6], [24.8, 29.6]];
 function todPhase() { const t = ((S.tod || 0.42) % 1 + 1) % 1; return t; }
+function weatherName() { return S.weather && WEATHER[S.weather] ? WEATHER[S.weather].n : ''; }
 function todName() { const t = todPhase(); return t < 0.08 ? 'Dawn' : t < 0.36 ? 'Day' : t < 0.48 ? 'Golden hour' : t < 0.58 ? 'Dusk' : t < 0.94 ? 'Night' : 'Dawn'; }
 function applyTimeOfDay(force) {
   if (!LV || LV.type !== 'town') return;
@@ -37,6 +38,7 @@ function applyTimeOfDay(force) {
   if (scene.fog) scene.fog.color.copy(scene.background);
   scene.environmentIntensity = lerp(0.55, 0.18, nightK);
   setAmbient(nightK > 0.55 ? 'night' : 'town');
+  applyWeather();
   Post.grade([lerp(0.9, 0.78, nightK), lerp(0.96, 0.88, nightK), lerp(1.1, 1.3, nightK)], [lerp(1.06, 1.0, nightK), 1.0, lerp(0.9, 1.06, nightK)], lerp(1.12, 0.92, nightK), lerp(0.3, 0.5, nightK), 0.75, lerp(1.15, 1.0, nightK));
   if (force) todT = 0;
 }
@@ -161,4 +163,61 @@ function buildDecor(grp) {
     const wp = mesh(G.box, st, 0.1, 1.2, 0.05, x + 0.62, 2.9, z); wp.rotation.z = -0.4; grp.add(wp);
     markSolid(x, z);
   }
+}
+
+// ================= weather =================
+// Rolled each time you come home. Rain darkens the sky and wets the ground, fog closes in, snow drifts.
+const WEATHER = { clear: { n: '', w: 55 }, rain: { n: 'Rain', w: 25 }, fog: { n: 'Fog', w: 12 }, snow: { n: 'Snow', w: 8 } };
+function rollWeather() { S.weather = wpick(Object.entries(WEATHER).map(([k, q]) => [k, q.w])); }
+const RAIN_N = 900;
+let rainSys = null, rainSnd = null, thunderT = 8;
+function ensureRain() {
+  if (rainSys) return rainSys;
+  const pos = new Float32Array(RAIN_N * 6), seed = new Float32Array(RAIN_N * 3);
+  for (let i = 0; i < RAIN_N; i++) { seed[i * 3] = rand(-22, 22); seed[i * 3 + 1] = rand(0, 18); seed[i * 3 + 2] = rand(-22, 22); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const m = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0xa8c4e0, transparent: true, opacity: 0.38, depthWrite: false }));
+  m.frustumCulled = false; m.userData.seed = seed;
+  rainSys = m; return m;
+}
+function updWeather(dt) {
+  const on = LV && LV.type === 'town' && S.weather === 'rain';
+  if (!on) { if (rainSys && rainSys.parent) rainSys.parent.remove(rainSys); stopRainSound(); return; }
+  const m = ensureRain(); if (!m.parent) scene.add(m);
+  const p = m.geometry.attributes.position.array, s = m.userData.seed, cx = camera.position.x, cz = camera.position.z;
+  for (let i = 0; i < RAIN_N; i++) {
+    s[i * 3 + 1] -= dt * 22; if (s[i * 3 + 1] < 0) { s[i * 3 + 1] += 18; s[i * 3] = rand(-22, 22); s[i * 3 + 2] = rand(-22, 22); }
+    const x = cx + s[i * 3] - 2, y = s[i * 3 + 1], z = cz + s[i * 3 + 2] - 8;
+    p[i * 6] = x; p[i * 6 + 1] = y; p[i * 6 + 2] = z; p[i * 6 + 3] = x + 0.06; p[i * 6 + 4] = y + 0.75; p[i * 6 + 5] = z;
+  }
+  m.geometry.attributes.position.needsUpdate = true;
+  startRainSound();
+  thunderT -= dt;
+  if (thunderT <= 0) { thunderT = rand(14, 32); flashT = 0.35; if (AC && !muted) { noise(2.4, 0.28, AC.currentTime + 0.4, 'lowpass', 180, 60, 0.7); tone(55, 38, 2, 'sine', 0.12, AC.currentTime + 0.4); } }
+}
+let flashT = 0;
+function startRainSound() {
+  if (rainSnd || !AC || muted || !noiseBuf) return;
+  const src = AC.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+  const f = AC.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2200; f.Q.value = 0.4;
+  const gn = AC.createGain(); gn.gain.value = 0.0; gn.gain.linearRampToValueAtTime(0.05, AC.currentTime + 1.5);
+  src.connect(f); f.connect(gn); gn.connect(sfxBus); src.start();
+  rainSnd = { src, gn };
+}
+function stopRainSound() { if (!rainSnd) return; try { rainSnd.gn.gain.linearRampToValueAtTime(0, AC.currentTime + 0.6); rainSnd.src.stop(AC.currentTime + 0.7); } catch (err) { /* already stopped */ } rainSnd = null; }
+// applied on top of the time of day
+function applyWeather() {
+  const w = S.weather || 'clear', W = worldMats(), u = sky.material.uniforms;
+  if (W.path.userData.r0 === undefined) W.path.userData.r0 = W.path.roughness;
+  W.grass.roughness = w === 'rain' ? 0.45 : 0.95; W.path.roughness = w === 'rain' ? 0.22 : W.path.userData.r0;
+  W.grass.color.setHex(w === 'snow' ? 0xc4cdd6 : 0x7aa65a); // a dusting of snow on the green
+  if (w === 'clear') return;
+  const grey = new THREE.Color(w === 'snow' ? 0xc8d0dc : 0x8a929c).multiplyScalar(lerp(1, 0.25, nightK));
+  const k = w === 'fog' ? 0.75 : w === 'rain' ? 0.65 : 0.55;
+  u.uTop.value.lerp(grey, k); u.uHor.value.lerp(grey, k); u.uSunCol.value.multiplyScalar(0.25);
+  sun.intensity *= w === 'rain' ? 0.35 : w === 'fog' ? 0.5 : 0.6; hemi.intensity *= w === 'rain' ? 0.8 : 1.05;
+  scene.background.lerp(grey, k);
+  if (scene.fog) { scene.fog.color.copy(scene.background); if (w === 'fog') { scene.fog.near = 6; scene.fog.far = SET.cam === 'top' ? 52 : 34; } else if (w === 'rain') scene.fog.far = Math.min(scene.fog.far, SET.cam === 'top' ? 80 : 90); }
+  if (w === 'snow') setAmbient('frost');
+  if (flashT > 0) { hemi.intensity += 6 * flashT; flashT -= 0.25; }
 }

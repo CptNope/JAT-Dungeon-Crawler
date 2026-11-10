@@ -107,10 +107,13 @@ function ensureBar(e) {
   world.add(g); e.bar = g;
 }
 function spawnEnemy(arch, x, z, o = {}) {
-  const A = ARCH[arch], d = RUN.depth, B = biomeOf(d), cyc = cycleOf(d);
+  const A = ARCH[arch], d = RUN.depth, B = biomeOf(d);
   const [name, color] = B.enemies[arch];
   const cr = makeCreature(arch, color, B.eye);
-  const hpm = Math.pow(1.15, d - 1) * (1 + cyc * 1.5), dm = Math.pow(1.105, d - 1) * (1 + cyc * 0.8);
+  // tuned against a simulated climb (see README, Balance): foes take a little longer to kill each depth and hit a
+  // little harder, and past depth 25 an extra ramp builds steadily instead of jumping at the start of a cycle
+  const ramp = Math.max(0, d - 25) / 25;
+  const hpm = Math.pow(1.135, d - 1) * (1 + ramp * 1.5), dm = Math.pow(1.088, d - 1) * (1 + ramp * 0.8);
   const e = {
     id: uid++, arch, ai: A.ai, A, name, x, z, r: A.r, spd: A.spd * rand(0.92, 1.08), hp: A.hp * hpm, dmg: A.dmg * dm, xp: A.xp * (1 + 0.18 * (d - 1)),
     cd: rand(0.4, 1.4), wind: 0, mesh: cr.g, mats: cr.mats, u: cr.u, h: cr.h, strikeT: 0, scale: 1, arm: A.armor || 0, kx: 0, kz: 0, burnT: 0, burnD: 0, chillT: 0, flashT: 0,
@@ -148,10 +151,10 @@ function spawnEnemy(arch, x, z, o = {}) {
     e.hp = 950 * hpm; e.dmg = 15 * dm; e.xp = 400 * (1 + 0.2 * d); e.scale = 2.4; e.r = 1.25; e.spd = 2.6; e.arm = 0.1;
     e.patterns = B.boss.patterns; e.patT = 2; e.color = B.boss.color;
     e.mats[0].emissive.setHex(B.boss.color).multiplyScalar(0.25);
-    const crown = new THREE.Group();
-    for (let k = 0; k < 7; k++) crown.add(mesh(G.cone4, mat(0xf2c56b, 2.5), 0.1, 0.36, 0.1, Math.sin(k * 0.9) * 0.24, bc.h + 0.16, Math.cos(k * 0.9) * 0.24));
-    bc.g.add(crown);
+    bossDress(bc.g, B.id, bc.h);
   }
+  if (riftMod("swift")) e.spd *= 1.3;
+  if (riftMod("brutal")) e.dmg *= 1.4;
   e.maxHp = e.hp;
   e.mesh.scale.setScalar(e.scale);
   e.mesh.rotation.order = 'YXZ'; // flinch and topple tilt around the creature's own axis
@@ -166,7 +169,8 @@ function spawnEnemy(arch, x, z, o = {}) {
 function wake(e) {
   if (e.awake) return;
   e.awake = true;
-  if (e.boss && !bossRef) { bossRef = e; $('#bossBar').hidden = false; $('#bossName').textContent = e.name; banner(e.name, biomeOf(RUN.depth).name); sfx('boss'); setMusic('boss'); shake(0.35); }
+  if (e.boss && !bossRef) { bossRef = e; $('#bossBar').hidden = false; $('#bossName').textContent = e.name; banner(e.name, biomeOf(RUN.depth).name); sfx('boss'); setMusic('boss'); shake(0.35); hint('boss'); }
+  else hint('fight');
   // wake the rest of the pack
   for (const o of enemies) if (!o.awake && !o.boss && Math.hypot(o.x - e.x, o.z - e.z) < 7) { o.awake = true; }
 }
@@ -249,6 +253,7 @@ function updEnemy(e, dt) {
   if (e.burnT > 0) { e.burnT -= dt; e.hpTick = (e.hpTick || 0) + dt; if (e.hpTick > 0.5) { e.hpTick = 0; damageEnemy(e, e.burnD * 0.5, false, 0, 0, 0, false, 'burn'); if (e.dead) return; } }
   if (e.regen) e.hp = Math.min(e.maxHp, e.hp + e.maxHp * e.regen * dt);
   if (e.wardT > 0) e.wardT -= dt;
+  if (!e.enr && e.hp < e.maxHp * 0.5 && riftMod('frenzy')) { e.enr = 1; e.spd *= 1.4; e.dmg *= 1.35; burst(e.x, e.h * e.scale, e.z, 0xff3a3a, 10, 3, 0.12); floatNum(e.x, e.h * e.scale + 0.6, e.z, 'Enraged', 'crit'); }
   e.auraOn = null;
   if (e.lead && !e.lead.dead && Math.hypot(e.lead.x - e.x, e.lead.z - e.z) < 7) {
     e.auraOn = e.lead.aura;
@@ -668,13 +673,15 @@ function killEnemy(e, noLoot) {
   sfx(e.boss || e.leader ? 'bigkill' : 'kill');
   questEvent('kill', e);
   gainXP(e.xp);
-  S.kills++;
+  S.kills++; if (RUN) RUN.kills = (RUN.kills || 0) + 1;
   if (!e.boss && !e.leader) { const bn = e.champ ? e.name.split(' ').slice(e.aff.length).join(' ') : e.name; S.bestiary[bn] = (S.bestiary[bn] || 0) + 1; }
   else S.bestiary[e.name] = (S.bestiary[e.name] || 0) + 1;
   if (e.leader) stat('leaders'); if (e.champ) stat('champs');
   if (tal('rage')) for (let i = 0; i < 3; i++) skillCd[i] = Math.max(0, skillCd[i] - 0.3 * tal('rage'));
   if (Math.random() * 100 < 10 * tal('volatile') && !e.boss) { ringFx(e.x, e.z, 0.4, 2.6, 0.25, 0xb08cff, 2.4); for (const o of enemies) if (!o.dead && o !== e && Math.hypot(o.x - e.x, o.z - e.z) < 2.6 + o.r) damageEnemy(o, ST.dmg * 0.6 * ST.skillM, false, 3, (o.x - e.x), (o.z - e.z), false); }
   if (pet) pet.kills++;
+  if (e.riftGuard) riftComplete(e);
+  else if (riftMod('volatile') && !e.boss) telegraph(e.x, e.z, 1.8, 0.7, e.dmg * 1.1, { col: 0xb07aff });
   if (!noLoot || e.explode) dropLoot(e);
   if (e.split) for (let k = 0; k < 2; k++) { const s = spawnEnemy('skitter', e.x + rand(-0.6, 0.6), e.z + rand(-0.6, 0.6)); s.awake = true; s.xp *= 0.3; }
   if (e.explode && !e.ai.startsWith('bomb')) { telegraph(e.x, e.z, 2.2, 0.6, e.dmg * 0.9, { col: 0xffb02a }); }
@@ -688,12 +695,14 @@ function hurtPlayer(d, src) {
   if (Math.random() * 100 < ST.block) { floatNum(P.x, 2, P.z, 'Blocked', 'xp'); sfx('block'); burst(P.x + Math.sin(P.face) * 0.5, 1, P.z + Math.cos(P.face) * 0.5, 0xd8e0ff, 6, 3, 0.1); P.iframes = 0.15; return; }
   if (Math.random() * 100 < ST.evade) { floatNum(P.x, 2, P.z, 'Evaded', 'xp'); P.iframes = 0.15; return; }
   const red = ST.armor / (ST.armor + 40 + 9 * RUN.depth);
-  d *= (1 - red) * (1 - ST.dr / 100);
+  d *= (1 - red) * (1 - ST.dr / 100) * (riftMod('glass') ? 2 : 1);
   P.hp -= d; P.hurtT = 0.2;
   shake(clamp(d / ST.maxHp * 2.2, 0.18, 0.55)); addHitStop(0.04);
   floatNum(P.x, 2, P.z, '-' + fmt(d), 'hurt');
   const v = $('#vignette'); v.classList.add('hit'); setTimeout(() => v.classList.remove('hit'), 90);
   sfx('hurt');
+  if (RUN) { RUN.taken = (RUN.taken || 0) + d; if (src && src.name) RUN.lastHit = src.name; }
+  if (P.hp < ST.maxHp * 0.4 && P.hp > 0) hint('potion');
   if (src) {
     if (src.vamp) src.hp = Math.min(src.maxHp, src.hp + d * 2);
     if (src.burn) { P.burnT = 2.5; P.burnD = d * 0.2; }
@@ -712,9 +721,9 @@ function healPlayer(n, quiet) {
 function gainXP(x) {
   if (S.decor && S.decor.dummy) x *= 1.05;
   S.xp += x;
-  let up = false;
+  let up = false; const from = S.level;
   while (S.xp >= xpNeed(S.level)) { S.xp -= xpNeed(S.level); S.level++; up = true; }
-  if (up) { ST = calcStats(); P.hp = ST.maxHp; toast(`Level ${S.level}. Health and damage rise.`, 'var(--xpc)', true); sfx('level'); burst(P.x, 1, P.z, 0xf2c56b, 26, 6, 0.18); }
+  if (up) { ST = calcStats(); P.hp = ST.maxHp; sfx('level'); levelUpFx(from, S.level); }
 }
 
 // ================= loot =================
@@ -729,6 +738,7 @@ function spawnDrop(x, z, data) {
   else if (data.gem) { g.add(mesh(G.oct, mat(new THREE.Color(GEMS[gemSplit(data.gem)[0]].c).getHex(), 3), 0.22, 0.3, 0.22, 0, 0.12, 0)); }
   else if (data.potion) { g.add(mesh(G.sph, mat(0xe0473b, 2), 0.28, 0.28, 0.28, 0, 0.1, 0), mesh(G.box, mat(0x8a6a4a), 0.08, 0.12, 0.08, 0, 0.3, 0)); }
   else if (data.item) {
+    hint('loot');
     const c = data.item.set ? 0x5fd38a : RCOL[data.item.rarity];
     g.add(mesh(G.box, mat(c, 2.4), 0.3, 0.3, 0.3, 0, 0.2, 0)); g.children[0].rotation.set(0.6, 0, 0.6);
     if (data.item.rarity >= 2) { const beam = new THREE.Mesh(G.cyl, new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(1.5), transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending })); beam.scale.set(0.35, 6, 0.35); beam.position.y = 3; g.add(beam); levelDisp.push(beam.material); }
@@ -774,7 +784,7 @@ function updDrops(dt) {
 function pickup(dt) {
   if (dt.gold) { S.gold += dt.gold; RUN && (RUN.gold += dt.gold); floatNum(P.x, 1.8, P.z, '+' + dt.gold + 'g', 'crit'); sfx('coin'); }
   else if (dt.mat) { addMat(dt.mat, dt.n); toast(`+${dt.n} ${MATS[dt.mat].n}`, MATS[dt.mat].c); sfx('coin'); questEvent('mat', dt.mat, dt.n); }
-  else if (dt.gem) { S.gems[dt.gem] = (S.gems[dt.gem] || 0) + 1; toast(`+1 ${gemName(dt.gem)}`, GEMS[gemSplit(dt.gem)[0]].c); sfx('coin'); }
+  else if (dt.gem) { hint('gem'); S.gems[dt.gem] = (S.gems[dt.gem] || 0) + 1; toast(`+1 ${gemName(dt.gem)}`, GEMS[gemSplit(dt.gem)[0]].c); sfx('coin'); }
   else if (dt.potion) { S.potions++; toast('+1 Healing Draught', 'var(--blood-2)'); sfx('coin'); }
-  else if (dt.item) { S.inv.push(dt.item); toast(dt.item.name, dt.item.set ? 'var(--set)' : `var(--r${dt.item.rarity})`); sfx('coin'); if (RUN) RUN.items++; if (dt.item.set) stat('sets'); else if (dt.item.rarity === 4) stat('legs'); }
+  else if (dt.item) { S.inv.push(dt.item); toast(dt.item.name, dt.item.set ? 'var(--set)' : `var(--r${dt.item.rarity})`); sfx('coin'); if (RUN) RUN.items++; if (dt.item.set) { stat('sets'); hint('set'); } else if (dt.item.rarity === 4) stat('legs'); }
 }

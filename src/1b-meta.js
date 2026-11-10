@@ -173,6 +173,7 @@ function checkAch() {
     toast(`Achievement: ${a.n}`, 'var(--brass-2)', true); sfx('quest');
   }
 }
+const statInit = () => { if (S && !S.hints) S.hints = {}; };
 const stat = (k, n) => { S.stats[k] = (S.stats[k] || 0) + (n === undefined ? 1 : n); };
 
 // ================= derived stats from class, talents, sets and gems =================

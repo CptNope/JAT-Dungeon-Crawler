@@ -14,7 +14,7 @@ function clearWorld() {
   levelDisp = [];
   world = new THREE.Group(); scene.add(world);
   burstSys.life.fill(0);
-  clearCorpses(); facers.length = 0; releaseLock(); clearZones(); villagers.length = 0;
+  clearCorpses(); facers.length = 0; fxLife.length = 0; releaseLock(); clearZones(); villagers.length = 0;
   for (const R of rings) R.o.visible = false;
   for (const l of torchPool) { l.intensity = 0; l.distance = 9; }
   FLAME_MATS.length = 1;
@@ -98,7 +98,7 @@ function buildDungeonVisuals() {
   W.torchCore.color.set(B.torch).multiplyScalar(5);
   const floors = [];
   for (let j = 0; j < L.h; j++) for (let i = 0; i < L.w; i++) {
-    if (L.g[j * L.w + i] !== 1) continue;
+    if (L.g[j * L.w + i] !== 1 && L.g[j * L.w + i] !== 3) continue;
     let n4 = 0, nd = 0;
     for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (solid(i + a, j + b)) n4++;
     for (const [a, b] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) if (solid(i + a, j + b)) nd++;
@@ -109,9 +109,9 @@ function buildDungeonVisuals() {
   // walls are laid out by layoutWalls(), which runs again whenever the camera mode changes wall height
   L.wallTiles = []; L.torchSpots = [];
   for (let j = 0; j < L.h; j++) for (let i = 0; i < L.w; i++) {
-    if (L.g[j * L.w + i] === 1) continue;
+    if (L.g[j * L.w + i] !== 0) continue; // rock only: furniture and chasms are dressed separately
     let near = false;
-    for (let dj = -1; dj <= 1 && !near; dj++) for (let di = -1; di <= 1; di++) { const ii = i + di, jj = j + dj; if (ii >= 0 && jj >= 0 && ii < L.w && jj < L.h && L.g[jj * L.w + ii] === 1) { near = true; break; } }
+    for (let dj = -1; dj <= 1 && !near; dj++) for (let di = -1; di <= 1; di++) { const ii = i + di, jj = j + dj; if (ii >= 0 && jj >= 0 && ii < L.w && jj < L.h && L.g[jj * L.w + ii] !== 0) { near = true; break; } }
     if (near) L.wallTiles.push({ i, j, v: rand(0.82, 1.1), hv: rand(-0.12, 0.12) });
   }
   for (const r of L.rooms) {
@@ -126,6 +126,7 @@ function buildDungeonVisuals() {
     }
   }
   layoutWalls();
+  dressThemedRooms();
   // rubble along walls and biome decoration in the rooms
   const rocks = [], deco = [], glow = [];
   const st = L.rooms[0];
@@ -308,6 +309,7 @@ function buildHome(grp) {
     if (S.home.garden === 3) { const gh = new THREE.Mesh(G.box, new THREE.MeshStandardMaterial({ color: 0xcfeaff, transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0.1 })); gh.scale.set(3.2, 2.2, rows * 0.9 + 0.6); gh.position.set(14.2, 1.1, 4.6 + (rows - 1) * 0.45); levelDisp.push(gh.material); grp.add(gh); }
   }
   buildDecor(grp);
+  if (S.caravan) buildCaravan(grp);
   if (S.home.trophy > 0) {
     const shown = S.slain.slice(-8);
     for (let k = 0; k < 8; k++) {
@@ -421,3 +423,60 @@ function buildTownVisuals() {
 // ================= interactables =================
 const interacts = [];
 function addInteract(o) { interacts.push(o); if (o.label) addLabel(o.label, o.x, o.ly || 3.2, o.z, o.cls || 'npc', o); return o; }
+
+// ================= themed rooms =================
+function dressThemedRooms() {
+  const L = LV, W = worldMats(), B = biomeOf(L.depth);
+  const wood = [], books = [], stone = [], glowL = [], cliffs = [], rims = [];
+  L.floods = [];
+  for (const r of L.rooms) {
+    if (!r.theme) continue;
+    const cx = r.x + r.w / 2, cz = r.y + r.h / 2;
+    if (r.theme === 'library') {
+      for (const [i, j, side] of r.shelves) {
+        const x = i + 0.5, z = j + 0.5, dz = side === 0 ? -0.22 : side === 2 ? 0.22 : 0, d = side === 1 ? 0.7 : 0.45;
+        wood.push({ x, y: 1.1, z: z + dz, sx: 0.96, sy: 2.2, sz: d, c: 0x5a3a24 });
+        for (let s = 0; s < 3; s++) for (let b = 0; b < 6; b++) {
+          const face = side === 1 ? [-1, 1] : [side === 0 ? 1 : -1];
+          for (const f of face) books.push({ x: x - 0.38 + b * 0.15 + rand(-0.02, 0.02), y: 0.45 + s * 0.62, z: z + dz + f * (d / 2 - 0.06), sx: 0.11, sy: rand(0.32, 0.44), sz: 0.16, c: pick([0x7a2a2a, 0x2a4a7a, 0x3a6a3a, 0x8a6a2a, 0x5a3a6a, 0xc8b89a]) });
+        }
+      }
+      for (let k = 0; k < 3; k++) glowL.push({ x: rand(r.x + 1.5, r.x + r.w - 1.5), y: 0.95, z: rand(r.y + 1.5, r.y + r.h - 1.5), sx: 0.08, sy: 0.12, sz: 0.08, c: glowC(0xffc070, 3.4) });
+    } else if (r.theme === 'tomb') {
+      for (const [x, z] of r.coffins) {
+        stone.push({ x, y: 0.3, z, sx: 1.8, sy: 0.6, sz: 0.8, c: 0x4a463f });
+        stone.push({ x, y: 0.66, z, sx: 1.95, sy: 0.12, sz: 0.92, c: 0x5e5950 });
+        stone.push({ x: x + 0.3, y: 0.76, z, sx: 0.5, sy: 0.08, sz: 0.36, c: 0x3a3630 });
+        glowL.push({ x: x - 1.05, y: 0.4, z, sx: 0.08, sy: 0.14, sz: 0.08, c: glowC(0xffc070, 3) });
+      }
+    } else if (r.theme === 'hall') {
+      const long = r.w >= r.h, carpet = mesh(G.tile, new THREE.MeshStandardMaterial({ color: 0x6a1a22, roughness: 0.95 }), long ? r.w - 2 : 1.6, 1, long ? 1.6 : r.h - 2, cx, 0.012, cz);
+      levelDisp.push(carpet.material); world.add(carpet);
+    } else if (r.theme === 'flooded') {
+      const wm = new THREE.MeshStandardMaterial({ color: 0x4a9ab0, emissive: new THREE.Color(B.torch).lerp(new THREE.Color(0x1a5a6a), 0.7).multiplyScalar(0.18), transparent: true, opacity: 0.42, roughness: 0.12, metalness: 0.1, normalMap: TEX.cobble.normal, depthWrite: false });
+      wm.normalScale.set(0.3, 0.3); levelDisp.push(wm);
+      L.waterMats = (L.waterMats || []).concat(wm);
+      const wtr = mesh(G.tile, wm, r.w, 1, r.h, cx, 0.12, cz); wtr.renderOrder = 2; world.add(wtr);
+      L.floods.push(r);
+    } else if (r.theme === 'chasm') {
+      const abyss = mesh(G.tile, new THREE.MeshBasicMaterial({ color: new THREE.Color(B.torch).multiplyScalar(0.09) }), r.w - 4, 1, r.h - 4, cx, -6, cz);
+      levelDisp.push(abyss.material); world.add(abyss);
+      for (let j = r.y; j < r.y + r.h; j++) for (let i = r.x; i < r.x + r.w; i++) {
+        if (L.g[j * L.w + i] !== 5) continue;
+        for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          if (L.g[(j + b) * L.w + i + a] === 5) continue;
+          cliffs.push({ x: i + 0.5 + a * 0.5, y: -3, z: j + 0.5 + b * 0.5, sx: a ? 0.06 : 1, sy: 6, sz: b ? 0.06 : 1, c: grey(rand(0.55, 0.75)) });
+          rims.push({ x: i + 0.5 + a * 0.44, y: 0.05, z: j + 0.5 + b * 0.44, sx: a ? 0.14 : 1.02, sy: 0.1, sz: b ? 0.14 : 1.02, c: grey(rand(0.8, 1)) });
+        }
+        if (chance(0.12)) glowL.push({ x: i + rand(0.2, 0.8), y: -5.6, z: j + rand(0.2, 0.8), sx: 0.12, sy: 0.12, sz: 0.12, c: glowC(B.torch, 3) });
+      }
+    }
+  }
+  if (wood.length) instanced(G.box, W.decoStd, wood, { keep: true, cast: true });
+  if (books.length) instanced(G.box, W.decoStd, books, { keep: true });
+  if (stone.length) instanced(G.box, W.decoStd, stone, { keep: true, cast: true });
+  if (cliffs.length) instanced(G.box, W.wall, cliffs, { keep: true });
+  if (rims.length) instanced(G.box, W.cap, rims, { keep: true });
+  if (glowL.length) instanced(G.sph, W.glow, glowL, { keep: true, receive: false });
+}
+const inFlood = (x, z) => LV && LV.floods && LV.floods.some((r) => x >= r.x && x < r.x + r.w && z >= r.y && z < r.y + r.h);
