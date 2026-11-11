@@ -6,6 +6,8 @@ const CLASSES = {
     d: 'Quick feet and a sharp eye. Kills from range and never stands still.', perk: '+5% critical chance, +8% move speed, +10% damage with bows, daggers and spears.' },
   mage: { n: 'Mage', col: 0x4a3a8a, trim: 0xe0aa50, weapon: 'staff', aff: ['staff'], skills: ['nova', 'blink', 'meteor'],
     d: 'Fire, frost and folded space. Fragile, and terrifying when the cooldowns line up.', perk: '+25% skill damage, +0.6 health per second, +15% damage with staves.' },
+  necro: { n: 'Necromancer', col: 0x2c3a30, trim: 0xb9e8b0, weapon: 'dagger', aff: ['dagger', 'staff'], skills: ['raise', 'bonespear', 'corpse'],
+    d: 'Bone, rot and borrowed soldiers. Never fights alone, and every fallen foe is another weapon.', perk: 'Heal 2% of max health per kill, +6% damage reduction, +12% damage with daggers and staves.' },
 };
 const clsOf = () => CLASSES[(S && S.cls) || 'warrior'];
 const SKILL_DEFS = {
@@ -17,6 +19,9 @@ const SKILL_DEFS = {
   rain: { n: 'Rain of Arrows', cd: 12, d: 'Storm-tipped arrows fall on a target area for two seconds, hitting every foe inside ten times for 45% lightning damage. Lightning on a burning foe overloads.' },
   nova: { n: 'Ember Nova', cd: 9, d: 'A ring of fire bursts from you for 250% fire damage, hurling foes back and setting them alight. Fire on a chilled foe is a thermal shock.' },
   blink: { n: 'Blink', cd: 6, d: 'Fold space and step up to seven paces away. Frost bursts where you stood: 120% cold damage and a deep chill. Chilling a chilled foe freezes it.' },
+  raise: { n: 'Raise Skeletons', cd: 8, d: 'Two skeletons claw out of the ground and fight beside you for 20 seconds, each hitting for 45% of your damage. Up to four at once.' },
+  bonespear: { n: 'Bone Spear', cd: 4, d: 'Hurl a lance of bone that passes through every foe in a line for 260% damage.' },
+  corpse: { n: 'Corpse Explosion', cd: 7, d: 'Every fallen foe within nine paces bursts, dealing 160% damage around itself. The fresher the dead, the more you have to work with.' },
   meteor: { n: 'Meteor', cd: 11, d: 'Call a falling star onto the target area: 380% fire damage and a burning crater. A critical hit shatters frozen foes.' },
 };
 const SKILL_LVL = [1, 4, 8];
@@ -57,6 +62,17 @@ const TALENTS = {
     { id: 'archmage', n: 'Archmage', t: 2, d: (r) => `+${8 * r}% damage` },
     { id: 'overflow', n: 'Overflow', t: 2, d: (r) => `${10 * r}% chance a skill costs no cooldown` },
     { id: 'glass', n: 'Glass Cannon', t: 2, d: (r) => `+${4 * r}% critical chance and +${12 * r}% critical damage` },
+  ],
+  necro: [
+    { id: 'gravepact', n: 'Grave Pact', t: 0, d: (r) => `Skeletons deal +${20 * r}% damage` },
+    { id: 'bonearmor', n: 'Bone Armor', t: 0, d: (r) => `+${8 * r}% armor and +${3 * r}% max health` },
+    { id: 'siphon', n: 'Soul Siphon', t: 0, d: (r) => `+${r}% life steal` },
+    { id: 'legion', n: 'Legion', t: 1, d: (r) => `Skeletons last ${5 * r} seconds longer, and Raise calls ${r >= 3 ? 'three' : 'two'}` },
+    { id: 'marrow', n: 'Marrow', t: 1, d: (r) => `Bone Spear deals +${20 * r}% damage and recharges ${0.3 * r}s faster` },
+    { id: 'plague', n: 'Plague', t: 1, d: (r) => `Corpse Explosion bursts ${15 * r}% wider and reaches ${r * 2} paces farther` },
+    { id: 'lich', n: 'Lich Form', t: 2, d: (r) => `+${8 * r}% damage` },
+    { id: 'undying', n: 'Undying', t: 2, d: (r) => `Skeletons burst for ${50 * r}% damage when they fall back to dust` },
+    { id: 'reaper', n: 'Reaper', t: 2, d: (r) => `+${4 * r}% critical chance; every kill takes ${(0.2 * r).toFixed(1)}s off your skill cooldowns` },
   ],
 };
 const TAL_MAX = 3;
@@ -109,6 +125,13 @@ BIOMES.push(
   { id: 'blood', name: 'The Bloodroot Warren', floor: 0x362a2a, floor2: 0x2e2424, wall: 0x4e3434, torch: 0xffa27a, fog: 0x100608, amb: 0x8a5a5e, bolt: 0xff3a5a, eye: 0xffd06a, mats: ['sap', 'thorn'], deco: 'roots',
     enemies: { grunt: ['Thornling', 0x8a4a3a], brute: ['Root Colossus', 0x5a3a2a], archer: ['Seed Spitter', 0x9a6a4a], caster: ['Blood Druid', 0xa03a4a], skitter: ['Tick Swarm', 0x6a2a2a], bomber: ['Gore Pod', 0xc04a5a], summoner: ['Heartwood Crone', 0x6a3a4a], warden: ['Bark Warden', 0x5a4a3a] },
     boss: { name: 'The Heart of the Wood', shape: 'summoner', color: 0xd03a5a, patterns: ['roots', 'summon', 'meteor', 'whirlpool'] } },
+  // past the Hollow King: depths 41 to 50
+  { id: 'shore', name: 'The Starless Shore', floor: 0x24272e, floor2: 0x1f2228, wall: 0x343a46, torch: 0xa8c8ff, fog: 0x04060c, amb: 0x4f6c9e, bolt: 0x7ab8ff, eye: 0xc8e8ff, mats: ['moonpearl', 'driftwood'], deco: 'pools',
+    enemies: { grunt: ['Shoal Wretch', 0x5a6a8a], brute: ['Tidewalker Giant', 0x3a4a6a], archer: ['Pearl Sniper', 0xb8c8e0], caster: ['Moon Oracle', 0x8a9ae8], skitter: ['Glass Shrimp', 0xa8e0ff], bomber: ['Ink Sac', 0x2a2a44], summoner: ['Shell Mother', 0xe0b8c8], warden: ['Barnacle Knight', 0x6a7a8a] },
+    boss: { name: 'The Drowned Moon', shape: 'caster', color: 0xbfd8ff, patterns: ['ripple', 'wave', 'spiral', 'summon'] } },
+  { id: 'gilded', name: 'The Gilded Necropolis', floor: 0x4a4438, floor2: 0x423c32, wall: 0x6e6450, torch: 0xffe6a0, fog: 0x0e0b06, amb: 0xb09a72, bolt: 0xffd860, eye: 0xfff2c0, mats: ['goldleaf', 'relic'], deco: 'urns',
+    enemies: { grunt: ['Gilded Mummy', 0xc8b888], brute: ['Tomb Colossus', 0x8a7a5a], archer: ['Reliquary Archer', 0xd8c8a0], caster: ['Embalmer', 0x6a8a7a], skitter: ['Scarab Swarm', 0x3a6a5a], bomber: ['Canopic Jar', 0xb08a5a], summoner: ['High Priest', 0xe0c060], warden: ['Sarcophagus Guard', 0xd0a848] },
+    boss: { name: 'The Gilded Sovereign', shape: 'warden', color: 0xf0c850, patterns: ['cross', 'chase', 'beam', 'summon'] } },
 );
 Object.assign(MATS, {
   pearl: { n: 'Black Pearl', c: '#5a8a9a', where: 'The Drowned Deep, depths 26 to 30' },
@@ -117,6 +140,10 @@ Object.assign(MATS, {
   brass: { n: 'Brass Plate', c: '#e0b860', where: 'The Clockwork Vault, depths 31 to 35' },
   sap: { n: 'Bloodsap', c: '#d03a4a', where: 'The Bloodroot Warren, depths 36 to 40' },
   thorn: { n: 'Heartthorn', c: '#8a5a3a', where: 'The Bloodroot Warren, depths 36 to 40' },
+  moonpearl: { n: 'Moon Pearl', c: '#a8d0ff', where: 'The Starless Shore, depths 41 to 45' },
+  driftwood: { n: 'Pale Driftwood', c: '#c8c0b0', where: 'The Starless Shore, depths 41 to 45' },
+  goldleaf: { n: 'Gold Leaf', c: '#f0c850', where: 'The Gilded Necropolis, depths 46 to 50' },
+  relic: { n: 'Sealed Relic', c: '#d8b880', where: 'The Gilded Necropolis, depths 46 to 50' },
 });
 const MAT_ORDER = Object.keys(MATS);
 // two new behaviours, named per biome
@@ -131,6 +158,8 @@ const NEW_FOES = {
   drowned: { leaper: ['Reef Crab', 0xc0604a], totem: ['Tide Bell', 0x5a8a8a] },
   clock: { leaper: ['Pounce Engine', 0xa08048], totem: ['Tesla Coil', 0x7a8aa0] },
   blood: { leaper: ['Flayed Hound', 0xa04a4a], totem: ['Heart Shrine', 0x6a2a3a] },
+  shore: { leaper: ['Riptide Hound', 0x4a6a9a], totem: ['Lighthouse Idol', 0x9ab8e0] },
+  gilded: { leaper: ['Jackal Shade', 0x5a4a3a], totem: ['Sun Obelisk', 0xe0c060] },
 };
 for (const B of BIOMES) Object.assign(B.enemies, NEW_FOES[B.id]);
 
@@ -184,10 +213,12 @@ function applyMeta(s) {
   const aff = CLASSES[C].aff.includes(s.wk);
   if (C === 'warrior') { hpM += 0.2; s.armor += 6; if (aff) dmgM += 0.1; }
   else if (C === 'ranger') { s.crit += 5; s.move += 8; if (aff) dmgM += 0.1; }
+  else if (C === 'necro') { s.dr += 6; if (aff) dmgM += 0.12; }
   else { s.skillM += 0.25; s.regen += 0.6; if (aff) dmgM += 0.15; }
   // talents
-  dmgM += 0.06 * tal('brawn') + 0.08 * tal('archmage');
-  armM += 0.08 * tal('hide'); hpM += 0.04 * tal('hide') + 0.1 * tal('juggernaut');
+  dmgM += 0.06 * tal('brawn') + 0.08 * tal('archmage') + 0.08 * tal('lich');
+  armM += 0.08 * tal('hide') + 0.08 * tal('bonearmor'); hpM += 0.04 * tal('hide') + 0.1 * tal('juggernaut') + 0.03 * tal('bonearmor');
+  s.ls += tal('siphon'); s.crit += 4 * tal('reaper');
   s.arcM += 0.12 * tal('cleave'); s.reachM += 0.05 * tal('cleave');
   s.ls += tal('bloodlust'); s.block += 6 * tal('shieldwall'); s.cdr += 8 * tal('warlord') + 7 * tal('focus');
   s.crit += 3 * tal('keen') + 4 * tal('glass'); s.move += 5 * tal('fleet'); s.aspd += 6 * tal('quickdraw');
@@ -216,4 +247,4 @@ function applyMeta(s) {
   return s;
 }
 // loot from foes and chests: a share of legendary rolls become set pieces
-function lootItem(il, o) { const it = genItem(il, o); return it.rarity === 4 && chance(0.4) ? makeSetItem(il) : it; }
+function lootItem(il, o) { const it = genItem(il, o); return maybeAscend(it.rarity === 4 && chance(0.4) ? makeSetItem(il) : it, il, (RUN && RUN.rift ? Math.min(0.08, (RUN.rift.tier || 0) * 0.003) : 0)); }

@@ -42,6 +42,17 @@ Every key below can be rebound in **Settings → Controls** (arrow keys, Shift a
 
 ## What's in it
 
+- **Necromancer**, the fourth class: Raise Skeletons (two at a time, up to four, fighting for 20 seconds), Bone Spear (pierces every foe in a line) and Corpse Explosion (every fallen foe nearby bursts; fallen foes glow green for 12 seconds). Heals 2% on every kill. Nine talents of its own: Grave Pact, Bone Armor, Soul Siphon, Legion, Marrow, Plague, Lich Form, Undying, Reaper.
+- **Depths 41 to 50**: past the Hollow King lie the Starless Shore (black sand, glowing tide pools; the Drowned Moon) and the Gilded Necropolis (gold and marble; the Gilded Sovereign), each with ten foes of its own, new materials, ambience and resistances.
+- **New boss attacks**: Ripple (rings of blows with a turning gap), Chase (blows fall where you stand, again and again) and Cross (a plus, then an X), used by the new bosses and added to the Bone Regent, Ashmaw and the Rime Halls boss.
+- **New rooms**: treasure vaults with three chests, one of them a Mimic with a hoard inside, and overgrown groves with a healing spring. Flooded rooms in the Magma Forge are lava, and it burns.
+- **Paragon**: levels stop at 60; past it, experience earns Paragon levels, each a point for Might, Vigor, Swiftness or Fortune (moved freely, Bag → Paragon). Heroes already past 60 keep every extra level as Paragon.
+- **Ancient and Primal gear**: from item level 32, legendaries and set pieces can drop Ancient (30% stronger); from 45, rarely Primal (50% stronger, one extra affix). Higher rift tiers raise the odds. A Runeforge can Awaken any legendary into an Ancient one with the new deep materials.
+- **Rift Guardians**: five of them (Warden of Hours, Maw of the Rift, the Many-Eyed, Riftwyrm Matriarch, the Unmade Knight), each with its own look and boss attacks.
+- **Seasonal festivals**: in November it's the Harvest Moon: gourd lanterns around the village, Harvest Tokens from foes, 10% more experience, and a festival stall trading caches, an Elixir of Plenty, essence and a Gourd Lantern for your yard. Frostfall (December) and Hallows' Eve (October) are set up the same way.
+- **Spell effects**: shader-drawn fire, frost, lightning and bone novas; forked lightning bolts that flicker; ice spikes that erupt and melt; spells briefly light the dungeon around them. Water ripples and catches light; lava churns under a cooling crust. Your gear shows on your hero: crests and brow bands on fine helms, glowing trims on fine armour, lit soles on epic boots, a halo when three pieces are Ancient.
+- **Online (on the published claude.ai page only)**: Menu → Online. A Weekly Rift leaderboard and a Deepest Descent board for everyone who can open the page; your weekly time is sent with a ghost of your run, and in the Weekly Rift you race the fastest ghost (or one you pick) as a pale figure on the same floors. **Parties**: start one and share its five-letter code; you see each other walking the village and inside the same seeded rift, anyone can call the party into a rift, and finishing times are announced to everyone. Each player fights their own foes; enemies are not shared between players. Names are shown as each viewer's claude.ai sees them, and only ids are stored. None of this exists on a plain web host, where the game stays single-player.
+
 - **Settings** (menu → Settings): view, graphics, a battery saver (30 fps cap, low resolution), look speed, music, vibration and the loot filter; **Accessibility**: red-green and blue-yellow safe palettes (rarity colours and the enemy warning colour, with rarity letters on every item), four interface sizes, reduce motion (no shake, hit-stop, slow motion, lens kicks or lightning flashes), and difficulty; **Controls**: rebind any key. The HUD, panels, toasts and death screen carry screen-reader roles and live regions.
 - **Difficulty** (per hero, change any time): Story (much softer foes, no gold lost on death), Normal, Hard (tougher foes, 30% more experience, 40% more magic find).
 - **Builds**: item names float over loot on the ground; the loot filter salvages Common (or Common and Uncommon) gear into essence the moment you pick it up, never sets or legendaries; three **loadouts** in the Bag save your gear and talents and swap them in one press (bag gear anywhere, stash gear and talents in town).
@@ -53,10 +64,11 @@ Every key below can be rebound in **Settings → Controls** (arrow keys, Shift a
 - **Graphics**: golden-hour town with sun shadows, sky dome and image-based light; torch-lit dungeons where the lantern casts shadows and the nearest wall torches flicker as real lights; HDR bloom, ACES tone mapping, colour grade and vignette; procedurally generated stone, brick, cobble, grass, wood, shingle and plaster textures with normal maps; wind-blown grass, biome particles (dust, spores, embers, snow, void sparks) and torch flames; arm and leg animation for every creature. High, Medium and Low quality presets, with automatic step-down on slow devices.
 
 - **Combat feel**: hit-stop and camera shake on heavy blows (shake can be turned off), three-hit combos with real swing animations, weapon trails, shockwave rings, flinch and stagger, corpses that topple and sink, lock-on targeting with camera framing, FOV kick on rolls and dashes.
-- **Classes**: pick Warrior, Ranger or Mage for a new hero (older saves are asked once and keep their gear). Each has its own perks and three skills:
+- **Classes**: pick Warrior, Ranger, Mage or Necromancer for a new hero (older saves are asked once and keep their gear). Each has its own perks and three skills:
   - Warrior: Whirlwind, Leap Slam, War Cry
   - Ranger: Volley, Shadow Dash, Rain of Arrows
   - Mage: Ember Nova, Blink, Meteor
+  - Necromancer: Raise Skeletons, Bone Spear, Corpse Explosion
 - **Talents**: one point per level, spent across a three-tier tree of nine talents per class (block, evasion, executioner, multishot, ricochet, overflow and more). Elder Maren unlearns them for a fee.
 - **Set items and gems**: three three-piece sets with two- and three-piece bonuses drop in place of some legendaries. Rare and better gear can roll sockets, and you can drill more at the workshop. Five gem types in three cuts drop from foes and chests; fuse three into the next cut.
 - **Dungeon events**: spike traps, shrines (Fury, Stone, Fortune, Haste, Life) that bless the rest of the run, and cursed altars that summon three ambush waves guarding a rich chest. Rooms are dressed with barrels, crates and biome-coloured banners.
@@ -79,8 +91,8 @@ Every key below can be rebound in **Settings → Controls** (arrow keys, Shift a
 - **The yard**: lantern posts, flower beds, banners in your class colours, a training dummy, a fountain and a statue of you, each with a small bonus.
 - **A living village**: a six-minute day and night cycle with stars, fireflies and lamplight, and villagers who walk the paths and stop to talk (about you, your depth and your dog).
 - **Progression**: three save slots, 28 achievements, a bestiary of every foe and boss by biome, a hall of records for your best descents, and a save code you can copy out and import on another device.
-- **Endless dungeon**: rooms-and-corridors generation with a flow field for enemy pathing. Eight biomes of five depths each, then round again with rising difficulty: Sunken Crypt, Fungal Hollows, Magma Forge, Rime Halls, The Hollow Rift, The Drowned Deep, The Clockwork Vault, The Bloodroot Warren.
-- **80 enemy types**: 10 behaviours (melee, charger, archer, caster, swarm, bomber, summoner, shield-bearer, leaper, warding totem) × 8 biomes, plus 10 champion affixes (Swift, Vampiric, Splitting, Explosive…), named **leaders** with Frenzy/Ward/Rally auras that buff their pack, and a two-phase **boss** every fifth depth with its own attack patterns (the deep three add whirlpools, breaking waves, turning beams and racing roots). Bosses open waypoints.
+- **Endless dungeon**: rooms-and-corridors generation with a flow field for enemy pathing. Ten biomes of five depths each, then round again with rising difficulty: Sunken Crypt, Fungal Hollows, Magma Forge, Rime Halls, The Hollow Rift, The Drowned Deep, The Clockwork Vault, The Bloodroot Warren, The Starless Shore, The Gilded Necropolis.
+- **100 enemy types**: 10 behaviours (melee, charger, archer, caster, swarm, bomber, summoner, shield-bearer, leaper, warding totem) × 10 biomes, plus 10 champion affixes (Swift, Vampiric, Splitting, Explosive…), named **leaders** with Frenzy/Ward/Rally auras that buff their pack, and a two-phase **boss** every fifth depth with its own attack patterns (the deep three add whirlpools, breaking waves, turning beams and racing roots). Bosses open waypoints.
 - **Loot**: 7 weapon types (melee arcs and ranged projectiles), 6 slots, 5 rarities, 13 affixes, 16 legendary powers (chain lightning, flame nova, spectral blades, phoenix, and the eight skill legendaries above).
 - **Crafting**: draughts, portal scrolls, elixirs, forging rare/epic/legendary gear for a chosen slot, upgrades to +10, affix rerolls, salvage into essence.
 - Progress saves in the browser (localStorage).
@@ -139,7 +151,10 @@ src/            game source (edit these)
   6b-meta-ui.js class choice, talents, gems and sockets, yard, codex, save slots and export
   6c-pad.js     gamepad play and menu navigation
   6d-share.js   run card, photo mode, rift seed codes
+  4d-vfx.js     shader spell effects, lightning, ice, spell light, water and lava, gear on the hero
+  5h-endgame.js Paragon, Ancient and Primal gear, Rift Guardians, seasonal festivals
   6e-settings.js settings, accessibility palettes, difficulty, key bindings, credits
+  6f-online.js  leaderboards, ghosts and parties (claude.ai capabilities; absent elsewhere)
   sw.js         offline cache for the hosted build (version stamped by build.sh)
   6-ui.js       HUD and all panels (shops, home, crafting, bag)
   7-main.js     input, look controls, title menu, loop, adaptive quality, boot

@@ -33,7 +33,7 @@ function startRift(t, weekly, coded) {
   else if (weekly) { const W = weeklyDef(); t = W.tier; mods = W.mods; seed = W.seed; }
   else { const n = t >= 10 ? 3 : t >= 4 ? 2 : 1, keys = Object.keys(RIFT_MODS); mods = []; while (mods.length < n) { const m = pick(keys); if (!mods.includes(m)) mods.push(m); } }
   startDelve(riftDepth(t), [], { mode: 'rift', rift: { tier: t, mods, floor: 1, t0: performance.now(), par: riftPar(t), weekly: !!weekly, seed, code: coded ? coded.code : null } });
-  hint('rift');
+  hint('rift'); ghostRecStart(); if (weekly) autoGhost();
   banner(weekly ? 'Weekly Rift' : coded ? 'Seeded rift' : `Rift tier ${t}`, mods.map((m) => RIFT_MODS[m].n).join(' · '));
 }
 const riftTime = () => (RUN && RUN.rift ? ((RUN.rift.end || performance.now()) - RUN.rift.t0) / 1000 : 0);
@@ -49,10 +49,12 @@ function riftStairs(x, z) { // the last floor's exit is a sealed rift until its 
 }
 function riftGuardian(r) {
   const [x, z] = [r.x + r.w / 2 + 1.5, r.y + r.h / 2];
-  const e = spawnEnemy(pick(['brute', 'warden', 'caster']), x, z, { leader: true });
-  e.name = 'Rift Guardian'; e.riftGuard = 1; e.hp = e.maxHp = e.maxHp * 2.2; e.dmg *= 1.15; e.scale *= 1.15; e.mesh.scale.setScalar(e.scale);
+  const Gd = GUARDIANS[(RUN.rift.seed !== undefined ? Math.abs(RUN.rift.seed) : randi(0, 999)) % GUARDIANS.length];
+  const e = spawnEnemy(Gd.arch, x, z, { leader: true });
+  e.name = Gd.n; e.riftGuard = 1; e.hp = e.maxHp = e.maxHp * 2.6; e.dmg *= 1.15; e.scale *= 1.3; e.mesh.scale.setScalar(e.scale);
+  e.guardPat = Gd.pats; e.patterns = Gd.pats; e.patT = 3;
   if (e.label) e.label.el.textContent = e.name;
-  e.u.uRim.value.setRGB(0.5, 0.25, 0.9);
+  e.u.uRim.value.setRGB(...Gd.rim);
 }
 function riftComplete(e) {
   const R = RUN.rift; if (R.done) return;
@@ -65,7 +67,8 @@ function riftComplete(e) {
   S.rift.cleared = Math.max(S.rift.cleared || 0, t);
   if (!S.rift.best[t] || secs < S.rift.best[t]) S.rift.best[t] = secs;
   if (R.code) { S.seedBest = S.seedBest || {}; if (!S.seedBest[R.code] || secs < S.seedBest[R.code]) S.seedBest[R.code] = secs; }
-  if (R.weekly) { const k = weeklyDef().key; if (!S.weekly || S.weekly.key !== k) S.weekly = { key: k, best: null, tries: 0 }; if (!S.weekly.best || secs < S.weekly.best) S.weekly.best = secs; }
+  if (R.weekly) { const k = weeklyDef().key; if (!S.weekly || S.weekly.key !== k) S.weekly = { key: k, best: null, tries: 0 }; if (!S.weekly.best || secs < S.weekly.best) S.weekly.best = secs; submitBoard({ time: secs, ghost: ghostString(R) }); }
+  partyDone(secs);
   stat('rifts');
   gainXP(80 * t + 40);
   addChest(e.x, e.z, true);

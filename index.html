@@ -435,6 +435,33 @@ body.photo .lbl.drop{display:none!important}
 </style>
 <style>@media (orientation:portrait){body.touch #hint{bottom:auto;top:calc(214px + env(safe-area-inset-top,0px))}}</style>
 <style>body:has(#panel:not([hidden])) #dlg{visibility:hidden}</style>
+<style>
+/* Ancient and Primal gear */
+.cell.anc1{box-shadow:inset 0 0 0 2px var(--r4),0 0 10px -2px var(--r4)}
+.cell.anc2{box-shadow:inset 0 0 0 2px #ff4a4a,0 0 14px -2px #ff4a4a}
+.icard.anc1{border-color:var(--r4);box-shadow:0 0 0 1px var(--r4) inset}
+.icard.anc2{border-color:#ff4a4a;box-shadow:0 0 0 1px #ff4a4a inset,0 0 24px -10px #ff4a4a}
+.ancb{font-weight:700;color:var(--r4);letter-spacing:.06em;text-transform:uppercase;font-size:.85em}
+.icard.anc2 .ancb{color:#ff6a5a}
+.lbl.drop.anc1{box-shadow:0 0 0 1px var(--r4),0 0 12px -2px var(--r4)}
+.lbl.drop.anc2{color:#ff6a5a;box-shadow:0 0 0 1px #ff4a4a,0 0 16px -2px #ff4a4a}
+#xpFill.para{background:linear-gradient(90deg,#5aa8ff,#bfe4ff)}
+</style>
+<style>
+/* online */
+.online-only{display:none}
+body.online .online-only{display:inline-flex}
+.board{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.board li{display:flex;align-items:center;gap:12px;padding:8px 12px;border:1px solid var(--line);border-radius:4px;background:var(--ink-2)}
+.board li.me{border-color:var(--brass-2)}
+.board .rk{font:600 14px var(--f-mono);color:var(--muted);min-width:2ch;text-align:right}
+.board .who{flex:1;min-width:0;display:flex;flex-direction:column;overflow-wrap:anywhere}
+.board .who small{color:var(--muted);font-size:12px}
+.board b{font:600 14px var(--f-mono);color:var(--brass-2);white-space:nowrap}
+.lbl.ghostlbl{color:#bfe4ff;font-style:italic}
+#invite{position:fixed;left:50%;top:calc(90px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:8;max-width:min(420px,calc(100vw - 32px));padding:14px 16px;border:1px solid #9fd8ff;border-radius:6px;background:rgba(14,16,24,.94);box-shadow:0 10px 30px rgba(0,0,0,.5)}
+#invite p{margin:0 0 10px;line-height:1.4}
+</style>
 </head><body>
 <canvas id="stage"></canvas>
 <div id="hud" hidden>
@@ -487,6 +514,7 @@ body.photo .lbl.drop{display:none!important}
     <div id="pBody"></div>
   </div>
 </div>
+<div id="invite" hidden role="alertdialog" aria-labelledby="invTxt"><p id="invTxt"></p><div class="acts"><button class="btn" type="button" id="invGo">Join the rift</button><button class="btn ghost" type="button" id="invNo">Not now</button></div></div>
 <div id="bossIntro" hidden aria-live="assertive"><i class="lb t"></i><i class="lb b"></i><div class="bi-card"><div id="biEpi"></div><div id="biName"></div><div id="biWhere"></div></div></div>
 <div id="loading" hidden role="status"><div class="ld-in"><div class="ld-spin" aria-hidden="true"></div><div class="ld-h">Descending</div><p id="ldTip"></p></div></div>
 <div class="over" id="title">

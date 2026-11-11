@@ -14,7 +14,7 @@ function clearWorld() {
   levelDisp = [];
   world = new THREE.Group(); scene.add(world);
   burstSys.life.fill(0);
-  clearCorpses(); facers.length = 0; fxLife.length = 0; releaseLock(); clearZones(); villagers.length = 0;
+  clearCorpses(); clearMinions(); facers.length = 0; fxLife.length = 0; releaseLock(); clearZones(); villagers.length = 0;
   for (const R of rings) R.o.visible = false;
   for (const l of torchPool) { l.intensity = 0; l.distance = 9; }
   FLAME_MATS.length = 1;
@@ -145,6 +145,8 @@ function buildDungeonVisuals() {
       case 'kelp': { const s = rand(0.7, 1.5); deco.push({ x, y: 0.55 * s, z, sx: 0.07, sy: 1.1 * s, sz: 0.07, rz: rand(-0.25, 0.25), rx: rand(-0.2, 0.2), c: pick([0x3a8a6a, 0x2a6a5a, 0x5a9a5a]) }); deco.push({ x: x + 0.12, y: 0.4 * s, z: z - 0.08, sx: 0.06, sy: 0.8 * s, sz: 0.06, rz: rand(-0.3, 0.3), c: 0x2a7a6a }); if (chance(0.4)) glow.push({ x: x + 0.2, y: 0.08, z, sx: 0.12, sy: 0.12, sz: 0.12, c: glowC(0x9affe8, 2.6) }); break; }
       case 'gears': deco.push({ x, y: 0.04, z, sx: rand(0.5, 1.0), sy: 0.08, sz: 0, ry: rand(0, 3), c: pick([0xb08a4a, 0x8a7050, 0xc8a060]) }); if (chance(0.35)) glow.push({ x, y: 0.1, z, sx: 0.1, sy: 0.1, sz: 0.1, c: glowC(0xffc84a, 3) }); break;
       case 'roots': deco.push({ x, y: 0.06, z, sx: rand(0.9, 1.8), sy: 0.12, sz: 0.14, ry: rand(0, 3), c: pick([0x4a2a22, 0x5a3426, 0x3a221c]) }); if (chance(0.5)) glow.push({ x: x + rand(-0.3, 0.3), y: 0.12, z: z + rand(-0.3, 0.3), sx: 0.16, sy: 0.12, sz: 0.16, c: glowC(0xff3a5a, 2.8) }); break;
+      case 'pools': { const s = rand(0.35, 0.8); glow.push({ x, y: 0.012, z, sx: s, sy: 0.01, sz: s * rand(0.6, 1), ry: rand(0, 3), c: glowC(pick([0x3a78c8, 0x4a98c0, 0x6a62c0]), 0.9) }); if (chance(0.5)) deco.push({ x: x + rand(-0.4, 0.4), y: 0.05, z: z + rand(-0.4, 0.4), sx: 0.12, sy: 0.08, sz: 0.16, ry: rand(0, 3), c: pick([0xe8dcd0, 0xd8c8e0, 0xc8d8e8]) }); break; }
+      case 'urns': { const s = rand(0.7, 1.1); deco.push({ x, y: 0.28 * s, z, sx: 0.32 * s, sy: 0.56 * s, sz: 0.32 * s, c: pick([0xd8b050, 0xc89a40, 0xe8d8b0]) }); if (chance(0.5)) glow.push({ x: x + rand(-0.4, 0.4), y: 0.02, z: z + rand(-0.4, 0.4), sx: 0.1, sy: 0.02, sz: 0.1, ry: rand(0, 3), c: glowC(0xffd860, 2.2) }); break; }
       case 'shards': glow.push({ x, y: rand(0.7, 1.6), z, sx: 0.16, sy: 0.32, sz: 0.16, ry: rand(0, 3), c: glowC(pick([0xd06cff, 0x8a6cff, 0xff6cf0]), 3) }); break;
     }
   }
@@ -162,8 +164,8 @@ function buildDungeonVisuals() {
   if (barrels.length) { instanced(G.cyl, W.timber, barrels, { keep: true, cast: true }); instanced(G.cyl, W.iron, hoops, { keep: true }); }
   if (crates.length) instanced(G.box, W.door, crates, { keep: true, cast: true });
   for (const q of deco) if (q.sz === 0) q.sz = q.sx; // gears lie flat and round
-  if (deco.length) instanced(B.deco === 'ice' ? G.oct : B.deco === 'gears' ? G.cyl : B.deco === 'kelp' ? G.taper : G.box, B.deco === 'ice' ? W.decoIce : W.decoStd, deco, { keep: true, cast: true });
-  if (glow.length) instanced(B.deco === 'shrooms' || B.deco === 'kelp' || B.deco === 'roots' ? G.sph : B.deco === 'shards' ? G.oct : G.box, W.glow, glow, { keep: true, receive: false });
+  if (deco.length) instanced(B.deco === 'ice' ? G.oct : B.deco === 'gears' || B.deco === 'urns' ? G.cyl : B.deco === 'kelp' ? G.taper : B.deco === 'pools' ? G.sph : G.box, B.deco === 'ice' ? W.decoIce : W.decoStd, deco, { keep: true, cast: true });
+  if (glow.length) instanced(B.deco === 'shrooms' || B.deco === 'kelp' || B.deco === 'roots' || B.deco === 'pools' ? G.sph : B.deco === 'urns' ? G.cyl : B.deco === 'shards' ? G.oct : G.box, W.glow, glow, { keep: true, receive: false });
   makeEnv(tint(B.amb, 0.6), tint(B.fog, 2.5), 0x050508, B.torch);
   scene.environmentIntensity = 0.5;
 }
@@ -449,12 +451,21 @@ function dressThemedRooms() {
         stone.push({ x: x + 0.3, y: 0.76, z, sx: 0.5, sy: 0.08, sz: 0.36, c: 0x3a3630 });
         glowL.push({ x: x - 1.05, y: 0.4, z, sx: 0.08, sy: 0.14, sz: 0.08, c: glowC(0xffc070, 3) });
       }
+    } else if (r.theme === 'vault') {
+      for (let k = 0; k < 14; k++) glowL.push({ x: rand(r.x + 1, r.x + r.w - 1), y: 0.02, z: rand(r.y + 1, r.y + r.h - 1), sx: rand(0.08, 0.16), sy: 0.03, sz: rand(0.08, 0.16), ry: rand(0, 3), c: glowC(0xffd24a, 2.4) });
+      for (const [x, z] of r.chests) stone.push({ x, y: 0.06, z, sx: 1.4, sy: 0.12, sz: 1.0, c: 0x6a5a3a });
+    } else if (r.theme === 'grove') {
+      const [x, z] = r.spring;
+      for (let k = 0; k < 10; k++) { const a = (k / 10) * Math.PI * 2; stone.push({ x: x + Math.sin(a) * 1.25, y: 0.16, z: z + Math.cos(a) * 1.25, sx: 0.42, sy: 0.32, sz: 0.36, ry: a, c: 0x6a6a5a }); }
+      for (let k = 0; k < 16; k++) { const gx = rand(r.x + 0.8, r.x + r.w - 0.8), gz = rand(r.y + 0.8, r.y + r.h - 0.8); if (Math.hypot(gx - x, gz - z) < 1.8) continue; wood.push({ x: gx, y: 0.25, z: gz, sx: 0.06, sy: 0.5, sz: 0.06, c: 0x3a6a3a }); glowL.push({ x: gx, y: 0.55, z: gz, sx: 0.12, sy: 0.12, sz: 0.12, c: glowC(pick([0x9aff9a, 0xd8ff8a, 0x8affe8]), 2.6) }); }
+      const wm = liquidMat('water', { torch: 0x3affc0 }); levelDisp.push(wm); L.waterMats = (L.waterMats || []).concat(wm);
+      const pool = mesh(G.cyl, wm, 2.1, 0.04, 2.1, x, 0.08, z); pool.renderOrder = 2; world.add(pool);
     } else if (r.theme === 'hall') {
       const long = r.w >= r.h, carpet = mesh(G.tile, new THREE.MeshStandardMaterial({ color: 0x6a1a22, roughness: 0.95 }), long ? r.w - 2 : 1.6, 1, long ? 1.6 : r.h - 2, cx, 0.012, cz);
       levelDisp.push(carpet.material); world.add(carpet);
     } else if (r.theme === 'flooded') {
-      const wm = new THREE.MeshStandardMaterial({ color: 0x4a9ab0, emissive: new THREE.Color(B.torch).lerp(new THREE.Color(0x1a5a6a), 0.7).multiplyScalar(0.18), transparent: true, opacity: 0.42, roughness: 0.12, metalness: 0.1, normalMap: TEX.cobble.normal, depthWrite: false });
-      wm.normalScale.set(0.3, 0.3); levelDisp.push(wm);
+      const lava = B.id === 'magma'; if (lava) L.lava = true;
+      const wm = liquidMat(lava ? 'lava' : 'water', B); levelDisp.push(wm);
       L.waterMats = (L.waterMats || []).concat(wm);
       const wtr = mesh(G.tile, wm, r.w, 1, r.h, cx, 0.12, cz); wtr.renderOrder = 2; world.add(wtr);
       L.floods.push(r);

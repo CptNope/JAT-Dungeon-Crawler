@@ -6,6 +6,7 @@ let bossRef = null;
 
 // ================= line fx (bursts live in the render core) =================
 function zap(ax, az, bx, bz, color) {
+  if (!calm()) { boltFx(ax, 1.1, az, bx, 1.0, bz, color, 0.22); return; }
   const pts = [];
   const n = 6;
   for (let i = 0; i <= n; i++) {
@@ -294,7 +295,8 @@ function updEnemy(e, dt) {
     e.hopT -= dt; const k = clamp(1 - e.hopT / e.hopDur, 0, 1);
     e.x = lerp(e.hx0, e.htx, k); e.z = lerp(e.hz0, e.htz, k); e.hopY = Math.sin(k * Math.PI) * 1.5;
     if (e.hopT <= 0) { e.hopY = 0; burst(e.x, 0.2, e.z, 0xc8b89a, 10, 4, 0.12); }
-  } else if (e.boss) { updBoss(e, dt, dist, dx, dz, spd); }
+  } else if (e.boss || (e.guardPat && e.casting)) { updBoss(e, dt, dist, dx, dz, spd); }
+  else if (e.guardPat && e.awake && (e.patT -= dt) <= 0 && dist < 13 && e.los) { e.patT = e.hp < e.maxHp * 0.5 ? 3.2 : 4.4; bossPattern(e, pick(e.guardPat), e.hp < e.maxHp * 0.5); }
   else if (e.wind > 0) {
     e.wind -= dt * atkM; faceP();
     if (e.wind <= 0) {
@@ -522,6 +524,26 @@ function bossPattern(e, p, p2) {
       } };
       break;
     }
+    case 'ripple': { // rings of breakers spread outward, each with a turning gap to stand in
+      let ringN = 0, acc = 0; const g0 = rand(0, 6.28), turn = chance(0.5) ? 0.9 : -0.9;
+      e.casting = { t: 2.2, tick: (dt) => {
+        acc += dt; if (acc < 0.36 || ringN >= (p2 ? 5 : 4)) return; acc = 0; ringN++;
+        const R = 1.8 + ringN * 1.7, n = Math.round(R * 3.2), gap = g0 + ringN * turn;
+        for (let k = 0; k < n; k++) { const a = (k / n) * Math.PI * 2; if (Math.abs(angDiff(a, gap)) < 0.55) continue; const x = e.x + Math.sin(a) * R, z = e.z + Math.cos(a) * R; if (walkable(x, z)) telegraph(x, z, 0.85, 0.6, e.dmg * 1.1, {}); }
+      } };
+      break;
+    }
+    case 'chase': { // blows fall where you stand, again and again: keep moving
+      let n = 0, acc = 0.3;
+      e.casting = { t: p2 ? 2.6 : 2.0, tick: (dt) => { acc += dt; if (acc > (p2 ? 0.28 : 0.36) && n < (p2 ? 8 : 6)) { acc = 0; n++; telegraph(P.x + (P.mx || 0) * 0.8, P.z + (P.mz || 0) * 0.8, 1.6, 0.6, e.dmg * 1.3, {}); } } };
+      break;
+    }
+    case 'cross': { // a plus, then an X, of falling blows through the boss
+      const lines = (off) => { for (let k = 0; k < 4; k++) { const a = off + k * Math.PI / 2; for (let s = 1; s <= 8; s++) { const x = e.x + Math.sin(a) * s * 1.3, z = e.z + Math.cos(a) * s * 1.3; if (!walkable(x, z)) break; telegraph(x, z, 0.8, 0.7 + s * 0.03, e.dmg * 1.2, {}); } } };
+      lines(Math.atan2(P.x - e.x, P.z - e.z));
+      if (p2) { let done = false; e.casting = { t: 1.2, tick: () => { if (!done && e.casting.t < 0.4) { done = true; lines(Math.atan2(P.x - e.x, P.z - e.z) + Math.PI / 4); } } }; }
+      break;
+    }
     case 'teleport': {
       for (let k = 0; k < 20; k++) {
         const a = rand(0, 6.28), r = rand(5, 7), x = P.x + Math.sin(a) * r, z = P.z + Math.cos(a) * r;
@@ -574,7 +596,8 @@ const _projMat = new Map();
 function projMat(c) { if (!_projMat.has(c)) _projMat.set(c, new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(3.2) })); return _projMat.get(c); }
 function spawnProj(o) {
   const m = new THREE.Mesh(G.lsph, projMat(o.col));
-  m.scale.set(o.size * 2, o.size * 2, o.size * (o.owner === 'p' && o.size < 0.15 ? 9 : 3));
+  m.scale.set(o.size * 2, o.size * 2, o.spear ? 2.4 : o.size * (o.owner === 'p' && o.size < 0.15 ? 9 : 3));
+  if (o.spear) m.scale.set(0.16, 0.16, 2.4);
   m.rotation.y = o.a; m.position.set(o.x, 0.85, o.z);
   world.add(m);
   projs.push(Object.assign({ vx: Math.sin(o.a) * o.spd, vz: Math.cos(o.a) * o.spd, mesh: m, hit: new Set(), life: o.life || 1.6, pierce: o.pierce || 0 }, o));
@@ -661,6 +684,7 @@ const withElem = (el, fn) => { const p = hitElem; hitElem = el; try { return fn(
 const RES = {
   crypt: { fire: 1.25, cold: 0.75 }, fungal: { fire: 1.3, shock: 0.8 }, magma: { fire: 0.5, cold: 1.3 }, frost: { cold: 0.5, fire: 1.3 },
   void: { arcane: 0.6, phys: 1.2 }, drowned: { fire: 0.7, shock: 1.4 }, clock: { phys: 0.75, shock: 1.4 }, blood: { fire: 1.35, arcane: 0.8 },
+  shore: { cold: 0.6, arcane: 1.35 }, gilded: { phys: 0.75, fire: 1.3 },
 };
 const ELEM_N = { phys: 'physical', fire: 'fire', cold: 'cold', shock: 'lightning', arcane: 'arcane' };
 const elemOf = (kind) => hitElem || (kind === 'burn' ? 'fire' : ST && ST.wk === 'staff' ? 'arcane' : 'phys');
@@ -694,7 +718,7 @@ function damageEnemy(e, d, crit, kb, nx, nz, proc, kind) {
   // heavy blows and crits stagger ordinary foes out of a wind-up
   if (proc && e.wind > 0 && !e.boss && !e.leader && (crit || kb >= 4.5)) { e.wind = 0; e.cd = Math.max(e.cd, 0.6); floatNum(e.x, e.h * e.scale + 0.6, e.z, 'Staggered', 'xp'); }
   floatNum(e.x, e.h * e.scale + 0.2, e.z, fmt(Math.max(1, d)), crit ? 'crit' : kind === 'burn' ? 'xp' : '');
-  if (combo) { floatNum(e.x, e.h * e.scale + 1.1, e.z, combo[0] + '!', 'crit'); sfx('crit'); addHitStop(0.05); if (combo[3]) comboBurst(e, combo[3], combo[1], combo[4], combo[2]); else burst(e.x, 0.9, e.z, combo[1], 12, 4, 0.14); stat('combos'); }
+  if (combo) { floatNum(e.x, e.h * e.scale + 1.1, e.z, combo[0] + '!', 'crit'); sfx('crit'); addHitStop(0.05); novaFx(e.x, e.z, 2.2, 0.4, combo[2] === 'cold' ? 'frost' : combo[2], combo[1]); if (combo[2] === 'cold') iceFx(e.x, e.z, 1.2, 6); if (combo[3]) comboBurst(e, combo[3], combo[1], combo[4], combo[2]); else burst(e.x, 0.9, e.z, combo[1], 12, 4, 0.14); stat('combos'); }
   if (kb && !e.boss && e.ai !== 'totem') { const k = kb * (e.arch === 'brute' || e.arch === 'warden' ? 0.4 : 1) * (e.leader ? 0.5 : 1); e.kx += nx * k * 2.2; e.kz += nz * k * 2.2; }
   ensureBar(e);
   if (proc) {
@@ -728,12 +752,14 @@ function killEnemy(e, noLoot) {
   if (!e.boss && !e.leader) { const bn = e.champ ? e.name.split(' ').slice(e.aff.length).join(' ') : e.name; S.bestiary[bn] = (S.bestiary[bn] || 0) + 1; }
   else S.bestiary[e.name] = (S.bestiary[e.name] || 0) + 1;
   if (e.leader) stat('leaders'); if (e.champ) stat('champs');
-  if (tal('rage')) for (let i = 0; i < 3; i++) skillCd[i] = Math.max(0, skillCd[i] - 0.3 * tal('rage'));
+  if (tal('rage') || tal('reaper')) for (let i = 0; i < 3; i++) skillCd[i] = Math.max(0, skillCd[i] - 0.3 * tal('rage') - 0.2 * tal('reaper'));
+  if (S.cls === 'necro') { healPlayer(ST.maxHp * 0.02); if (!e.boss) addRemains(e); }
   if (Math.random() * 100 < 10 * tal('volatile') && !e.boss) { ringFx(e.x, e.z, 0.4, 2.6, 0.25, 0xb08cff, 2.4); for (const o of enemies) if (!o.dead && o !== e && Math.hypot(o.x - e.x, o.z - e.z) < 2.6 + o.r) damageEnemy(o, ST.dmg * 0.6 * ST.skillM, false, 3, (o.x - e.x), (o.z - e.z), false); }
   if (pet) pet.kills++;
   if (e.riftGuard) riftComplete(e);
   else if (riftMod('volatile') && !e.boss) telegraph(e.x, e.z, 1.8, 0.7, e.dmg * 1.1, { col: 0xb07aff });
-  if (!noLoot || e.explode) dropLoot(e);
+  if (!noLoot || e.explode) { dropLoot(e); seasonDrop(e); }
+  if (e.mimic) { for (let k = 0; k < 3; k++) spawnDrop(e.x + rand(-0.5, 0.5), e.z + rand(-0.5, 0.5), { item: lootItem(RUN.depth + 2, { mf: ST.mf + 150, min: 2 }) }); spawnDrop(e.x, e.z, { gold: Math.round(randi(60, 90) * Math.pow(1.09, RUN.depth)) }); }
   if (e.split) for (let k = 0; k < 2; k++) { const s = spawnEnemy('skitter', e.x + rand(-0.6, 0.6), e.z + rand(-0.6, 0.6)); s.awake = true; s.xp *= 0.3; }
   if (e.explode && !e.ai.startsWith('bomb')) { telegraph(e.x, e.z, 2.2, 0.6, e.dmg * 0.9, { col: 0xffb02a }); }
   if (ST.powers.nova) { telegraph(e.x, e.z, 3, 0.25, ST.dmg * 0.7, { player: true, col: 0xff8a2a }); }
@@ -789,9 +815,12 @@ function healPlayer(n, quiet) {
 }
 function gainXP(x) {
   if (S.decor && S.decor.dummy) x *= 1.05;
+  x *= seasonXP();
+  if (S.level >= LVL_CAP) { gainParagon(x); return; }
   S.xp += x;
   let up = false; const from = S.level;
-  while (S.xp >= xpNeed(S.level)) { S.xp -= xpNeed(S.level); S.level++; up = true; }
+  while (S.level < LVL_CAP && S.xp >= xpNeed(S.level)) { S.xp -= xpNeed(S.level); S.level++; up = true; }
+  if (S.level >= LVL_CAP && S.xp > 0) { const rest = S.xp; S.xp = 0; gainParagon(rest); }
   if (up) { ST = calcStats(); P.hp = ST.maxHp; sfx('level'); levelUpFx(from, S.level); }
 }
 
@@ -806,6 +835,7 @@ function spawnDrop(x, z, data) {
   else if (data.mat) { g.add(mesh(G.oct, mat(new THREE.Color(MATS[data.mat].c).getHex(), 1.8), 0.26, 0.34, 0.26, 0, 0.1, 0)); }
   else if (data.gem) { g.add(mesh(G.oct, mat(new THREE.Color(GEMS[gemSplit(data.gem)[0]].c).getHex(), 3), 0.22, 0.3, 0.22, 0, 0.12, 0)); }
   else if (data.potion) { g.add(mesh(G.sph, mat(0xe0473b, 2), 0.28, 0.28, 0.28, 0, 0.1, 0), mesh(G.box, mat(0x8a6a4a), 0.08, 0.12, 0.08, 0, 0.3, 0)); }
+  else if (data.token) { const s = season(); g.add(mesh(G.cyl, mat(s ? s.lamp : 0xff8a2a, 2.6), 0.3, 0.06, 0.3, 0, 0.1, 0)); g.children[0].rotation.x = Math.PI / 2; }
   else if (data.item) {
     hint('loot');
     const c = data.item.set ? 0x5fd38a : RCOL[data.item.rarity];
@@ -818,7 +848,7 @@ function spawnDrop(x, z, data) {
   const D = { x: fx, z: fz, g, data, t: 0, vy: 4 };
   if (data.item) { // a name over every item on the ground; commons show only while Alt is held
     const it = data.item;
-    D.lbl = addLabel(it.name, fx, 1.0, fz, `drop r${it.rarity}${it.set ? ' set' : ''}${filtered(it) ? ' junk' : ''}`);
+    D.lbl = addLabel(it.name, fx, 1.0, fz, `drop r${it.rarity}${it.set ? ' set' : ''}${it.anc ? ' anc' + it.anc : ''}${filtered(it) ? ' junk' : ''}`);
     D.lbl.el.dataset.r = it.set ? 'S' : 'CURELS'[it.rarity]; D.lbl.near = 13;
   }
   drops.push(D);
@@ -864,6 +894,7 @@ function pickup(dt) {
   if (dt.gold) { S.gold += dt.gold; RUN && (RUN.gold += dt.gold); floatNum(P.x, 1.8, P.z, '+' + dt.gold + 'g', 'crit'); sfx('coin'); }
   else if (dt.mat) { addMat(dt.mat, dt.n); toast(`+${dt.n} ${MATS[dt.mat].n}`, MATS[dt.mat].c); sfx('coin'); questEvent('mat', dt.mat, dt.n); }
   else if (dt.gem) { hint('gem'); S.gems[dt.gem] = (S.gems[dt.gem] || 0) + 1; toast(`+1 ${gemName(dt.gem)}`, GEMS[gemSplit(dt.gem)[0]].c); sfx('coin'); }
+  else if (dt.token) { S.tokens = (S.tokens || 0) + dt.token; const s = season(); floatNum(P.x, 1.8, P.z, `+${dt.token} ${s ? s.token : 'token'}${dt.token > 1 ? 's' : ''}`, 'xp'); sfx('coin'); }
   else if (dt.potion) { S.potions++; toast('+1 Healing Draught', 'var(--blood-2)'); sfx('coin'); }
   else if (dt.item && filtered(dt.item)) { const n = RAR[dt.item.rarity].salv; addMat('essence', n); floatNum(P.x, 1.8, P.z, `+${n} essence`, 'xp'); sfx('coin'); }
   else if (dt.item) { S.inv.push(dt.item); toast(dt.item.name, dt.item.set ? 'var(--set)' : `var(--r${dt.item.rarity})`); sfx('coin'); if (RUN) RUN.items++; if (dt.item.set) { stat('sets'); hint('set'); } else if (dt.item.rarity === 4) stat('legs'); }

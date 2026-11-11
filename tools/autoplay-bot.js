@@ -57,7 +57,7 @@ window.startBot = (cls, plan) => {
       if (R.depth !== lastDepth) { lastDepth = R.depth; log.floors++; log.maxDepth = Math.max(log.maxDepth, R.depth); lastProg = now; path = null; }
       if (H.S.kills !== lastKills) { lastKills = H.S.kills; lastProg = now; }
       if (R.arena) log.waves = Math.max(log.waves, R.arena.wave);
-      if (now - lastProg > 45000) { log.softlocks++; log.events.push(`softlock d${R.depth} at ${P.x.toFixed(1)},${P.z.toFixed(1)}`); lastProg = now; nextPhase(); return; }
+      if (now - lastProg > 45000) { log.softlocks++; { const al = H.enemies.filter((e) => !e.dead), nf = al.sort((a, b) => Math.hypot(a.x - P.x, a.z - P.z) - Math.hypot(b.x - P.x, b.z - P.z))[0]; const I = D.interacts.find((o) => o.kind === 'stairs'); log.events.push(`softlock d${R.depth} at ${P.x.toFixed(1)},${P.z.toFixed(1)} alive ${al.length} near ${nf ? nf.name + '@' + Math.hypot(nf.x - P.x, nf.z - P.z).toFixed(1) + ' hp' + Math.round(nf.hp) + ' aw' + (nf.awake ? 1 : 0) + ' ig' + (ignore.has(nf) ? 1 : 0) + ' w' + (D.walkable(nf.x, nf.z) ? 1 : 0) : '-'} stairs ${I ? I.x.toFixed(0) + ',' + I.z.toFixed(0) + ' seen' + (H.LV.explored[Math.floor(I.z) * H.LV.w + Math.floor(I.x)] ? 1 : 0) : 'none'} path ${path ? path.length : 'null'} th ${H.LV.rooms.map((r) => r.theme).filter(Boolean).join('/')}`); } lastProg = now; nextPhase(); return; }
       if (P.hp < D.calcStats().maxHp * 0.45) D.usePotion();
       const foes = H.enemies.filter((e) => !e.dead && !ignore.has(e) && (e.awake || Math.hypot(e.x - P.x, e.z - P.z) < 9)).sort((a, b) => Math.hypot(a.x - P.x, a.z - P.z) - Math.hypot(b.x - P.x, b.z - P.z));
       const f = foes[0], fd = f ? Math.hypot(f.x - P.x, f.z - P.z) : 99;

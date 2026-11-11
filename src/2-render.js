@@ -28,6 +28,8 @@ torch.shadow.normalBias = 0.04; torch.shadow.bias = -0.002; torch.shadow.camera.
 scene.add(torch);
 const torchPool = []; // a few wall torches near the player get real lights, reassigned as you move
 for (let i = 0; i < 4; i++) { const l = new THREE.PointLight(0xffa04a, 0, 9, 2); scene.add(l); torchPool.push(l); }
+const spellPool = [new THREE.PointLight(0xffffff, 0, 10, 2)]; // one light that flashes where spells land (High quality only)
+for (const l of spellPool) { l.position.set(0, -50, 0); scene.add(l); }
 let world = new THREE.Group(); scene.add(world);
 const fxGroup = new THREE.Group(); scene.add(fxGroup);
 let levelDisp = [];
@@ -48,6 +50,7 @@ function applyQuality() {
   torch.castShadow = Q.torchShadow && !!LV && LV.type === 'dungeon';
   torch.shadow.mapSize.set(512, 512);
   torchPool.forEach((l, i) => { l.visible = i < Q.pool; });
+  for (const l of spellPool) l.visible = Q.pool >= 4;
   Post.setup();
 }
 
@@ -414,6 +417,7 @@ function limbMat(color, o = {}, u) {
   const m = new THREE.MeshStandardMaterial({ color, roughness: o.rough ?? 0.72, metalness: o.metal ?? 0.05 });
   if (o.map) { m.map = o.map; }
   if (o.nmap) { m.normalMap = o.nmap; m.normalScale.set(o.ns ?? 0.7, o.ns ?? 0.7); }
+  if (o.emissive) { m.emissive.set(color); m.emissiveIntensity = o.emissive; }
   u = u || limbU();
   m.userData.u = u;
   m.onBeforeCompile = (sh) => {
@@ -568,6 +572,8 @@ const AMBIENT = {
   drowned: { col: 0x9affe8, glow: 1.6, vel: [0.02, 0.35, 0.02], size: 0.08, wobble: 0.8, box: 6 },
   clock: { col: 0xffd27a, glow: 3.0, vel: [0.3, -0.5, 0.1], size: 0.06, wobble: 0.2, box: 7 },
   blood: { col: 0xff6a7a, glow: 2.4, vel: [0.05, -0.12, 0.03], size: 0.1, wobble: 0.7, box: 6 },
+  shore: { col: 0xbfe0ff, glow: 2.8, vel: [0.02, 0.06, 0.02], size: 0.07, wobble: 1.2, box: 7 },
+  gilded: { col: 0xffe08a, glow: 2.6, vel: [0.04, -0.08, 0.04], size: 0.06, wobble: 0.5, box: 6 },
   night: { col: 0xd8ff7a, glow: 4.0, vel: [0.12, 0.05, 0.1], size: 0.08, wobble: 1.4, box: 8 },
 };
 function setAmbient(key) {

@@ -1,7 +1,8 @@
 // ================= level loading =================
 let spinners = [];
 function placePlayerMesh() {
-  if (!P.mesh) { const h = makeHero(); P.mesh = h.g; P.hand = h.hand; P.shoulder = h.shoulder; P.u = h.u; scene.add(P.mesh); }
+  if (P.mesh && P.look !== gearLook()) { scene.remove(P.mesh); P.mesh.traverse((o) => { if (o.material && o.material.dispose) o.material.dispose(); }); P.mesh = null; P.wkind = null; }
+  if (!P.mesh) { P.look = gearLook(); const h = makeHero(); P.mesh = h.g; P.hand = h.hand; P.shoulder = h.shoulder; P.u = h.u; scene.add(P.mesh); }
   if (P.wkind !== ST.wk) {
     if (P.weapon) P.hand.remove(P.weapon);
     P.weapon = weaponMesh(ST.wk); P.hand.add(P.weapon); P.wkind = ST.wk;
@@ -37,7 +38,7 @@ function loadTown() {
   placePlayerMesh(); resetMini(); snapCamera();
   releaseLock(); setMusic('town');
   P.u.uRim.value.setRGB(0.05, 0.06, 0.08);
-  spawnPet(); spawnVillagers(); spawnCaravan(); applyTimeOfDay(true);
+  spawnPet(); spawnVillagers(); spawnCaravan(); placeSeasonDecor(false); applyTimeOfDay(true);
   setTimeout(() => { if (LV && LV.type === 'town' && started && S.cls) storyOnTown(); }, 900);
   warmLevel();
 }
@@ -94,6 +95,8 @@ function populate() {
       for (let k = 0; k < n; k++) { const [x, z] = spot(r); const e = spawnEnemy(wpick(pool), x, z, { champ: chance((0.05 + d * 0.004) * (riftMod('elite') ? 3 : 1)) }); if (lead) e.lead = lead; }
       if (chance(0.22) || r === vault) addChest(...spot(r, 1.5));
       if (r === vault) addChest(...spot(r, 1.5));
+      if (r.theme === 'vault') { const m = randi(0, 2); r.chests.forEach(([x, z], k) => (k === m && d >= 3 ? addMimic(x, z) : addChest(x, z))); }
+      if (r.theme === 'grove') addSpring(...r.spring);
       const nn = randi(0, 2);
       for (let k = 0; k < nn; k++) addNode(...spot(r, 1), pick(['iron', 'iron', 'herb', B.mats[0], B.mats[1]]));
     }
@@ -156,7 +159,7 @@ function addChest(x, z, rich) {
   g.traverse((o) => { o.castShadow = true; });
   g.position.set(x, 0, z); g.rotation.y = rand(-0.4, 0.4); world.add(g);
   if (rich) { g.scale.setScalar(1.25); g.add(makeFlames([{ x: -0.55, y: 0.6, z: 0.3 }, { x: 0.55, y: 0.6, z: 0.3 }])); }
-  addInteract({ x, z, r: 1.4, kind: 'chest', verb: rich ? 'Open the altar hoard' : 'Open chest', act(o) {
+  addInteract({ x, z, r: 1.4, kind: 'chest', g, verb: rich ? 'Open the altar hoard' : 'Open chest', act(o) {
     lid.rotation.x = -1.9; o.dead = true; sfx('chest');
     const d = RUN.depth, mf = ST.mf;
     spawnDrop(x, z, { gold: Math.round(randi(8, 18) * Math.pow(1.09, d) * (1 + ST.gold / 100)) });
@@ -244,6 +247,7 @@ function startDelve(depth, elix, mode) {
   if (RUN.rested) toast('Well rested: bonus health this descent.', 'var(--ok)');
 }
 function returnToTown(died) {
+  setTimeout(() => submitBoard(), 2000);
   if (RUN) setTimeout(() => hint('home'), 1200);
   const summary = !RUN ? '' : RUN.arena ? `Back from the Pit: ${RUN.arena.wave - (RUN.arena.exit ? 0 : 1)} waves won, ${fmt(RUN.gold)} gold.` : RUN.rift ? `Back from the rift${RUN.rift.done ? ` (sealed in ${fmtClock(riftTime())})` : ''} with ${RUN.gold} gold.` : `Back home from depth ${RUN.depth} with ${RUN.gold} gold and ${RUN.items} item${RUN.items === 1 ? '' : 's'}.`;
   const gl = S.home.garden;
@@ -432,7 +436,8 @@ function updPlayer(dt) {
   if (P.frenzyT > 0) { P.frenzyT -= dt; if (P.frenzyT <= 0) P.frenzy = 0; }
   if (P.chillT > 0) P.chillT -= dt;
   if (P.burnT > 0) { P.burnT -= dt; P.hp -= P.burnD * dt; if (P.hp <= 0 && LV.type === 'dungeon') { P.hp = 0.01; hurtPlayer(9999, null); } }
-  const wet = LV.type === 'dungeon' && inFlood(P.x, P.z); // wading slows you
+  const wet = LV.type === 'dungeon' && inFlood(P.x, P.z); // wading slows you; lava burns
+  if (wet && LV.lava && P.dodgeT <= 0 && !P.dead) { P.burnT = Math.max(P.burnT || 0, 0.6); P.burnD = Math.max(P.burnD || 0, ST.maxHp * 0.04); if (Math.random() < dt * 6) burst(P.x, 0.3, P.z, 0xff7a2a, 2, 2, 0.1); }
   const spd = 5.3 * (1 + ST.move / 100) * (P.chillT > 0 ? 0.6 : 1) * (wet ? 0.8 : 1);
   if (wet && il > 0.1 && Math.random() < dt * 8) burst(P.x + rand(-0.3, 0.3), 0.15, P.z + rand(-0.3, 0.3), 0xbfe8ff, 3, 2, 0.08);
   let vx = ix * spd, vz = iz * spd;
@@ -638,6 +643,12 @@ function normalizeSave(s) {
   if (!Array.isArray(s.records)) s.records = [];
   if (!Array.isArray(s.loadouts) || s.loadouts.length !== 3) s.loadouts = [null, null, null];
   if (!Array.isArray(s.learned)) s.learned = [];
+  if (typeof s.para !== 'number' || !(s.para >= 0)) s.para = 0;
+  if (typeof s.pxp !== 'number' || !(s.pxp >= 0)) s.pxp = 0;
+  if (!s.parap || typeof s.parap !== 'object') s.parap = {};
+  if (typeof s.tokens !== 'number' || !(s.tokens >= 0)) s.tokens = 0;
+  if (s.elixirs && typeof s.elixirs.plenty !== 'number') s.elixirs.plenty = 0;
+  if (s.level > LVL_CAP) { s.para += s.level - LVL_CAP; s.level = LVL_CAP; s.xp = 0; } // older heroes past the new cap keep every level as Paragon
   if (!DIFF[s.diff]) s.diff = 'normal';
   if (!['none', 'common', 'uncommon'].includes(s.filter)) s.filter = 'none';
   if (typeof s.shards !== 'number') s.shards = 0;

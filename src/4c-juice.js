@@ -134,6 +134,23 @@ function bossDress(g, id, h) {
       add(G.sph, glow(0x7af0ff, 3), 0.24, 0.24, 0.24, 0, h * 0.6, 0.3);
       break;
     }
+    case 'shore': { // a pale moon-disc halo and trailing tide-lights
+      const halo = orbit(1, 0, h + 0.4, () => { const t = mesh(G.fullTorus, glow(0xcfe4ff, 2.6), 0.6, 0.6, 0.6, 0, 0, 0); return t; }, 0.25);
+      halo.position.z = -0.25;
+      add(G.cyl, glow(0xe8f2ff, 3.2), 0.9, 0.04, 0.9, 0, h + 0.4, -0.3, [Math.PI / 2, 0, 0]);
+      orbit(7, 1.15, h * 0.35, () => mesh(G.sph, glow(0x7ab8ff, 2.4), 0.09, 0.09, 0.09, 0, 0, 0), -0.5);
+      for (let k = 0; k < 4; k++) add(G.cone4, mat(0x2a3a5a), 0.08, 0.6, 0.08, (k - 1.5) * 0.18, h * 0.3, -0.3, [0.5, 0, (k - 1.5) * 0.2]);
+      break;
+    }
+    case 'gilded': { // a tall crown, a sun disc behind the head, and orbiting relics
+      const gold = metal(0xf0c850, 0.3);
+      add(G.cyl, gold, 0.5, 0.18, 0.5, 0, h + 0.1, 0);
+      for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; add(G.cone4, gold, 0.07, 0.34, 0.07, Math.sin(a) * 0.22, h + 0.32, Math.cos(a) * 0.22); }
+      add(G.cyl, glow(0xffd860, 2.8), 1.3, 0.04, 1.3, 0, h * 0.85, -0.4, [Math.PI / 2, 0, 0]);
+      orbit(4, 1.0, h * 0.55, () => mesh(G.box, gold, 0.16, 0.22, 0.08, 0, 0, 0), 0.7);
+      add(G.sph, glow(0xfff2c0, 3), 0.2, 0.2, 0.2, 0, h * 0.6, 0.3);
+      break;
+    }
     case 'blood': {
       const bark = mat(0x8a6248);
       for (const s of [-1, 1]) { add(G.box, bark, 0.12, 1.0, 0.12, s * 0.3, h + 0.4, 0, [0, 0, -s * 0.45]); add(G.box, bark, 0.09, 0.55, 0.09, s * 0.7, h + 0.75, 0.05, [0.4, 0, -s * 1.1]); add(G.box, bark, 0.09, 0.5, 0.09, s * 0.52, h + 1.0, -0.05, [-0.3, 0, -s * 0.1]); add(G.box, bark, 0.07, 0.4, 0.07, s * 0.2, h + 0.95, 0.05, [0, 0, s * 0.5]); }
@@ -146,7 +163,7 @@ function bossDress(g, id, h) {
 }
 
 // ================= boss intro card and level loading tips =================
-const BOSS_EPI = { crypt: 'Keeper of the bone-halls', fungal: 'The rot that thinks', magma: 'Heart of the deep forge', frost: 'Who wears the winter', void: 'The space between', drowned: 'Lord of the sunken stair', clock: 'Measure of all hours', blood: 'The red tithe' };
+const BOSS_EPI = { crypt: 'Keeper of the bone-halls', fungal: 'The rot that thinks', magma: 'Heart of the deep forge', frost: 'Who wears the winter', void: 'The space between', drowned: 'Lord of the sunken stair', clock: 'Measure of all hours', blood: 'The red tithe', shore: 'Light that drowned', gilded: 'Last of the old kings' };
 let bossIntroId = 0;
 function bossIntro(e) {
   const B = biomeOf(RUN.depth), el = $('#bossIntro'), id = ++bossIntroId;

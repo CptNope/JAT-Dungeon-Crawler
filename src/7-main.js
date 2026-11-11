@@ -110,7 +110,7 @@ function showTitle() {
       + (started ? '<button class="btn ghost" type="button" id="mBack">Back</button>' : '') + `<button class="btn ghost" type="button" id="mSound">${muted ? 'Sound off' : 'Sound on'}</button>`;
   }
   $('#opts').innerHTML = optRow('View', 'cam', [['top', 'Overhead'], ['third', 'Third person'], ['first', 'First person']]) + optRow('Graphics', 'q', [['high', 'High'], ['medium', 'Medium'], ['low', 'Low']])
-    + '<div class="opt"><span>More</span><div class="seg"><button type="button" id="mSettings">Settings</button><button type="button" id="mAccess">Accessibility</button><button type="button" id="mKeys">Controls</button><button type="button" id="mCredits">Credits</button></div></div>';
+    + '<div class="opt"><span>More</span><div class="seg"><button type="button" id="mSettings">Settings</button><button type="button" id="mAccess">Accessibility</button><button type="button" id="mKeys">Controls</button><button type="button" id="mCredits">Credits</button><button type="button" id="mOnline" class="online-only">Online</button></div></div>';
   if (document.pointerLockElement) document.exitPointerLock();
   $('#title').hidden = false; $('#confirmNew').hidden = true; mouseDown = false;
   const b = $('#mResume') || $('#mSlot' + (SET.slot || 0)); if (b) b.focus();
@@ -165,6 +165,7 @@ $('#title').addEventListener('click', (ev) => {
   else if (id === 'mSound') { toggleMute(); showTitle(); }
   else if (id === 'mSettings' || id === 'mAccess' || id === 'mKeys') { resume(); openPanel('settings', { mSettings: 'game', mAccess: 'access', mKeys: 'keys' }[id]); }
   else if (id === 'mCredits') { resume(); openPanel('credits'); }
+  else if (id === 'mOnline') { resume(); openPanel('online'); }
   const o = ev.target.closest('[data-opt]');
   if (o) {
     if (o.dataset.opt === 'cam') setCamMode(o.dataset.v);
@@ -261,7 +262,7 @@ function frame(ts) {
   for (let st = 0; st < steps; st++) simTick(st ? 0.05 : dt);
   const gdt = dt * (hitStop > 0 ? 0.06 : 1) * (slowT > 0 ? 0.3 : 1); // effects follow the slowed clock too
   for (const s of spinners) s.rotation.y += dt * (s.userData.spin || 1);
-  updParts(gdt); updSwings(dt); updRings(dt); updTorchLights(dt); updBlobs(); updLock();
+  updParts(gdt); updSwings(dt); updRings(dt); updVfx(dt); if (started) onlineTick(dt); updTorchLights(dt); updBlobs(); updLock();
   if (PHOTO.on) updPhoto(dt); else if (!started && LV.type === 'town' && !$('#title').hidden) titleFly(dt); else if (P.mesh) updCamera(dt);
   updTrail(gdt); updFacers();
   musicTick(); ambTick(dt);
@@ -285,7 +286,7 @@ function frame(ts) {
 
 // ================= boot =================
 function boot(data) {
-  applyA11y(); refreshKeyList();
+  applyA11y(); refreshKeyList(); initOnline();
   // installable, offline-capable when served from a web host with the manifest (not inside claude.ai)
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && document.querySelector('link[rel=manifest]') && !window.claude) navigator.serviceWorker.register('sw.js').catch(() => {});
   applyQuality();
@@ -300,4 +301,4 @@ function boot(data) {
 }
 if (window.claude && window.claude.hot && window.claude.hot.snapshot) window.claude.hot.snapshot(() => ({ S, started }));
 if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(boot); else boot((window.claude && window.claude.hot && window.claude.hot.data) || {});
-return { get S() { return S; }, get RUN() { return RUN; }, get P() { return P; }, get LV() { return LV; }, enemies, renderer, startDelve, begin, freshHero, openPanel, closePanel, loadDungeon, get ready() { return levelReady; }, perf, debug: { parseRiftCode, setTouchMode, returnToTown, afterGear, DBG, stick, interacts, interact, usePotion, get skillCd() { return skillCd; }, isPaused, snapCamera, nextFloor, loadTown, rollCaravan, startRift, startArena, die, gainXP, hurtPlayer, calcStats, xpNeed, ARCH, BIOMES, genItem, makeSetItem, scene, sun, hemi, sky, walkable, spawnEnemy, bossPattern, get LVL() { return LV; }, applyTimeOfDay, get pet() { return pet; }, villagers, zones, chooseClass, checkAch, playerAttack, CAM, setCamMode, useSkill, cycleLock, get lockT() { return lockT; }, corpses, skillCd, questEvent, makeQuestOffers, claimQuest, get trail() { return trail; }, spawnDrop, bossIntro, LEGENDS, applyLoadout, get drops() { return drops; } } };
+return { get S() { return S; }, get RUN() { return RUN; }, get P() { return P; }, get LV() { return LV; }, enemies, renderer, startDelve, begin, freshHero, openPanel, closePanel, loadDungeon, get ready() { return levelReady; }, perf, debug: { parseRiftCode, setTouchMode, returnToTown, afterGear, DBG, stick, interacts, interact, usePotion, get skillCd() { return skillCd; }, isPaused, snapCamera, nextFloor, loadTown, rollCaravan, startRift, startArena, die, gainXP, hurtPlayer, calcStats, xpNeed, ARCH, BIOMES, genItem, makeSetItem, scene, sun, hemi, sky, walkable, spawnEnemy, bossPattern, get LVL() { return LV; }, applyTimeOfDay, get pet() { return pet; }, villagers, zones, chooseClass, checkAch, playerAttack, CAM, setCamMode, useSkill, cycleLock, get lockT() { return lockT; }, corpses, skillCd, questEvent, makeQuestOffers, claimQuest, get trail() { return trail; }, spawnDrop, bossIntro, LEGENDS, applyLoadout, ascend, gainParagon, GUARDIANS, season, minions, remains, initOnline, ONLINE, submitBoard, get drops() { return drops; } } };

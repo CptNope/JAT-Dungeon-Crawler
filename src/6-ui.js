@@ -28,6 +28,9 @@ const IC = {
   rain: '<path d="M6 3v7M10 2v7M14 3v7M18 2v7"/><path d="m5 9 1 2 1-2m2-1 1 2 1-2m2 1 1 2 1-2m2-1 1 2 1-2"/><ellipse cx="12" cy="19" rx="8" ry="2.5"/>',
   blink: '<circle cx="6" cy="16" r="2.5"/><circle cx="18" cy="8" r="2.5"/><path d="M8 14l1.5-1.5M11 11l1.5-1.5M14 8l1.5-1.5" stroke-dasharray="1 2"/>',
   meteor: '<circle cx="15" cy="15" r="4"/><path d="M12 12 4 4M14 10 8 3M10 14 3 8"/>',
+  raise: '<path d="M9 10a3 3 0 1 1 6 0v2h-6z"/><path d="M10 15h4M12 12v8M8 17h8M4 21h16"/><path d="M10 9.5h.01M14 9.5h.01"/>',
+  bonespear: '<path d="M4 20 18 6"/><path d="M18 6l2-2m-2 2 1 4m-1-4-4 1"/><path d="M5 17l2 2M7 15l2 2"/>',
+  corpse: '<circle cx="12" cy="13" r="3"/><path d="M12 3v4M12 19v2M4 13H2M22 13h-2M6 7l2 2M18 7l-2 2M6 19l2-2M18 19l-2-2"/>',
   hound: '<path d="M5 18v-5l-2-3 3-1 2-3 2 2h6l3 3v7"/><path d="M8 18v-3m8 3v-3"/><circle cx="6.5" cy="10.5" r=".6"/>',
   star: '<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L3.4 9.3l6-.7z"/>',
   book: '<path d="M4 5c3-1 6-1 8 1 2-2 5-2 8-1v14c-3-1-6-1-8 1-2-2-5-2-8-1z"/><path d="M12 6v14"/>',
@@ -67,16 +70,17 @@ function buildActionBar() {
 let lastWk = '';
 function hud() {
   if (!S || !ST || !LV) return;
-  $('#hLvl').textContent = 'Lv ' + S.level;
+  $('#hLvl').textContent = 'Lv ' + S.level + (S.para ? ` · P${S.para}` : '');
   const f = clamp(P.hp / ST.maxHp, 0, 1);
   $('#hpFill').style.width = f * 100 + '%';
   $('#hpText').textContent = `${Math.ceil(Math.max(0, P.hp))} / ${ST.maxHp}`;
-  $('#xpFill').style.width = clamp(S.xp / xpNeed(S.level), 0, 1) * 100 + '%';
+  $('#xpFill').style.width = (S.level >= LVL_CAP ? clamp((S.pxp || 0) / paraNeed(S.para || 0), 0, 1) : clamp(S.xp / xpNeed(S.level), 0, 1)) * 100 + '%';
+  $('#xpFill').classList.toggle('para', S.level >= LVL_CAP);
   $('#hGold').textContent = fmt(S.gold) + ' gold';
   const tp = talPoints();
   $("#hMisc").textContent = `Bag ${S.inv.length}/${BAG_CAP}`;
   const buffs = [];
-  if (RUN) { if (RUN.buffs.might) buffs.push('Might'); if (RUN.buffs.stone) buffs.push('Stoneskin'); if (RUN.buffs.swift) buffs.push('Gale'); if (RUN.rested) buffs.push('Rested'); }
+  if (RUN) { if (RUN.buffs.plenty) buffs.push('Plenty'); if (RUN.buffs.might) buffs.push('Might'); if (RUN.buffs.stone) buffs.push('Stoneskin'); if (RUN.buffs.swift) buffs.push('Gale'); if (RUN.rested) buffs.push('Rested'); }
   if (P.frenzy) buffs.push('Frenzy ×' + P.frenzy);
   if (P.horn) buffs.push('Warhorn ×' + P.horn);
   if (P.cryT > 0) buffs.push('War Cry ' + Math.ceil(P.cryT) + 's');
@@ -127,7 +131,7 @@ function isPaused() { return !started || Panel.kind !== null || !$('#title').hid
 function openPanel(kind, tab) {
   Panel.kind = kind; Panel.sel = null;
   rebinding = null;
-  Panel.tab = tab || { settings: 'game', bag: 'gear', home: 'home', smith: 'buy', trader: 'buy', alch: 'buy', delve: 'delve', elder: 'tasks', class: 'class', codex: 'ach' }[kind];
+  Panel.tab = tab || { settings: 'game', online: 'week', bag: 'gear', home: 'home', smith: 'buy', trader: 'buy', alch: 'buy', delve: 'delve', elder: 'tasks', class: 'class', codex: 'ach' }[kind];
   $('#pClose').hidden = kind === 'class';
   if (kind === 'elder' && !S.quest && !S.questOffers) S.questOffers = makeQuestOffers();
   Panel.abandon = false;
@@ -166,12 +170,12 @@ function itemCard(it, cmp) {
   const affs = it.aff.map((a) => `<li>${esc(AFF[a.k].l(a.v * am)).replace(/^\+ ?/, '')}</li>`).join('');
   const leg = it.set ? setInfoHtml(it) : it.power ? `<div class="leg">${esc(legendOf(it).desc)}</div>` : '';
   const socks = it.sock ? `<div class="socks">${it.gems.map((g) => (g ? `<span class="sock" style="--gc:${GEMS[gemSplit(g)[0]].c}"><i></i>${esc(gemName(g))}: ${esc(gemLine(g))}</span>` : '<span class="sock empty"><i></i>Empty socket</span>')).join('')}</div>` : '';
-  return `<div class="icard"><div class="nm r${it.rarity}${it.set ? ' set' : ''}">${esc(it.name)}${it.up ? ` <span class="r0">+${it.up}</span>` : ''}</div>
-    <div class="sub">${it.set ? 'Set' : RAR[it.rarity].n} ${esc(typeName(it))} · ${SLOT_N[it.slot]}</div>${base}${affs ? `<ul>${affs}</ul>` : ''}${socks}${leg}
+  return `<div class="icard${it.anc ? ' anc' + it.anc : ''}"><div class="nm r${it.rarity}${it.set ? ' set' : ''}">${esc(it.name)}${it.up ? ` <span class="r0">+${it.up}</span>` : ''}</div>
+    <div class="sub">${it.anc ? `<b class="ancb">${ANC[it.anc].n}</b> ` : ''}${it.set ? 'Set' : RAR[it.rarity].n} ${esc(typeName(it))} · ${SLOT_N[it.slot]}</div>${base}${affs ? `<ul>${affs}</ul>` : ''}${socks}${leg}
     <div class="meta"><span>Item level ${it.il}</span><span>Sells for ${fmt(it.value)}g</span>${cmp && cmp !== it ? `<span>vs ${esc(cmp.name)}</span>` : ''}</div></div>`;
 }
 const cellsHtml = (list, src, cap, priceFn) => {
-  let h = list.map((it) => `<button class="cell r${it.rarity}${it.set ? ' set' : ''}${Panel.sel && Panel.sel.src === src && String(Panel.sel.id) === String(it.id) ? ' on' : ''}" type="button" data-act="sel" data-src="${src}" data-id="${it.id}" title="${esc(it.name)}">${itemIcon(it)}${it.up ? `<b>+${it.up}</b>` : ''}${priceFn ? `<i>${fmt(priceFn(it))}</i>` : ''}</button>`).join('');
+  let h = list.map((it) => `<button class="cell r${it.rarity}${it.set ? ' set' : ''}${it.anc ? ' anc' + it.anc : ''}${Panel.sel && Panel.sel.src === src && String(Panel.sel.id) === String(it.id) ? ' on' : ''}" type="button" data-act="sel" data-src="${src}" data-id="${it.id}" title="${esc(it.name)}">${itemIcon(it)}${it.up ? `<b>+${it.up}</b>` : ''}${priceFn ? `<i>${fmt(priceFn(it))}</i>` : ''}</button>`).join('');
   if (cap) for (let k = list.length; k < Math.min(cap, list.length + 6); k++) h += '<div class="cell empty"></div>';
   return `<div class="cells">${h}</div>`;
 };
@@ -212,9 +216,11 @@ function renderPanel() {
     case 'bag': {
       title = 'Bag'; sub = `Level ${S.level} delver`;
       tabs = [['gear', 'Gear'], ['loadouts', 'Loadouts'], ['mats', 'Materials'], ['char', 'Character'], ['talents', `Talents${talPoints() ? ' (' + talPoints() + ')' : ''}`]];
+      if (S.level >= LVL_CAP) tabs.push(['paragon', `Paragon${paraFree() ? ' (' + paraFree() + ')' : ''}`]);
       if (p.tab === 'gear') body = purseRow() + `<div class="inv"><section><h3>Equipped</h3>${eqHtml()}</section><section><h3>Bag<small>${S.inv.length}/${BAG_CAP}</small></h3>${S.inv.length ? cellsHtml(S.inv, 'inv', BAG_CAP) : '<p class="hint">Empty. Loot drops from foes, chests and bosses; walk over an item to pick it up.</p>'}<div class="acts" style="margin-top:10px"><button class="btn ghost" type="button" data-act="salvageJunk"${S.inv.some((q) => q.rarity <= 1) ? '' : ' disabled'}>Salvage all Common and Uncommon</button></div></section><section class="detail">${detailFor(it, 'bag')}</section></div>`;
       else if (p.tab === 'mats') body = matsHtml();
       else if (p.tab === 'loadouts') body = loadoutsHtml();
+      else if (p.tab === 'paragon') body = paragonHtml();
       else if (p.tab === 'talents') body = talentsHtml();
       else body = charHtml();
       break;
@@ -266,6 +272,19 @@ function renderPanel() {
       break;
     }
     case 'credits': { title = 'Credits'; sub = ''; body = creditsHtml(); break; }
+    case 'online': {
+      title = 'Online'; sub = ONLINE.party ? `Party ${ONLINE.code.toUpperCase()}` : 'Leaderboards, ghosts and parties';
+      tabs = [['week', 'Weekly Rift'], ['deep', 'Deepest'], ['party', 'Party']];
+      body = '<p class="hint">Loading\u2026</p>';
+      const want = p.tab, tk = (p.onlineTk = (p.onlineTk || 0) + 1);
+      onlineHtml(want).then((h) => { if (Panel.kind === 'online' && Panel.tab === want && p.onlineTk === tk) $('#pBody').innerHTML = h; });
+      break;
+    }
+    case 'season': {
+      const s = season(); title = s ? `${s.n} Stall` : 'Festival Stall'; sub = 'Trade festival tokens';
+      body = seasonHtml();
+      break;
+    }
     case 'caravan': {
       title = "Sabine's Caravan"; sub = 'Rare goods from the far roads';
       body = caravanHtml();
@@ -326,7 +345,7 @@ function charHtml() {
     ['Max health', fmt(s.maxHp)], ['Armor', `${fmt(s.armor)} (${red}% at depth ${Math.max(1, S.best)})`], ['Health per second', s.regen.toFixed(1)], ['Life steal', s.ls.toFixed(1) + '%'],
     ['Move speed', '+' + Math.round(s.move) + '%'], ['Attack speed', '+' + Math.round(s.aspd) + '%'], ['Burn chance', Math.round(s.burn) + '%'], ['Chill chance', Math.round(s.chill) + '%'],
     ['Gold found', '+' + Math.round(s.gold) + '%'], ['Magic find', '+' + Math.round(s.mf) + '%'],
-    ['Experience', `${fmt(S.xp)} / ${fmt(xpNeed(S.level))}`], ['Deepest depth', S.best], ['Foes slain', fmt(S.kills)], ['Bosses slain', S.bossKills], ['Descents', S.runs], ['Times fallen', S.deaths],
+    S.level >= LVL_CAP ? ['Paragon', `${S.para || 0} (${fmt(S.pxp || 0)} / ${fmt(paraNeed(S.para || 0))})`] : ['Experience', `${fmt(S.xp)} / ${fmt(xpNeed(S.level))}`], ['Deepest depth', S.best], ['Foes slain', fmt(S.kills)], ['Bosses slain', S.bossKills], ['Descents', S.runs], ['Times fallen', S.deaths],
   ];
   const pw = Object.keys(s.powers).map((k) => LEGENDS.find((l) => l.power === k));
   return `<div class="stats">${rows.map(([a, b]) => `<div class="stat"><span>${a}</span><b>${b}</b></div>`).join('')}</div>${pw.length ? `<h3 style="margin-top:16px">Legendary powers</h3>${pw.map((l) => `<p class="hint" style="color:var(--r4)">${esc(l.name)}: ${esc(l.desc)}</p>`).join('')}` : ''}`;
@@ -365,7 +384,7 @@ function workHtml(it) {
 function delveHtml() {
   const B = (d) => biomeOf(d).name;
   const wps = S.waypoints.map((d) => `<button class="wpb" type="button" data-act="delve" data-d="${d}"><b>Depth ${d}</b><span>${B(d)}${cycleOf(d) ? ` · Cycle ${cycleOf(d) + 1}` : ''}</span><span>${d === 1 ? 'From the top' : 'Waypoint from a slain boss'}</span></button>`).join('');
-  const el = [['might', 'Elixir of Might', '+25% damage'], ['stone', 'Elixir of Stoneskin', '+40% armor'], ['swift', 'Elixir of the Gale', '+15% speed']];
+  const el = [['might', 'Elixir of Might', '+25% damage'], ['stone', 'Elixir of Stoneskin', '+40% armor'], ['swift', 'Elixir of the Gale', '+15% speed']].concat(S.elixirs.plenty ? [['plenty', 'Elixir of Plenty', '+50% gold and experience']] : []);
   const tog = el.map(([k, n, d]) => `<button class="tog${Panel.elix[k] ? ' on' : ''}" type="button" data-act="elix" data-k="${k}"${S.elixirs[k] ? '' : ' disabled'}>${Panel.elix[k] ? '✓' : '○'} ${n} <span class="hint">${d} · have ${S.elixirs[k]}</span></button>`).join('');
   return purseRow() + `<p class="hint" style="margin:0 0 12px">Every floor below is new. Every fifth depth holds a boss; slay it to open a waypoint. Floors 1, 6, 11 and so on keep a way home in the first room. Portal scrolls open one anywhere.${S.rested ? ' <b style="color:var(--ok)">You are rested.</b>' : ''}</p>
     <div class="wp">${wps}</div><h3 style="margin-top:18px">Drink before descending</h3><div class="wp">${tog}</div>
@@ -429,7 +448,7 @@ function doAct(d) {
     case 'copyCode': { const t = d.code; try { navigator.clipboard.writeText(t).then(() => toast('Code copied: ' + t, 'var(--ok)'), () => toast(t, 'var(--muted)', true)); } catch (err) { toast(t, 'var(--muted)', true); } return; }
     case 'cvBuy': caravanBuy(+d.i); break;
     case 'cvLook': Panel.cvLook = +d.i; break;
-    default: if (settingsAct(d)) break; if (metaAct(d, it) === 'stop') return;
+    default: if (settingsAct(d) || onlineAct(d)) break; if (metaAct(d, it) === 'stop') return;
   }
   renderPanel(); hud(); save();
 }

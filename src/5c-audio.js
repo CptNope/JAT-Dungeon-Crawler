@@ -61,6 +61,7 @@ function sfx(t) {
       case 'lock': tone(1200, 1600, 0.06, 'square', 0.025, now); break;
       case 'step': noise(0.05, 0.03, now, 'lowpass', 600); break;
       case 'cry': tone(140, 90, 0.7, 'sawtooth', 0.09, now); tone(210, 130, 0.6, 'square', 0.04, now + 0.02); noise(0.5, 0.1, now, 'bandpass', 600, 300, 1); break;
+      case 'summon': noise(0.5, 0.1, now, 'lowpass', 300, 900, 1.5); tone(110, 220, 0.5, 'sawtooth', 0.04, now); tone(330, 165, 0.6, 'triangle', 0.03, now + 0.15); for (let k = 0; k < 4; k++) noise(0.04, 0.06, now + 0.1 + k * 0.07, 'bandpass', 2200, 0, 3); break;
       case 'blink': tone(1600, 400, 0.25, 'sine', 0.06, now); tone(800, 2400, 0.2, 'sine', 0.03, now + 0.08); noise(0.15, 0.05, now, 'highpass', 4000); break;
       case 'bite': noise(0.06, 0.12, now, 'bandpass', 1800, 700, 2); tone(260, 140, 0.07, 'square', 0.03, now); break;
       case 'block': tone(1900, 1700, 0.12, 'square', 0.03, now); noise(0.06, 0.12, now, 'highpass', 3000); break;
@@ -74,7 +75,7 @@ function sfx(t) {
 // A tiny step sequencer schedules notes ~0.3 s ahead of the audio clock. Tracks: town, one per biome, boss.
 const Music = { want: null, track: null, next: 0, step: 0, bpm: 80, nodes: [], out: null, echo: null };
 const hz = (midi) => 440 * Math.pow(2, (midi - 69) / 12);
-const BIOME_ROOT = { crypt: 45, fungal: 48, magma: 38, frost: 50, void: 43, drowned: 41, clock: 47, blood: 40 }; // MIDI note of each biome's drone
+const BIOME_ROOT = { crypt: 45, fungal: 48, magma: 38, frost: 50, void: 43, drowned: 41, clock: 47, blood: 40, shore: 39, gilded: 44 }; // MIDI note of each biome's drone
 function setMusic(track) { Music.want = track; }
 function stopTrack() {
   if (!Music.out) { Music.track = null; return; }
@@ -139,7 +140,7 @@ function playStep(i, at) {
 
 // ================= ambience and footsteps =================
 // Each biome has a few sparse one-shots layered over the music; the town has birds by day and crickets at night.
-const STEP_SURF = { crypt: 'stone', fungal: 'moss', magma: 'ash', frost: 'snow', void: 'stone', drowned: 'wet', clock: 'metal', blood: 'flesh' };
+const STEP_SURF = { crypt: 'stone', fungal: 'moss', magma: 'ash', frost: 'snow', void: 'stone', drowned: 'wet', clock: 'metal', blood: 'flesh', shore: 'ash', gilded: 'stone' };
 function footstep(surf) {
   if (muted || !AC) return; const now = AC.currentTime, v = 0.045;
   switch (surf) {
@@ -179,6 +180,8 @@ function ambTick(dt) {
     case 'frost': noise(2.4, 0.03, now, 'bandpass', 600, 1400, 4, B); break; // wind through ice
     case 'void': tone(rand(180, 260), rand(150, 300), 2.2, 'sine', 0.012, now, B, 0.8); tone(rand(300, 420), rand(280, 440), 2, 'triangle', 0.006, now + 0.4, B, 0.8); break; // whispers
     case 'clock': for (let k = 0; k < 4; k++) noise(0.03, 0.03, now + k * 0.5, 'highpass', 3500, 0, 1, B); ambT = rand(4, 7); break; // ticking
+    case 'shore': noise(2.8, 0.035, now, 'lowpass', 500, 1400, 0.8, B); ambT = rand(3.5, 6); break; // a slow wave washing in
+    case 'gilded': { const f = pick([880, 988, 1175, 1319]); tone(f, f, 1.6, 'sine', 0.01, now, B, 0.02); tone(f * 1.5, f * 1.5, 1.2, 'sine', 0.005, now + 0.05, B, 0.02); break; } // a distant chime
     case 'blood': for (let k = 0; k < 2; k++) tone(62, 44, 0.16, 'sine', 0.05, now + k * 0.22, B); ambT = rand(3, 5); break; // heartbeat
   }
 }

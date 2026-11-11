@@ -226,7 +226,7 @@ function weaponMesh(kind) { // points along +z from the grip at the origin
 // ================= the delver =================
 function makeHero() {
   const u = limbU(), C = clsOf(), ck = (S && S.cls) || 'warrior';
-  const steel = limbMat(ck === 'warrior' ? 0x9aa4b2 : ck === 'ranger' ? 0x7a5a3e : 0x5a4a7a, { metal: ck === 'warrior' ? 0.75 : 0.1, rough: 0.55, nmap: TEX.plaster.normal, ns: 0.4 }, u), cloth = limbMat(C.col, { rough: 0.9, map: TEX.plaster.map, nmap: TEX.wood.normal, ns: 0.5 }, u), skin = limbMat(0xe2b48f, { rough: 0.6 }, u);
+  const steel = limbMat(ck === 'warrior' ? 0x9aa4b2 : ck === 'ranger' ? 0x7a5a3e : ck === 'necro' ? 0x3a3c36 : 0x5a4a7a, { metal: ck === 'warrior' ? 0.75 : 0.1, rough: 0.55, nmap: TEX.plaster.normal, ns: 0.4 }, u), cloth = limbMat(C.col, { rough: 0.9, map: TEX.plaster.map, nmap: TEX.wood.normal, ns: 0.5 }, u), skin = limbMat(0xe2b48f, { rough: 0.6 }, u);
   const leather = limbMat(0x6a4630, { rough: 0.75, map: TEX.plaster.map, nmap: TEX.plaster.normal, ns: 0.8 }, u), hair = limbMat(0x2e2018, { rough: 0.9, nmap: TEX.wood.normal, ns: 0.8 }, u), gold = limbMat(0xe0aa50, { metal: 1, rough: 0.35 }, u);
   const g = new THREE.Group();
   const P = (geo, m, sx, sy, sz, x, y, z, limb, pv) => { const o = mesh(geo, m, sx, sy, sz, x, y, z); if (limb) { o.userData.limb = limb; o.userData.pivot = new THREE.Vector3(...pv); } g.add(o); return o; };
@@ -243,8 +243,17 @@ function makeHero() {
   P(G.box, mat(0x1a1410), 0.06, 0.05, 0.02, -0.08, 1.44, 0.19); P(G.box, mat(0x1a1410), 0.06, 0.05, 0.02, 0.08, 1.44, 0.19);
   for (const s of [-1, 1]) { const L = s < 0 ? 3 : 4, pv = [s * 0.36, 1.1, 0]; P(G.box, cloth, 0.13, 0.28, 0.14, s * 0.36, 0.96, 0, L, pv); P(G.box, steel, 0.15, 0.22, 0.16, s * 0.36, 0.72, 0.01, L, pv); P(G.sph, leather, 0.13, 0.13, 0.13, s * 0.36, 0.6, 0.02, L, pv); }
   if (ck === 'mage') { P(G.cyl, cloth, 0.62, 0.05, 0.62, 0, 1.6, 0); P(G.cone, cloth, 0.4, 0.62, 0.4, 0, 1.92, -0.06); P(G.cyl, gold, 0.42, 0.06, 0.42, 0, 1.64, 0); P(G.box, cloth, 0.62, 0.7, 0.04, 0, 0.42, 0.1); }
+  else if (ck === 'necro') {
+    const bone = limbMat(0xd8d2bc, { rough: 0.7 }, u), glow = limbMat(0x7cff9a, { emissive: 2.2 }, u);
+    P(G.sph, cloth, 0.48, 0.46, 0.48, 0, 1.48, -0.05); P(G.cone, cloth, 0.34, 0.36, 0.34, 0, 1.66, -0.2); // hood
+    P(G.box, cloth, 0.6, 0.72, 0.05, 0, 0.42, 0.12); // long robe front
+    for (const s of [-1, 1]) { P(G.sph, bone, 0.26, 0.2, 0.26, s * 0.36, 1.2, 0); for (let k = 0; k < 3; k++) P(G.cone, bone, 0.05, 0.16, 0.05, s * (0.3 + k * 0.06), 1.32, -0.02); } // bone pauldrons
+    P(G.sph, bone, 0.13, 0.13, 0.13, 0.16, 0.6, 0.19); P(G.box, glow, 0.03, 0.02, 0.01, 0.13, 0.61, 0.255); P(G.box, glow, 0.03, 0.02, 0.01, 0.19, 0.61, 0.255); // skull at the belt
+    P(G.box, glow, 0.07, 0.03, 0.02, -0.08, 1.44, 0.2); P(G.box, glow, 0.07, 0.03, 0.02, 0.08, 1.44, 0.2); // eyes glow under the hood
+  }
   else if (ck === 'ranger') { P(G.sph, cloth, 0.46, 0.4, 0.46, 0, 1.5, -0.04); P(G.cone, cloth, 0.3, 0.3, 0.3, 0, 1.58, -0.24); P(G.cyl, leather, 0.14, 0.62, 0.14, 0.18, 1.0, -0.26); for (let k = 0; k < 3; k++) P(G.box, mat(0xeee6d0), 0.03, 0.14, 0.06, 0.14 + k * 0.04, 1.36, -0.26); }
   else { P(G.box, steel, 0.42, 0.14, 0.42, 0, 1.6, 0); P(G.box, cloth, 0.06, 0.24, 0.32, 0, 1.76, -0.02); }
+  if (S) addGearLook(P, u, ck);
   const parts = bakeByMaterial(g);
   const out = new THREE.Group();
   for (const p of parts) { const m = new THREE.Mesh(p.geometry, p.material); m.castShadow = true; out.add(m); }
@@ -272,7 +281,7 @@ let LV = null;
 function tidx(x, z) { return Math.floor(z) * LV.w + Math.floor(x); }
 // Themed rooms. Tile values: 0 rock, 1 floor, 3 furniture (solid, floor beneath), 5 chasm (no floor at all).
 // Every theme keeps a walkable band along the room's edges, so corridors into the room stay connected.
-const ROOM_THEMES = ['library', 'flooded', 'chasm', 'hall', 'tomb'];
+const ROOM_THEMES = ['library', 'flooded', 'chasm', 'hall', 'tomb', 'vault', 'grove'];
 function themeRooms(rooms, g, W, exitRoom) {
   const cands = rooms.slice(1).filter((r) => r !== exitRoom && r.w >= 7 && r.h >= 6);
   const n = Math.min(cands.length, randi(1, 3));
@@ -296,6 +305,11 @@ function themeRooms(rooms, g, W, exitRoom) {
       for (let j = y0 + 2; j <= y1 - 2; j++) for (let i = x0 + 2; i <= x1 - 2; i++) if (i !== mx && i !== mx + 1 && j !== my && j !== my + 1) set(i, j, 5);
     } else if (r.theme === 'hall') { // rows of columns
       for (let j = y0 + 2; j <= y1 - 2; j += 3) for (let i = x0 + 2; i <= x1 - 2; i += 3) if (Math.abs(i + 0.5 - (x0 + r.w / 2)) > 1.2) set(i, j, 0);
+    } else if (r.theme === 'vault') { // a treasury: three chests in a row, and one of them is hungry
+      const cz = y0 + Math.floor(r.h / 2) + 0.5, cx = x0 + r.w / 2;
+      r.chests = [-2.2, 0, 2.2].map((o) => [cx + o, cz]);
+    } else if (r.theme === 'grove') { // a spring in a ring of stones, overgrown
+      r.spring = [x0 + r.w / 2, y0 + r.h / 2];
     } else if (r.theme === 'tomb') { // stone coffins in the middle of the floor
       r.coffins = [];
       for (let j = y0 + 2; j <= y1 - 2; j += 3) for (let i = x0 + 2; i <= x1 - 3; i += 4) { set(i, j, 3); set(i + 1, j, 3); r.coffins.push([i + 1, j + 0.5]); }

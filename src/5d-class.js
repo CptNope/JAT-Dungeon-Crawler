@@ -44,7 +44,7 @@ function classSkill(s) {
     }
     case 'cry': {
       P.cryT = 8; ST = calcStats(); healPlayer(ST.maxHp * 0.1);
-      ringFx(P.x, P.z, 0.4, 4.4, 0.35, 0xffc24a, 3); ringFx(P.x, P.z, 0.2, 3.0, 0.25, 0xff7a3a, 2.4);
+      ringFx(P.x, P.z, 0.4, 4.4, 0.35, 0xffc24a, 3); novaFx(P.x, P.z, 4.6, 0.5, 'arcane', 0xffc24a);
       if (LV.type === 'dungeon') hitAround(4.2, 0.5 * ST.skillM, 9);
       shake(0.4); sfx('cry'); toast('War Cry: +30% damage and armor', 'var(--brass-2)');
       return;
@@ -67,7 +67,7 @@ function classSkill(s) {
       const t = mv ? { x: P.x + P.mx * 7, z: P.z + P.mz * 7 } : skillTarget(7), r = reachTo(t.x, t.z);
       if (r.d < 1) { floatNum(P.x, 2.2, P.z, 'No room', 'xp'); return false; }
       const ox = P.x, oz = P.z;
-      burst(ox, 1, oz, 0x9fd4ff, 18, 5, 0.16); ringFx(ox, oz, 0.4, 3.2, 0.3, 0x9fd4ff, 2.6);
+      burst(ox, 1, oz, 0x9fd4ff, 18, 5, 0.16); novaFx(ox, oz, 3.4, 0.5, 'frost', 0x9fd4ff); iceFx(ox, oz, 2.8, 12);
       if (LV.type === 'dungeon') for (const e of enemies) {
         if (e.dead) continue; const dx = e.x - ox, dz = e.z - oz, d = Math.hypot(dx, dz);
         if (d > 3.2 + e.r) continue;
@@ -76,6 +76,30 @@ function classSkill(s) {
       P.x = r.x; P.z = r.z; P.iframes = Math.max(P.iframes, 0.3); P.face = Math.atan2(r.x - ox, r.z - oz);
       burst(P.x, 1, P.z, 0xb08cff, 18, 5, 0.16); sfx('blink');
       if (SET.cam !== 'top') { CAM.fx = P.x; CAM.fz = P.z; }
+      return;
+    }
+    case 'raise': {
+      if (LV.type !== 'dungeon') { floatNum(P.x, 2.2, P.z, 'Not here', 'xp'); return false; }
+      const n = tal('legion') >= 3 ? 3 : 2;
+      for (let k = 0; k < n; k++) { const a = P.face + Math.PI + (k - (n - 1) / 2) * 0.9; raiseSkeleton(P.x + Math.sin(a) * 1.4, P.z + Math.cos(a) * 1.4); }
+      while (minions.length > 4) dismissMinion(minions[0], false);
+      ringFx(P.x, P.z, 0.3, 3, 0.4, 0x9fe8a0, 2.2); sfx('summon');
+      return;
+    }
+    case 'bonespear': {
+      const t = skillTarget(12); P.face = Math.atan2(t.x - P.x, t.z - P.z);
+      spawnProj({ x: P.x + Math.sin(P.face) * 0.6, z: P.z + Math.cos(P.face) * 0.6, a: P.face, spd: 26, owner: 'p', size: 0.22, col: 0xe8e2c8, pierce: 99, mult: (2.6 + 0.2 * tal('marrow')) * ST.skillM, life: LV.type === 'town' ? 0.5 : 0.9, spear: true });
+      P.atkT = Math.max(P.atkT, 0.25); P.swingT = P.swingDur = 0.22; sfx('shoot'); shake(0.15);
+      return;
+    }
+    case 'corpse': {
+      if (LV.type !== 'dungeon') { floatNum(P.x, 2.2, P.z, 'Not here', 'xp'); return false; }
+      const reach = 9 + 2 * tal('plague'), rad = 2.8 * (1 + 0.15 * tal('plague'));
+      const near = remains.filter((r) => Math.hypot(r.x - P.x, r.z - P.z) < reach);
+      if (!near.length) { floatNum(P.x, 2.2, P.z, 'No fallen foes', 'xp'); return false; }
+      near.forEach((r, k) => setTimeout(() => detonateRemains(r, rad), k * 70));
+      for (const r of near) removeRemains(r);
+      sfx('boom');
       return;
     }
     case 'meteor': {
@@ -111,6 +135,7 @@ function updClassSkills(dt) {
       if (z.tick <= 0 && z.t > 0) {
         z.tick = 0.2;
         for (let k = 0; k < 4; k++) { const a = rand(0, 6.28), r = Math.sqrt(Math.random()) * z.r; burst(z.x + Math.sin(a) * r, 0.15, z.z + Math.cos(a) * r, 0xf0e6c0, 2, 2, 0.08); }
+        if (chance(0.5)) { const a = rand(0, 6.28), r = Math.sqrt(Math.random()) * z.r; boltFx(z.x + Math.sin(a) * r + rand(-1, 1), 8, z.z + Math.cos(a) * r, z.x + Math.sin(a) * r, 0.1, z.z + Math.cos(a) * r, 0xd8e8a0, 0.16); }
         for (const e of enemies) {
           if (e.dead || Math.hypot(e.x - z.x, e.z - z.z) > z.r + e.r) continue;
           const q = rollDmg(e); withElem('shock', () => damageEnemy(e, q.d * 0.45 * ST.skillM, q.crit, 0.5, 0, 0, false)); // storm-tipped: lightning
@@ -122,7 +147,7 @@ function updClassSkills(dt) {
       z.rock.position.set(lerp(z.x - 3, z.x, k), lerp(12, 0.3, k * k), lerp(z.z + 2, z.z, k));
       if (z.t <= 0) {
         world.remove(z.rock);
-        ringFx(z.x, z.z, 0.5, 4.2, 0.4, 0xff7a2a, 3.4); ringFx(z.x, z.z, 0.3, 3.0, 0.3, 0xffe08a, 2.6);
+        ringFx(z.x, z.z, 0.5, 4.2, 0.4, 0xff7a2a, 3.4); novaFx(z.x, z.z, 4.6, 0.7, 'fire', 0xff6a1a); spellLight(z.x, 1.5, z.z, 0xff7a2a, 14, 0.5);
         for (let n = 0; n < 3; n++) burst(z.x, 0.4, z.z, n ? 0xff7a2a : 0xffe08a, 22, 10, 0.24, 2.4);
         let hit = 0;
         for (const e of enemies) {
@@ -188,3 +213,90 @@ function updPet(dt) {
   pet.u.uWalk.value += dt * (3 + spd * 1.6) * (spd ? 1 : 0);
   pet.u.uAmp.value = lerp(pet.u.uAmp.value, spd ? 0.7 : 0, Math.min(1, dt * 8));
 }
+
+// ================= the necromancer's dead: skeletons and remains =================
+const minions = [], remains = [];
+let remainsMesh = null;
+function raiseSkeleton(x, z) {
+  const cr = makeCreature('grunt', 0xd8d2bc, 0x7cff9a);
+  cr.mats.forEach((m) => levelDisp.push(m));
+  const m = { x, z, r: 0.34, face: P.face, mesh: cr.g, u: cr.u, h: cr.h, scale: 0.92, biteT: rand(0, 0.5), tgt: null, scanT: 0, t: 20 + 5 * tal('legion'), rise: 0, lunge: 0 };
+  const sp = reachTo(x, z); m.x = sp.x; m.z = sp.z;
+  m.mesh.scale.setScalar(m.scale); m.mesh.position.set(m.x, -1.2, m.z); m.u.uRim.value.setRGB(0.1, 0.5, 0.16);
+  world.add(m.mesh); minions.push(m);
+  burst(m.x, 0.3, m.z, 0x9fe8a0, 12, 3, 0.12); burst(m.x, 0.2, m.z, 0xd8d2bc, 8, 2.5, 0.1);
+}
+function dismissMinion(m, burstDmg) {
+  const i = minions.indexOf(m); if (i < 0) return; minions.splice(i, 1);
+  burst(m.x, 0.8, m.z, 0xd8d2bc, 14, 4, 0.14);
+  if (burstDmg && tal('undying') && LV.type === 'dungeon') {
+    ringFx(m.x, m.z, 0.3, 2.6, 0.3, 0x9fe8a0, 2.2);
+    for (const e of enemies) if (!e.dead && Math.hypot(e.x - m.x, e.z - m.z) < 2.6 + e.r) damageEnemy(e, ST.dmg * 0.5 * tal('undying'), false, 3, e.x - m.x, e.z - m.z, false);
+  }
+  world.remove(m.mesh);
+}
+function clearMinions() { while (minions.length) dismissMinion(minions[0], false); remains.length = 0; if (remainsMesh) remainsMesh.count = 0; }
+function updMinions(dt) {
+  if (!minions.length) return;
+  const fight = LV.type === 'dungeon', pct = 0.45 * (1 + 0.2 * tal('gravepact'));
+  for (const m of [...minions]) {
+    m.t -= dt; m.biteT -= dt; m.scanT -= dt; m.lunge = Math.max(0, m.lunge - dt); m.rise = Math.min(1, m.rise + dt * 2.2);
+    if (m.t <= 0 || !fight || P.dead) { dismissMinion(m, true); continue; }
+    if (m.scanT <= 0) {
+      m.scanT = 0.3; m.tgt = null; let bd = 1e9;
+      for (const e of enemies) { if (e.dead || !e.awake || Math.hypot(e.x - P.x, e.z - P.z) > 11) continue; const d = Math.hypot(e.x - m.x, e.z - m.z) + (e.boss ? -2 : 0); if (d < bd) { bd = d; m.tgt = e; } }
+    }
+    if (m.tgt && m.tgt.dead) m.tgt = null;
+    let tx, tz, spd = 0;
+    if (m.tgt) {
+      const e = m.tgt, d = Math.hypot(e.x - m.x, e.z - m.z);
+      tx = e.x; tz = e.z; spd = d > e.r + m.r + 0.3 ? 6.2 : 0;
+      if (d < e.r + m.r + 0.7 && m.biteT <= 0 && m.rise >= 1) {
+        m.biteT = 0.9; m.lunge = 0.2;
+        const q = rollDmg(e); damageEnemy(e, q.d * pct, q.crit, 1, (e.x - m.x) / (d || 1), (e.z - m.z) / (d || 1), false);
+        sfx('hit');
+      }
+    } else {
+      const k = minions.indexOf(m), a = P.face + Math.PI + (k - 1.5) * 0.7, fx = P.x + Math.sin(a) * 1.8, fz = P.z + Math.cos(a) * 1.8, d = Math.hypot(fx - m.x, fz - m.z);
+      tx = fx; tz = fz; spd = d > 0.6 ? clamp(d * 2.2, 2, 8) : 0;
+    }
+    const dx = tx - m.x, dz = tz - m.z, d = Math.hypot(dx, dz);
+    if (Math.hypot(P.x - m.x, P.z - m.z) > 16) { const sp = reachTo(P.x - Math.sin(P.face) * 1.5, P.z - Math.cos(P.face) * 1.5); m.x = sp.x; m.z = sp.z; }
+    else if (spd && d > 0.05 && m.rise >= 1) { const st = Math.min(spd * dt, d); m.x += dx / d * st; m.z += dz / d * st; collide(m); }
+    if (d > 0.05 && (spd || m.tgt)) m.face = Math.atan2(dx, dz);
+    const cur = m.mesh.rotation.y; m.mesh.rotation.y = cur + angDiff(m.face, cur) * Math.min(1, dt * 10);
+    m.mesh.position.set(m.x + Math.sin(m.face) * m.lunge * 1.4, (m.rise - 1) * 1.2 + (m.t < 1 ? (m.t - 1) * 1.2 : 0), m.z + Math.cos(m.face) * m.lunge * 1.4);
+    m.u.uWalk.value += dt * (3 + spd * 1.6) * (spd ? 1 : 0);
+    m.u.uAmp.value = lerp(m.u.uAmp.value, spd ? 0.8 : 0, Math.min(1, dt * 8));
+  }
+}
+// fallen foes leave remains for 12 seconds, shown as faint green soul-lights the Necromancer can detonate
+function addRemains(e) {
+  remains.push({ x: e.x, z: e.z, t: 12, big: e.leader || e.champ });
+  while (remains.length > 24) remains.shift();
+}
+function removeRemains(r) { const i = remains.indexOf(r); if (i >= 0) remains.splice(i, 1); }
+function detonateRemains(r, rad) {
+  if (!LV || LV.type !== 'dungeon') return;
+  novaFx(r.x, r.z, rad, 0.45, 'bone', 0x9fe8a0); spellLight(r.x, 1, r.z, 0x7cff9a, 4, 0.25); burst(r.x, 0.6, r.z, 0xb8f0a8, 16, 6, 0.18); burst(r.x, 0.4, r.z, 0xd8d2bc, 10, 5, 0.12);
+  const mult = (r.big ? 2.2 : 1.6) * ST.skillM;
+  for (const e of enemies) {
+    if (e.dead) continue; const dx = e.x - r.x, dz = e.z - r.z, d = Math.hypot(dx, dz);
+    if (d > rad + e.r) continue;
+    const q = rollDmg(e); damageEnemy(e, q.d * mult, q.crit, 4, dx / (d || 1), dz / (d || 1), true);
+  }
+  shake(0.12);
+}
+function updRemains(dt) {
+  for (let i = remains.length - 1; i >= 0; i--) { remains[i].t -= dt; if (remains[i].t <= 0) remains.splice(i, 1); }
+  if (!remainsMesh) {
+    remainsMesh = new THREE.InstancedMesh(G.sph, new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7cff9a).multiplyScalar(1.6), transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending }), 24);
+    remainsMesh.frustumCulled = false; remainsMesh.count = 0;
+  }
+  if (remainsMesh.parent !== world) world.add(remainsMesh);
+  const now = performance.now() / 1000;
+  remainsMesh.count = remains.length;
+  remains.forEach((r, i) => { const s = (r.big ? 0.26 : 0.18) * Math.min(1, r.t / 2); _rm.makeScale(s, s, s).setPosition(r.x, 0.45 + Math.sin(now * 2.4 + i) * 0.12, r.z); remainsMesh.setMatrixAt(i, _rm); });
+  remainsMesh.instanceMatrix.needsUpdate = true;
+}
+const _rm = new THREE.Matrix4();

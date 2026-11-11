@@ -63,9 +63,11 @@ function socketHtml(it) {
 const imprintCost = (it) => ({ essence: 18 + it.rarity * 6, sigil: it.rarity === 3 ? 2 : 1, gold: Math.round(400 + it.value) });
 function powerHtml(it) {
   const learned = S.learned || [], ok = S.home.bench >= 2;
+  const aw = it.rarity === 4 && !it.anc ? (() => { const c = awakenCost(), okA = S.home.bench >= 3; return `<div class="row"><div><div class="t">Awaken<small>legendary or set</small></div><div class="d">${okA ? 'Make this item Ancient: its damage or armor and every affix grow by 30%.' : 'Needs a Runeforge.'}</div>${okA ? costChips(c) : ''}</div><button class="btn" type="button" data-act="awaken"${okA && hasCost(c) ? '' : ' disabled'}>Awaken</button></div>`; })() : '';
+  if (it.rarity === 4 && it.set) return aw;
   if (it.rarity === 4 && it.power) {
     const known = learned.includes(it.power);
-    return `<div class="row"><div><div class="t">Extract the power<small>${known ? 'already learned' : 'destroys the item'}</small></div><div class="d">${ok ? `Learn ${esc(legendOf(it).name)}'s power for good, so you can imprint it onto rare or epic gear.` : "Needs an Artificer's Table."}</div></div><button class="btn ghost" type="button" data-act="extract"${ok && !known && !SLOTS.some((s) => S.equip[s] === it) ? '' : ' disabled'}>Extract</button></div>`;
+    return aw + `<div class="row"><div><div class="t">Extract the power<small>${known ? 'already learned' : 'destroys the item'}</small></div><div class="d">${ok ? `Learn ${esc(legendOf(it).name)}'s power for good, so you can imprint it onto rare or epic gear.` : "Needs an Artificer's Table."}</div></div><button class="btn ghost" type="button" data-act="extract"${ok && !known && !SLOTS.some((s) => S.equip[s] === it) ? '' : ' disabled'}>Extract</button></div>`;
   }
   if ((it.rarity === 2 || it.rarity === 3) && !it.set) {
     const c = imprintCost(it);
@@ -159,6 +161,12 @@ function metaAct(d, it) {
       if (!it || (it.sock || 0) >= MAX_SOCK || S.home.bench < 1) break;
       const c = drillCost(it); if (!hasCost(c)) break;
       payCost(c); it.sock = (it.sock || 0) + 1; it.gems = (it.gems || []).concat([null]); toast(`${it.name} now has ${it.sock} socket${it.sock > 1 ? 's' : ''}`, 'var(--brass-2)'); sfx('craft'); break;
+    }
+    case 'para': paraAct(d.k, +d.v); break;
+    case 'seasonBuy': seasonBuy(d.k); break;
+    case 'awaken': {
+      const c = awakenCost(); if (!it || it.rarity !== 4 || it.anc || S.home.bench < 3 || !hasCost(c)) break;
+      payCost(c); ascend(it, 1); afterGear(); toast(`${it.name} awakens.`, 'var(--r4)', true); sfx('shrine'); burst(P.x, 1.5, P.z, 0xf19a33, 24, 5, 0.2); break;
     }
     case 'extract': {
       if (!it || it.rarity !== 4 || !it.power || S.home.bench < 2 || SLOTS.some((s) => S.equip[s] === it)) break;

@@ -5,7 +5,7 @@ function setClassSkills() {
   SKILLS.length = 0;
   clsOf().skills.forEach((id, i) => SKILLS.push(Object.assign({ id, key: String(i + 1), lvl: SKILL_LVL[i] }, SKILL_DEFS[id])));
 }
-const skillCdOf = (s) => s.cd * (1 - (ST ? ST.cdr : 0) / 100);
+const skillCdOf = (s) => Math.max(0.5, s.cd - (s.id === 'bonespear' ? 0.3 * tal('marrow') : 0)) * (1 - (ST ? ST.cdr : 0) / 100);
 const skillCd = [0, 0, 0];
 Object.assign(P, { spinT: 0, dashT: 0, dashDir: 0, dashHit: new Set(), spinTicks: 0 });
 function useSkill(i) {
@@ -29,7 +29,7 @@ function useSkill(i) {
     P.dashT = 0.2; P.iframes = Math.max(P.iframes, 0.34); P.dashHit.clear();
     burst(P.x, 0.6, P.z, 0x9a7aff, 14, 3, 0.16); sfx('dash');
   } else if (s.id === 'nova') {
-    ringFx(P.x, P.z, 0.5, 5.0, 0.38, 0xff7a2a, 3.2); ringFx(P.x, P.z, 0.3, 3.6, 0.3, 0xffd06a, 2.4);
+    ringFx(P.x, P.z, 0.5, 5.0, 0.38, 0xff7a2a, 3.2); novaFx(P.x, P.z, 5.4, 0.55, 'fire', 0xff7a2a); spellLight(P.x, 1.2, P.z, 0xff8a3a, 9, 0.35);
     for (let k = 0; k < 3; k++) burst(P.x, 0.4, P.z, k ? 0xff7a2a : 0xffd06a, 18, 9, 0.22, 2.2);
     const n = withElem('fire', () => hitAround(5.0, 2.5 * ST.skillM, 7, (e) => { e.burnT = 3; e.burnD = ST.dmg * 0.4 * ST.burnM; }));
     shake(0.55); addHitStop(n ? 0.09 : 0.03); sfx('nova');
@@ -44,10 +44,10 @@ function legendSkillHooks() {
     ringFx(P.x, P.z, 7, 0.6, 0.35, 0x8fd0ff, 2.2);
     for (const e of near(7)) { const dx = P.x - e.x, dz = P.z - e.z, d = Math.hypot(dx, dz) || 1; if (!e.boss) { e.kx += dx / d * Math.min(9, d * 1.6); e.kz += dz / d * Math.min(9, d * 1.6); } e.chillT = Math.max(e.chillT || 0, 1.2); }
   }
-  if (W.frostpath) { ringFx(P.x, P.z, 0.4, 5, 0.3, 0xbfe8ff, 2.2); for (const e of near(5)) chillEnemy(e, 2.5); }
+  if (W.frostpath) { novaFx(P.x, P.z, 5, 0.45, 'frost', 0xbfe8ff); iceFx(P.x, P.z, 4.5, 14); for (const e of near(5)) chillEnemy(e, 2.5); }
   if (W.storm) {
     const ts = near(10).filter((e) => e.awake && e.los !== false).sort(() => Math.random() - 0.5).slice(0, 3);
-    withElem('shock', () => { for (const e of ts) { zap(P.x, P.z, e.x, e.z, 0x9fd8ff); burst(e.x, 1, e.z, 0x9fd8ff, 10, 4, 0.12); damageEnemy(e, ST.dmg * 1.6 * ST.skillM, false, 1, 0, 0, false, 'shock'); } });
+    withElem('shock', () => { for (const e of ts) { boltFx(e.x + rand(-0.5, 0.5), 9, e.z + rand(-0.5, 0.5), e.x, 0.3, e.z, 0x9fd8ff, 0.28); burst(e.x, 1, e.z, 0x9fd8ff, 10, 4, 0.12); damageEnemy(e, ST.dmg * 1.6 * ST.skillM, false, 1, 0, 0, false, 'shock'); } });
     if (ts.length) sfx('crit');
   }
   if (W.barrage) {
@@ -103,7 +103,7 @@ function dashHits() {
 }
 function updSkills(dt) {
   for (let i = 0; i < 3; i++) skillCd[i] = Math.max(0, skillCd[i] - dt);
-  updClassSkills(dt); updLegends(dt);
+  updClassSkills(dt); updLegends(dt); updMinions(dt); updRemains(dt);
   if (P.spinT > 0) {
     P.spinT -= dt;
     const due = P.spinT < 0.38 && P.spinTicks === 0 ? 1 : P.spinT < 0.12 && P.spinTicks === 1 ? 2 : 0;
@@ -310,4 +310,23 @@ function updElderLabel() {
   const L = labelEls.find((q) => q.ref === elderLabel); if (!L) return;
   const mark = S.quest ? (S.quest.done ? ' ?' : '') : ' !';
   const txt = 'Elder Maren' + mark; if (L.el.textContent !== txt) L.el.textContent = txt;
+}
+
+// ================= vault mimics and grove springs =================
+function addMimic(x, z) {
+  // looks like any chest; opening it wakes a Mimic that drops a rich hoard
+  const before = interacts.length; addChest(x, z);
+  const o = interacts[before]; if (!o) return;
+  o.act = (it) => {
+    it.dead = true; if (it.g) world.remove(it.g);
+    const e = spawnEnemy('brute', x, z, { champ: true }); e.awake = true; e.name = 'Mimic'; e.hp *= 1.6; e.maxHp = e.hp; e.mimic = true;
+    burst(x, 0.8, z, 0xffc24a, 24, 6, 0.2); shake(0.4); sfx('ambush'); floatNum(x, 2.2, z, 'It bites!', 'crit');
+  };
+}
+function addSpring(x, z) {
+  addInteract({ x, z, r: 1.9, kind: 'spring', label: 'Healing Spring', ly: 1.2, cls: '', verb: 'Drink from the spring', act(o) {
+    o.dead = true; healPlayer(ST.maxHp * 0.5); P.burnT = 0; sfx('drink'); ringFx(x, z, 0.4, 2.4, 0.5, 0x7affc8, 2.2); burst(x, 0.6, z, 0x9affd8, 20, 3, 0.14);
+    toast('The spring restores you.', 'var(--ok)');
+    if (LV.waterMats) for (const m of LV.waterMats) if (m.emissive) m.emissive.multiplyScalar(0.3);
+  } });
 }
