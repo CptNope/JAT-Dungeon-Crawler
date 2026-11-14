@@ -31,8 +31,8 @@ function startRift(t, weekly, coded) {
   let mods, seed = 0;
   if (coded) { t = coded.tier; mods = coded.mods; seed = coded.seed; }
   else if (weekly) { const W = weeklyDef(); t = W.tier; mods = W.mods; seed = W.seed; }
-  else { const n = t >= 10 ? 3 : t >= 4 ? 2 : 1, keys = Object.keys(RIFT_MODS); mods = []; while (mods.length < n) { const m = pick(keys); if (!mods.includes(m)) mods.push(m); } }
-  startDelve(riftDepth(t), [], { mode: 'rift', rift: { tier: t, mods, floor: 1, t0: performance.now(), par: riftPar(t), weekly: !!weekly, seed, code: coded ? coded.code : null } });
+  else { const n = t >= 10 ? 3 : t >= 4 ? 2 : 1, keys = Object.keys(RIFT_MODS); mods = []; while (mods.length < n) { const m = pick(keys); if (!mods.includes(m)) mods.push(m); } seed = (Math.floor(Math.random() * 0xfffffffe) + 1) >>> 0; } // a seed of its own, so any rift can be shared afterwards
+  startDelve(riftDepth(t), [], { mode: 'rift', rift: { tier: t, mods, floor: 1, t0: performance.now(), par: riftPar(t), weekly: !!weekly, seed, code: coded ? coded.code : null, share: coded ? coded.code : riftCode(t, mods, seed) } });
   hint('rift'); ghostRecStart(); if (weekly) autoGhost();
   banner(weekly ? 'Weekly Rift' : coded ? 'Seeded rift' : `Rift tier ${t}`, mods.map((m) => RIFT_MODS[m].n).join(' · '));
 }
@@ -68,6 +68,7 @@ function riftComplete(e) {
   if (!S.rift.best[t] || secs < S.rift.best[t]) S.rift.best[t] = secs;
   if (R.code) { S.seedBest = S.seedBest || {}; if (!S.seedBest[R.code] || secs < S.seedBest[R.code]) S.seedBest[R.code] = secs; }
   if (R.weekly) { const k = weeklyDef().key; if (!S.weekly || S.weekly.key !== k) S.weekly = { key: k, best: null, tries: 0 }; if (!S.weekly.best || secs < S.weekly.best) S.weekly.best = secs; submitBoard({ time: secs, ghost: ghostString(R) }); }
+  if (R.share) { S.lastRift = { code: R.share, secs, tier: t }; dareToast(R.share, secs); }
   partyDone(secs);
   stat('rifts');
   gainXP(80 * t + 40);
@@ -200,6 +201,8 @@ function riftHtml() {
       <button class="btn" type="button" data-act="weekly">Enter</button></div>
     <div class="row"><div><div class="t">Daily seed<small>today's floors, the same for anyone with the code</small></div>${(() => { const c = dailyCode(), p = parseRiftCode(c), b = S.seedBest && S.seedBest[c]; return `<div class="d"><code>${c}</code> · tier ${p.tier} · ${p.mods.map((m) => RIFT_MODS[m].n).join(', ')}${b ? ` · <span style="color:var(--ok)">your best ${fmtClock(b)}</span>` : ''}</div><div class="acts"><button class="btn ghost sm" type="button" data-act="copyCode" data-code="${c}">${canLink() ? 'Copy challenge link' : 'Copy code'}</button></div>`; })()}</div>
       <button class="btn" type="button" data-act="daily">Enter</button></div>
+${S.lastRift && parseRiftCode(S.lastRift.code) ? `<div class="row"><div><div class="t">Your last rift<small>dare a friend to beat your time on the same floors</small></div><div class="d"><code>${esc(S.lastRift.code)}</code> · tier ${S.lastRift.tier} · sealed in ${fmtClock(S.lastRift.secs)}</div></div>
+      <button class="btn ghost" type="button" data-act="copyCode" data-code="${esc(S.lastRift.code)}" data-secs="${Math.round(S.lastRift.secs)}">${canLink() ? 'Copy challenge link' : 'Copy code'}</button></div>` : ''}
     <div class="row"><div><div class="t">Play a code<small>a friend's rift, floor for floor</small></div><input id="seedIn" class="code-in" type="text" placeholder="HD-4-SB-1A2B3C" value="${pendingRift ? pendingRift.code : ''}" autocomplete="off" spellcheck="false"><div class="hint" id="seedMsg"></div></div>
       <button class="btn ghost" type="button" data-act="seedGo">Play</button></div>
     </div>`;

@@ -166,6 +166,21 @@ function announcePendingRift() {
   if (!pendingRift) return;
   toast(`A friend's rift is waiting: ${pendingRift.code} (tier ${pendingRift.tier}). Walk to the Delve and choose Rift Trials to race it.`, 'var(--brass)', true);
 }
+function copyChallenge(code, secs) {
+  const link = canLink(), say = secs ? `I sealed this Hearthdeep rift in ${fmtClock(secs)}. Same floors, same foes. Beat it:` : 'Race me in Hearthdeep, same floors, same foes:';
+  const t = link ? `${say} ${riftLink(code)}` : code;
+  // on a phone the share sheet is the natural way to send a link; everywhere else it goes to the clipboard
+  if (link && navigator.share && window.matchMedia('(pointer: coarse)').matches) { navigator.share({ title: 'Hearthdeep', text: say, url: riftLink(code) }).catch(() => {}); return; }
+  try { navigator.clipboard.writeText(t).then(() => toast(link ? 'Challenge link copied. Send it to a friend.' : 'Code copied: ' + t, 'var(--ok)'), () => toast(t, 'var(--muted)', true)); } catch (err) { toast(t, 'var(--muted)', true); }
+}
+// the moment a rift is sealed is when a time is worth showing off: offer the link there, and keep it in the Delve for later
+function dareToast(code, secs) {
+  const box = $('#toasts'), el = document.createElement('div'); el.className = 'toast big dare';
+  const s = document.createElement('span'); s.textContent = `Sealed in ${fmtClock(secs)}. Dare a friend to beat it.`;
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'btn sm'; b.textContent = canLink() ? (navigator.share && window.matchMedia('(pointer: coarse)').matches ? 'Send challenge' : 'Copy challenge link') : 'Copy code';
+  b.addEventListener('click', () => { copyChallenge(code, secs); el.remove(); });
+  el.append(s, b); box.prepend(el); setTimeout(() => el.remove(), 14000);
+}
 function dailyCode() {
   const d = new Date(), key = `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
   let h = 2166136261; for (const c of key + 'daily') h = Math.imul(h ^ c.charCodeAt(0), 16777619);
