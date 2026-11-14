@@ -134,6 +134,7 @@ function begin() {
   hud(); save();
   if (!S.cls) openPanel('class');
   else if (S.runs === 0 && S.kills === 0) hint('move');
+  if (S.cls) announcePendingRift();
 }
 function freshHero() {
   S = newSave(); uid = 1; RUN = null; P.dead = false;

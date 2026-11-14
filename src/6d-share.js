@@ -43,7 +43,7 @@ async function makeRunCard() {
   return cv.toDataURL('image/png');
 }
 function runSummary() {
-  return `Hearthdeep: ${clsOf().n} level ${S.level}, deepest depth ${S.best || 0}, ${S.bossKills} bosses, ${fmt(S.kills)} foes, best rift ${(S.rift && S.rift.cleared) || 0}, best Pit wave ${S.arenaBest || 0}.`;
+  return `Hearthdeep: ${clsOf().n} level ${S.level}, deepest depth ${S.best || 0}, ${S.bossKills} bosses, ${fmt(S.kills)} foes, best rift ${(S.rift && S.rift.cleared) || 0}, best Pit wave ${S.arenaBest || 0}.${canLink() ? ' Play free: ' + playUrl() : ''}`;
 }
 function showShare(url, title, note) {
   const el = $('#share');
@@ -153,6 +153,18 @@ function parseRiftCode(code) {
   const mods = [...new Set(m[2].split('').map((c) => inv[c]))];
   const tier = clamp(+m[1], 1, 30), seed = parseInt(m[3], 36) >>> 0;
   return seed ? { tier, mods, seed, code: riftCode(tier, mods, seed) } : null;
+}
+// Challenge links: a rift code can travel as a link (?rift=HD-4-SB-1A2B3C). A code is also found inside any pasted text,
+// so a whole message or link can go straight into the "Play a code" box.
+const findRiftCode = (text) => { const m = String(text || '').toUpperCase().match(/HD-\d{1,2}-[SBHEGLVDF]{1,3}-[0-9A-Z]{1,8}/); return m ? parseRiftCode(m[0]) : null; };
+const canLink = () => /^https?:$/.test(location.protocol) && !window.claude;
+const playUrl = () => location.origin + location.pathname;
+const riftLink = (code) => `${playUrl()}?rift=${code}`;
+let pendingRift = null;
+try { pendingRift = findRiftCode(new URLSearchParams(location.search).get('rift')); } catch (err) { pendingRift = null; }
+function announcePendingRift() {
+  if (!pendingRift) return;
+  toast(`A friend's rift is waiting: ${pendingRift.code} (tier ${pendingRift.tier}). Walk to the Delve and choose Rift Trials to race it.`, 'var(--brass)', true);
 }
 function dailyCode() {
   const d = new Date(), key = `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
