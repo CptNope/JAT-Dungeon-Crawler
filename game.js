@@ -5480,9 +5480,9 @@ function riftHtml() {
     <div class="row"><div><div class="t">Weekly Rift<small>${W.key} · same floors for everyone this week · tier ${W.tier}</small></div>
       <div class="d">${W.mods.map((m) => `<b>${RIFT_MODS[m].n}</b>: ${RIFT_MODS[m].d}`).join('<br>')}</div>${wk && wk.best ? `<div class="d" style="color:var(--ok)">Your best this week: ${fmtClock(wk.best)}</div>` : ''}</div>
       <button class="btn" type="button" data-act="weekly">Enter</button></div>
-    <div class="row"><div><div class="t">Daily seed<small>today's floors, the same for anyone with the code</small></div>${(() => { const c = dailyCode(), p = parseRiftCode(c), b = S.seedBest && S.seedBest[c]; return `<div class="d"><code>${c}</code> · tier ${p.tier} · ${p.mods.map((m) => RIFT_MODS[m].n).join(', ')}${b ? ` · <span style="color:var(--ok)">your best ${fmtClock(b)}</span>` : ''}</div><div class="acts"><button class="btn ghost sm" type="button" data-act="copyCode" data-code="${c}">Copy code</button></div>`; })()}</div>
+    <div class="row"><div><div class="t">Daily seed<small>today's floors, the same for anyone with the code</small></div>${(() => { const c = dailyCode(), p = parseRiftCode(c), b = S.seedBest && S.seedBest[c]; return `<div class="d"><code>${c}</code> · tier ${p.tier} · ${p.mods.map((m) => RIFT_MODS[m].n).join(', ')}${b ? ` · <span style="color:var(--ok)">your best ${fmtClock(b)}</span>` : ''}</div><div class="acts"><button class="btn ghost sm" type="button" data-act="copyCode" data-code="${c}">${canLink() ? 'Copy challenge link' : 'Copy code'}</button></div>`; })()}</div>
       <button class="btn" type="button" data-act="daily">Enter</button></div>
-    <div class="row"><div><div class="t">Play a code<small>a friend's rift, floor for floor</small></div><input id="seedIn" class="code-in" type="text" placeholder="HD-4-SB-1A2B3C" autocomplete="off" spellcheck="false"><div class="hint" id="seedMsg"></div></div>
+    <div class="row"><div><div class="t">Play a code<small>a friend's rift, floor for floor</small></div><input id="seedIn" class="code-in" type="text" placeholder="HD-4-SB-1A2B3C" value="${pendingRift ? pendingRift.code : ''}" autocomplete="off" spellcheck="false"><div class="hint" id="seedMsg"></div></div>
       <button class="btn ghost" type="button" data-act="seedGo">Play</button></div>
     </div>`;
 }
@@ -6072,8 +6072,8 @@ function doAct(d) {
     case 'riftT': Panel.riftT = +d.t; break;
     case 'pit': startArena(); return;
     case 'daily': { const c = parseRiftCode(dailyCode()); if (c) startRift(0, false, c); return; }
-    case 'seedGo': { const inp = $('#seedIn'), c = parseRiftCode(inp && inp.value); if (!c) { const m = $('#seedMsg'); if (m) m.textContent = 'That is not a rift code. Codes look like HD-4-SB-1A2B3C.'; return; } startRift(0, false, c); return; }
-    case 'copyCode': { const t = d.code; try { navigator.clipboard.writeText(t).then(() => toast('Code copied: ' + t, 'var(--ok)'), () => toast(t, 'var(--muted)', true)); } catch (err) { toast(t, 'var(--muted)', true); } return; }
+    case 'seedGo': { const inp = $('#seedIn'), c = findRiftCode(inp && inp.value); if (!c) { const m = $('#seedMsg'); if (m) m.textContent = 'That is not a rift code. Codes look like HD-4-SB-1A2B3C.'; return; } pendingRift = null; startRift(0, false, c); return; }
+    case 'copyCode': { const link = canLink(), t = link ? `Race me in Hearthdeep, same floors, same foes: ${riftLink(d.code)}` : d.code; try { navigator.clipboard.writeText(t).then(() => toast(link ? 'Challenge link copied. Send it to a friend.' : 'Code copied: ' + t, 'var(--ok)'), () => toast(t, 'var(--muted)', true)); } catch (err) { toast(t, 'var(--muted)', true); } return; }
     case 'cvBuy': caravanBuy(+d.i); break;
     case 'cvLook': Panel.cvLook = +d.i; break;
     default: if (settingsAct(d) || onlineAct(d)) break; if (metaAct(d, it) === 'stop') return;
@@ -6112,7 +6112,7 @@ function rebuildHero() {
   if (P.mesh) { scene.remove(P.mesh); P.mesh.traverse((o) => { if (o.material && o.material.dispose) o.material.dispose(); }); }
   P.mesh = null; P.wkind = null; placePlayerMesh();
 }
-function chooseClassThen() { if (LV && LV.type === 'town') storyOnTown(); }
+function chooseClassThen() { if (LV && LV.type === 'town') storyOnTown(); announcePendingRift(); }
 function chooseClass(k) {
   const fresh = !S.runs && !S.kills;
   S.cls = k; S.tal = {};
@@ -6462,7 +6462,7 @@ async function makeRunCard() {
   return cv.toDataURL('image/png');
 }
 function runSummary() {
-  return `Hearthdeep: ${clsOf().n} level ${S.level}, deepest depth ${S.best || 0}, ${S.bossKills} bosses, ${fmt(S.kills)} foes, best rift ${(S.rift && S.rift.cleared) || 0}, best Pit wave ${S.arenaBest || 0}.`;
+  return `Hearthdeep: ${clsOf().n} level ${S.level}, deepest depth ${S.best || 0}, ${S.bossKills} bosses, ${fmt(S.kills)} foes, best rift ${(S.rift && S.rift.cleared) || 0}, best Pit wave ${S.arenaBest || 0}.${canLink() ? ' Play free: ' + playUrl() : ''}`;
 }
 function showShare(url, title, note) {
   const el = $('#share');
@@ -6572,6 +6572,18 @@ function parseRiftCode(code) {
   const mods = [...new Set(m[2].split('').map((c) => inv[c]))];
   const tier = clamp(+m[1], 1, 30), seed = parseInt(m[3], 36) >>> 0;
   return seed ? { tier, mods, seed, code: riftCode(tier, mods, seed) } : null;
+}
+// Challenge links: a rift code can travel as a link (?rift=HD-4-SB-1A2B3C). A code is also found inside any pasted text,
+// so a whole message or link can go straight into the "Play a code" box.
+const findRiftCode = (text) => { const m = String(text || '').toUpperCase().match(/HD-\d{1,2}-[SBHEGLVDF]{1,3}-[0-9A-Z]{1,8}/); return m ? parseRiftCode(m[0]) : null; };
+const canLink = () => /^https?:$/.test(location.protocol) && !window.claude;
+const playUrl = () => location.origin + location.pathname;
+const riftLink = (code) => `${playUrl()}?rift=${code}`;
+let pendingRift = null;
+try { pendingRift = findRiftCode(new URLSearchParams(location.search).get('rift')); } catch (err) { pendingRift = null; }
+function announcePendingRift() {
+  if (!pendingRift) return;
+  toast(`A friend's rift is waiting: ${pendingRift.code} (tier ${pendingRift.tier}). Walk to the Delve and choose Rift Trials to race it.`, 'var(--brass)', true);
 }
 function dailyCode() {
   const d = new Date(), key = `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
@@ -7138,6 +7150,7 @@ function begin() {
   hud(); save();
   if (!S.cls) openPanel('class');
   else if (S.runs === 0 && S.kills === 0) hint('move');
+  if (S.cls) announcePendingRift();
 }
 function freshHero() {
   S = newSave(); uid = 1; RUN = null; P.dead = false;

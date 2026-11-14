@@ -1,5 +1,22 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Hearthdeep</title>
+<title>Hearthdeep: a free browser action RPG with endless dungeons</title>
+<meta name="description" content="Hearthdeep is a free 3D dungeon crawler that runs in your browser. Four classes, 100 enemy types, bosses every fifth floor, loot, crafting and a home you build from a shack into a keep. No download, no account; works on phones and offline.">
+<link rel="canonical" href="https://cptnope.github.io/JAT-Dungeon-Crawler/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Hearthdeep">
+<meta property="og:title" content="Hearthdeep: a free browser action RPG with endless dungeons">
+<meta property="og:description" content="Delve through endless procedurally generated floors, bring loot home, craft at your bench, and grow your shack into a keep. Free, in your browser, no download.">
+<meta property="og:url" content="https://cptnope.github.io/JAT-Dungeon-Crawler/">
+<meta property="og:image" content="https://cptnope.github.io/JAT-Dungeon-Crawler/press/hearthdeep-social.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A mage stands on the cobbled path of the lamplit village of Hearthdeep">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:creator" content="@JAndersonTech">
+<meta name="twitter:title" content="Hearthdeep: a free browser action RPG with endless dungeons">
+<meta name="twitter:description" content="Endless dungeons, four classes, 100 enemy types, loot, crafting and a home to build. Free in your browser.">
+<meta name="twitter:image" content="https://cptnope.github.io/JAT-Dungeon-Crawler/press/hearthdeep-social.jpg">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"VideoGame","name":"Hearthdeep","alternateName":"JAT Dungeon Crawler","url":"https://cptnope.github.io/JAT-Dungeon-Crawler/","image":"https://cptnope.github.io/JAT-Dungeon-Crawler/press/hearthdeep-social.jpg","description":"A free 3D action RPG that runs in the browser: endless procedurally generated dungeons, four classes, 100 enemy types, bosses, loot, crafting and an upgradable home.","genre":["Action RPG","Dungeon crawler","Roguelite"],"gamePlatform":["Web browser","Android","iOS","Windows","macOS","Linux"],"applicationCategory":"Game","operatingSystem":"Any","playMode":"SinglePlayer","inLanguage":"en","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Person","name":"Jeremy Anderson","url":"https://jeremyanderson.tech/"},"publisher":{"@type":"Organization","name":"Jeremy Anderson Tech","url":"https://jeremyanderson.tech/"}}</script>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"%3E%3Crect width="512" height="512" rx="96" fill="%2315131b"/%3E%3Cpath d="M128 410V236a128 128 0 0 1 256 0v174" fill="%230b0a0f" stroke="%23d6a24a" stroke-width="26" stroke-linejoin="round"/%3E%3Cpath d="M92 410h328" stroke="%238a6a3a" stroke-width="30" stroke-linecap="round"/%3E%3Cpath d="M256 372c-46 0-72-30-72-66 0-40 34-58 42-100 28 22 30 50 26 70 14-8 24-26 22-48 34 26 54 52 54 80 0 38-28 64-72 64z" fill="%23f19a33"/%3E%3Cpath d="M256 372c-22 0-36-14-36-34 0-20 16-30 22-50 14 12 16 26 14 36 8-4 14-12 14-24 16 14 22 26 22 40 0 20-14 32-36 32z" fill="%23ffe08a"/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -6022,9 +6039,9 @@ function riftHtml() {
     <div class="row"><div><div class="t">Weekly Rift<small>${W.key} · same floors for everyone this week · tier ${W.tier}</small></div>
       <div class="d">${W.mods.map((m) => `<b>${RIFT_MODS[m].n}</b>: ${RIFT_MODS[m].d}`).join('<br>')}</div>${wk && wk.best ? `<div class="d" style="color:var(--ok)">Your best this week: ${fmtClock(wk.best)}</div>` : ''}</div>
       <button class="btn" type="button" data-act="weekly">Enter</button></div>
-    <div class="row"><div><div class="t">Daily seed<small>today's floors, the same for anyone with the code</small></div>${(() => { const c = dailyCode(), p = parseRiftCode(c), b = S.seedBest && S.seedBest[c]; return `<div class="d"><code>${c}</code> · tier ${p.tier} · ${p.mods.map((m) => RIFT_MODS[m].n).join(', ')}${b ? ` · <span style="color:var(--ok)">your best ${fmtClock(b)}</span>` : ''}</div><div class="acts"><button class="btn ghost sm" type="button" data-act="copyCode" data-code="${c}">Copy code</button></div>`; })()}</div>
+    <div class="row"><div><div class="t">Daily seed<small>today's floors, the same for anyone with the code</small></div>${(() => { const c = dailyCode(), p = parseRiftCode(c), b = S.seedBest && S.seedBest[c]; return `<div class="d"><code>${c}</code> · tier ${p.tier} · ${p.mods.map((m) => RIFT_MODS[m].n).join(', ')}${b ? ` · <span style="color:var(--ok)">your best ${fmtClock(b)}</span>` : ''}</div><div class="acts"><button class="btn ghost sm" type="button" data-act="copyCode" data-code="${c}">${canLink() ? 'Copy challenge link' : 'Copy code'}</button></div>`; })()}</div>
       <button class="btn" type="button" data-act="daily">Enter</button></div>
-    <div class="row"><div><div class="t">Play a code<small>a friend's rift, floor for floor</small></div><input id="seedIn" class="code-in" type="text" placeholder="HD-4-SB-1A2B3C" autocomplete="off" spellcheck="false"><div class="hint" id="seedMsg"></div></div>
+    <div class="row"><div><div class="t">Play a code<small>a friend's rift, floor for floor</small></div><input id="seedIn" class="code-in" type="text" placeholder="HD-4-SB-1A2B3C" value="${pendingRift ? pendingRift.code : ''}" autocomplete="off" spellcheck="false"><div class="hint" id="seedMsg"></div></div>
       <button class="btn ghost" type="button" data-act="seedGo">Play</button></div>
     </div>`;
 }
@@ -6614,8 +6631,8 @@ function doAct(d) {
     case 'riftT': Panel.riftT = +d.t; break;
     case 'pit': startArena(); return;
     case 'daily': { const c = parseRiftCode(dailyCode()); if (c) startRift(0, false, c); return; }
-    case 'seedGo': { const inp = $('#seedIn'), c = parseRiftCode(inp && inp.value); if (!c) { const m = $('#seedMsg'); if (m) m.textContent = 'That is not a rift code. Codes look like HD-4-SB-1A2B3C.'; return; } startRift(0, false, c); return; }
-    case 'copyCode': { const t = d.code; try { navigator.clipboard.writeText(t).then(() => toast('Code copied: ' + t, 'var(--ok)'), () => toast(t, 'var(--muted)', true)); } catch (err) { toast(t, 'var(--muted)', true); } return; }
+    case 'seedGo': { const inp = $('#seedIn'), c = findRiftCode(inp && inp.value); if (!c) { const m = $('#seedMsg'); if (m) m.textContent = 'That is not a rift code. Codes look like HD-4-SB-1A2B3C.'; return; } pendingRift = null; startRift(0, false, c); return; }
+    case 'copyCode': { const link = canLink(), t = link ? `Race me in Hearthdeep, same floors, same foes: ${riftLink(d.code)}` : d.code; try { navigator.clipboard.writeText(t).then(() => toast(link ? 'Challenge link copied. Send it to a friend.' : 'Code copied: ' + t, 'var(--ok)'), () => toast(t, 'var(--muted)', true)); } catch (err) { toast(t, 'var(--muted)', true); } return; }
     case 'cvBuy': caravanBuy(+d.i); break;
     case 'cvLook': Panel.cvLook = +d.i; break;
     default: if (settingsAct(d) || onlineAct(d)) break; if (metaAct(d, it) === 'stop') return;
@@ -6654,7 +6671,7 @@ function rebuildHero() {
   if (P.mesh) { scene.remove(P.mesh); P.mesh.traverse((o) => { if (o.material && o.material.dispose) o.material.dispose(); }); }
   P.mesh = null; P.wkind = null; placePlayerMesh();
 }
-function chooseClassThen() { if (LV && LV.type === 'town') storyOnTown(); }
+function chooseClassThen() { if (LV && LV.type === 'town') storyOnTown(); announcePendingRift(); }
 function chooseClass(k) {
   const fresh = !S.runs && !S.kills;
   S.cls = k; S.tal = {};
@@ -7004,7 +7021,7 @@ async function makeRunCard() {
   return cv.toDataURL('image/png');
 }
 function runSummary() {
-  return `Hearthdeep: ${clsOf().n} level ${S.level}, deepest depth ${S.best || 0}, ${S.bossKills} bosses, ${fmt(S.kills)} foes, best rift ${(S.rift && S.rift.cleared) || 0}, best Pit wave ${S.arenaBest || 0}.`;
+  return `Hearthdeep: ${clsOf().n} level ${S.level}, deepest depth ${S.best || 0}, ${S.bossKills} bosses, ${fmt(S.kills)} foes, best rift ${(S.rift && S.rift.cleared) || 0}, best Pit wave ${S.arenaBest || 0}.${canLink() ? ' Play free: ' + playUrl() : ''}`;
 }
 function showShare(url, title, note) {
   const el = $('#share');
@@ -7114,6 +7131,18 @@ function parseRiftCode(code) {
   const mods = [...new Set(m[2].split('').map((c) => inv[c]))];
   const tier = clamp(+m[1], 1, 30), seed = parseInt(m[3], 36) >>> 0;
   return seed ? { tier, mods, seed, code: riftCode(tier, mods, seed) } : null;
+}
+// Challenge links: a rift code can travel as a link (?rift=HD-4-SB-1A2B3C). A code is also found inside any pasted text,
+// so a whole message or link can go straight into the "Play a code" box.
+const findRiftCode = (text) => { const m = String(text || '').toUpperCase().match(/HD-\d{1,2}-[SBHEGLVDF]{1,3}-[0-9A-Z]{1,8}/); return m ? parseRiftCode(m[0]) : null; };
+const canLink = () => /^https?:$/.test(location.protocol) && !window.claude;
+const playUrl = () => location.origin + location.pathname;
+const riftLink = (code) => `${playUrl()}?rift=${code}`;
+let pendingRift = null;
+try { pendingRift = findRiftCode(new URLSearchParams(location.search).get('rift')); } catch (err) { pendingRift = null; }
+function announcePendingRift() {
+  if (!pendingRift) return;
+  toast(`A friend's rift is waiting: ${pendingRift.code} (tier ${pendingRift.tier}). Walk to the Delve and choose Rift Trials to race it.`, 'var(--brass)', true);
 }
 function dailyCode() {
   const d = new Date(), key = `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
@@ -7680,6 +7709,7 @@ function begin() {
   hud(); save();
   if (!S.cls) openPanel('class');
   else if (S.runs === 0 && S.kills === 0) hint('move');
+  if (S.cls) announcePendingRift();
 }
 function freshHero() {
   S = newSave(); uid = 1; RUN = null; P.dead = false;

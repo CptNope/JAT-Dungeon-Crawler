@@ -1,0 +1,26 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build-and-smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build and check the committed build matches src/
+        run: |
+          ./build.sh
+          git diff --exit-code -- game.js index.html sw.js dist/hearthdeep.html || { echo "::error::Built files are out of date. Run ./build.sh and commit the result."; exit 1; }
+      - name: Install headless Chromium
+        run: |
+          npm i --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Smoke test (boot, new hero, short autoplay delve)
+        run: node tools/smoke-test.mjs

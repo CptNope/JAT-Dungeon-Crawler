@@ -198,9 +198,9 @@ function riftHtml() {
     <div class="row"><div><div class="t">Weekly Rift<small>${W.key} · same floors for everyone this week · tier ${W.tier}</small></div>
       <div class="d">${W.mods.map((m) => `<b>${RIFT_MODS[m].n}</b>: ${RIFT_MODS[m].d}`).join('<br>')}</div>${wk && wk.best ? `<div class="d" style="color:var(--ok)">Your best this week: ${fmtClock(wk.best)}</div>` : ''}</div>
       <button class="btn" type="button" data-act="weekly">Enter</button></div>
-    <div class="row"><div><div class="t">Daily seed<small>today's floors, the same for anyone with the code</small></div>${(() => { const c = dailyCode(), p = parseRiftCode(c), b = S.seedBest && S.seedBest[c]; return `<div class="d"><code>${c}</code> · tier ${p.tier} · ${p.mods.map((m) => RIFT_MODS[m].n).join(', ')}${b ? ` · <span style="color:var(--ok)">your best ${fmtClock(b)}</span>` : ''}</div><div class="acts"><button class="btn ghost sm" type="button" data-act="copyCode" data-code="${c}">Copy code</button></div>`; })()}</div>
+    <div class="row"><div><div class="t">Daily seed<small>today's floors, the same for anyone with the code</small></div>${(() => { const c = dailyCode(), p = parseRiftCode(c), b = S.seedBest && S.seedBest[c]; return `<div class="d"><code>${c}</code> · tier ${p.tier} · ${p.mods.map((m) => RIFT_MODS[m].n).join(', ')}${b ? ` · <span style="color:var(--ok)">your best ${fmtClock(b)}</span>` : ''}</div><div class="acts"><button class="btn ghost sm" type="button" data-act="copyCode" data-code="${c}">${canLink() ? 'Copy challenge link' : 'Copy code'}</button></div>`; })()}</div>
       <button class="btn" type="button" data-act="daily">Enter</button></div>
-    <div class="row"><div><div class="t">Play a code<small>a friend's rift, floor for floor</small></div><input id="seedIn" class="code-in" type="text" placeholder="HD-4-SB-1A2B3C" autocomplete="off" spellcheck="false"><div class="hint" id="seedMsg"></div></div>
+    <div class="row"><div><div class="t">Play a code<small>a friend's rift, floor for floor</small></div><input id="seedIn" class="code-in" type="text" placeholder="HD-4-SB-1A2B3C" value="${pendingRift ? pendingRift.code : ''}" autocomplete="off" spellcheck="false"><div class="hint" id="seedMsg"></div></div>
       <button class="btn ghost" type="button" data-act="seedGo">Play</button></div>
     </div>`;
 }

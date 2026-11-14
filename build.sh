@@ -16,7 +16,7 @@ else window.hearthdeep = window.startHearthdeep(T);
 </script>
 JS
 }
-PWA='<link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><meta name="theme-color" content="#15131b"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">'
+PWA='<link rel="modulepreload" href="vendor/three.module.js"><link rel="modulepreload" href="vendor/three.core.js"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><meta name="theme-color" content="#15131b"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">'
 { echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'"$PWA"; cat src/head.html; echo '</head><body>'; cat src/body.html; echo '<script src="game.js"></script>'; loader "'./vendor/three.module.js', 'https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js'"; echo '</body></html>'; } > index.html
 mkdir -p dist
 { echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'; cat src/head.html; echo '</head><body>'; cat src/body.html; echo "<script>"; tail -n +2 game.js; echo "</script>"; loader "'https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js', 'https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js'"; echo '</body></html>'; } > dist/hearthdeep.html

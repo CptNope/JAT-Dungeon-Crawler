@@ -10,7 +10,7 @@ function rebuildHero() {
   if (P.mesh) { scene.remove(P.mesh); P.mesh.traverse((o) => { if (o.material && o.material.dispose) o.material.dispose(); }); }
   P.mesh = null; P.wkind = null; placePlayerMesh();
 }
-function chooseClassThen() { if (LV && LV.type === 'town') storyOnTown(); }
+function chooseClassThen() { if (LV && LV.type === 'town') storyOnTown(); announcePendingRift(); }
 function chooseClass(k) {
   const fresh = !S.runs && !S.kills;
   S.cls = k; S.tal = {};

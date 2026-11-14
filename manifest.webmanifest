@@ -1,7 +1,7 @@
 {
   "name": "Hearthdeep",
   "short_name": "Hearthdeep",
-  "description": "A three.js dungeon crawler. Delve beneath the village of Hearthdeep.",
+  "description": "A free 3D action RPG: endless dungeons, four classes, loot, crafting and a home to build. Plays offline.",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",
@@ -9,9 +9,54 @@
   "background_color": "#15131b",
   "theme_color": "#15131b",
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
-    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "id": "./",
+  "categories": [
+    "games",
+    "entertainment"
+  ],
+  "screenshots": [
+    {
+      "src": "press/screenshots/rime.jpg",
+      "sizes": "1280x720",
+      "type": "image/jpeg",
+      "form_factor": "wide",
+      "label": "Fighting through the Rime Halls"
+    },
+    {
+      "src": "press/screenshots/town.jpg",
+      "sizes": "1280x720",
+      "type": "image/jpeg",
+      "form_factor": "wide",
+      "label": "The village of Hearthdeep"
+    },
+    {
+      "src": "press/screenshots/magma.jpg",
+      "sizes": "1280x720",
+      "type": "image/jpeg",
+      "form_factor": "wide",
+      "label": "The Magma Forge"
+    }
   ]
 }

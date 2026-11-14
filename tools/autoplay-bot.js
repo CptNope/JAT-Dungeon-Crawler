@@ -81,10 +81,13 @@ window.startBot = (cls, plan) => {
       else if (now - lastMoveT > 8000 && !R.arena) { log.stuck++; lastMoveT = now; path = null; D.stick.x = Math.random() - 0.5; D.stick.y = Math.random() - 0.5; }
     } catch (err) { log.errors.push('bot: ' + err.message); }
   };
-  setInterval(tick, 60);
+  if (window.BOTTIMER) { clearInterval(window.BOTTIMER); if (window.BOTLOG) window.BOTLOG.done = true; }
+  window.BOTTIMER = setInterval(tick, 60);
   window.BOTLOG = log;
   return 'started';
 };
+// stopBot() halts the bot and hands the controls back
+window.stopBot = () => { clearInterval(window.BOTTIMER); window.BOTTIMER = 0; if (window.BOTLOG) window.BOTLOG.done = true; const D = hearthdeep.debug; D.DBG.turbo = 0; D.stick.x = D.stick.y = 0; return 'stopped'; };
 window.botReport = () => {
   const L = window.BOTLOG, fr = L.frames.slice(5).sort((a, b) => a - b);
   const pct = (p) => (fr.length ? fr[Math.floor(fr.length * p)].toFixed(0) : '-');
