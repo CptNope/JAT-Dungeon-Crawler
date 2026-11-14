@@ -1,10 +1,10 @@
 [
   {"name": "pit-gif", "mode": "pit", "depth": 0, "cam": "top", "cls": "mage", "lvl": 7, "near": 3, "frames": 230, "settle": 4, "zoom": 5},
-  {"name": "rime", "depth": 18, "cam": "top", "cls": "mage", "lvl": 45, "near": 5, "zoom": 6, "shots": 4, "gap": 8},
-  {"name": "boss", "depth": 5, "cam": "top", "cls": "warrior", "lvl": 10, "near": 1, "boss": true, "maxMs": 200000, "zoom": 4, "shots": 4, "gap": 12, "settle": 40},
-  {"name": "magma", "depth": 12, "cam": "top", "cls": "warrior", "lvl": 32, "near": 4, "zoom": 6, "shots": 4, "gap": 8},
-  {"name": "clockwork", "depth": 33, "cam": "top", "cls": "ranger", "lvl": 60, "near": 4, "zoom": 6, "shots": 4, "gap": 8},
-  {"name": "shore", "depth": 43, "cam": "top", "cls": "necro", "lvl": 60, "near": 4, "zoom": 6, "shots": 4, "gap": 8},
-  {"name": "gilded", "depth": 48, "cam": "top", "cls": "mage", "lvl": 60, "near": 4, "zoom": 6, "shots": 4, "gap": 8},
+  {"name": "rime", "depth": 18, "cam": "top", "cls": "mage", "lvl": 45, "near": 5, "zoom": 0, "shots": 5, "gap": 8},
+  {"name": "boss", "depth": 5, "cam": "top", "cls": "warrior", "lvl": 10, "near": 1, "boss": true, "maxMs": 200000, "zoom": 0, "shots": 5, "gap": 12, "settle": 40},
+  {"name": "magma", "depth": 12, "cam": "top", "cls": "warrior", "lvl": 32, "near": 4, "zoom": 0, "shots": 5, "gap": 8},
+  {"name": "clockwork", "depth": 33, "cam": "top", "cls": "ranger", "lvl": 60, "near": 4, "zoom": 0, "shots": 5, "gap": 8},
+  {"name": "shore", "depth": 43, "cam": "top", "cls": "necro", "lvl": 60, "near": 4, "zoom": 0, "shots": 5, "gap": 8},
+  {"name": "gilded", "depth": 48, "cam": "top", "cls": "mage", "lvl": 60, "near": 4, "zoom": 0, "shots": 5, "gap": 8},
   {"name": "town", "mode": "town", "cam": "third", "shots": 4, "yaw": 0.5}
 ]

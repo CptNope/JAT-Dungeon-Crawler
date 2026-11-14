@@ -67,6 +67,15 @@ try {
   check(rep.errors.length === 0, 'no script errors while delving' + (rep.errors.length ? ': ' + rep.errors.join(' | ') : ''));
   // (the bot's own softlock timer is wall-clock and trips on slow renderers, so it is reported above but not judged)
   check(seen1 > seen0 + 20 || rep.kills > 0 || rep.floors > 1, 'the hero moves and explores under bot control');
+  // 5. sealing a rift offers the challenge link and remembers the rift
+  await page.evaluate(() => { window.stopBot(); const H = hearthdeep, D = H.debug; if (H.LV.type !== 'town') D.returnToTown(false); });
+  await page.waitForFunction(() => hearthdeep.ready && hearthdeep.LV.type === 'town', null, { timeout: 90000 });
+  await page.evaluate(() => hearthdeep.debug.startRift(1, false));
+  await page.waitForFunction(() => hearthdeep.ready && hearthdeep.LV.type === 'dungeon' && hearthdeep.RUN.rift, null, { timeout: 90000 });
+  await page.evaluate(() => { const H = hearthdeep, D = H.debug; const e = D.spawnEnemy(Object.keys(D.ARCH)[0], H.P.x + 1.2, H.P.z, { leader: true }); e.riftGuard = 1; D.damageEnemy(e, 1e9, false, 0, 0, 0); });
+  await page.waitForTimeout(1500);
+  const seal = await page.evaluate(() => ({ dare: !!document.querySelector('.toast.dare button'), share: hearthdeep.RUN.rift.share, last: hearthdeep.S.lastRift && hearthdeep.S.lastRift.code, ok: !!hearthdeep.debug.parseRiftCode(hearthdeep.RUN.rift.share) }));
+  check(seal.dare && seal.ok && seal.last === seal.share, 'a sealed rift offers its challenge link (' + seal.share + ')');
 } catch (err) { problems.push('test crashed: ' + String(err).slice(0, 400)); }
 await browser.close(); server.close();
 if (problems.length) { console.error('\n' + problems.length + ' problem(s):\n- ' + [...new Set(problems)].join('\n- ')); process.exit(1); }
