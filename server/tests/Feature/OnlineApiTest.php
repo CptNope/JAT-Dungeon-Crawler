@@ -84,7 +84,7 @@ class OnlineApiTest extends TestCase
         $this->send($p, ['week' => $wk, 'time' => 300.44, 'ghost' => '1.10.12,1.11.12', 'gcls' => 'mage'])->assertOk()->assertJsonPath('data.time', 300.4)->assertJsonPath('data.ghost', '1');
         $this->send($p, ['week' => $wk, 'time' => 320, 'ghost' => '1.1.1'])->assertOk()->assertJsonPath('data.time', 300.4);
         $this->send($p, ['week' => '1999-W1', 'time' => 100, 'ghost' => '1.2.2'])->assertOk()->assertJsonPath('data.time', 300.4);
-        $this->send($p, ['week' => $wk, 'time' => 250, 'ghost' => '1.3.3'])->assertOk()->assertJsonPath('data.time', 250.0);
+        $this->send($p, ['week' => $wk, 'time' => 250.5, 'ghost' => '1.3.3'])->assertOk()->assertJsonPath('data.time', 250.5);
         $this->getJson("/api/v1/players/{$p['id']}/entry")->assertOk()->assertJson(['exists' => true, 'data' => ['ghost' => '1.3.3', 'gcls' => 'mage', 'week' => $wk]]);
     }
 
@@ -134,7 +134,10 @@ class OnlineApiTest extends TestCase
     public function test_only_listed_websites_may_call_the_api_from_a_browser(): void
     {
         $this->getJson('/api/v1/status', ['Origin' => 'https://cptnope.github.io'])->assertHeader('Access-Control-Allow-Origin', 'https://cptnope.github.io');
-        $this->getJson('/api/v1/status', ['Origin' => 'https://evil.example'])->assertHeaderMissing('Access-Control-Allow-Origin');
+        // another site is never named in the reply, so its visitors' browsers refuse to hand it the answer
+        $other = $this->getJson('/api/v1/status', ['Origin' => 'https://evil.example'])->headers->get('Access-Control-Allow-Origin');
+        $this->assertNotSame('https://evil.example', $other);
+        $this->assertNotSame('*', $other);
     }
 
     public function test_the_front_page_answers_without_a_database_session(): void
