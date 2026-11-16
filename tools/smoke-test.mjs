@@ -84,23 +84,24 @@ try {
   const seal = await page.evaluate(() => ({ dare: !!document.querySelector('.toast.dare button'), share: hearthdeep.RUN.rift.share, last: hearthdeep.S.lastRift && hearthdeep.S.lastRift.code, ok: !!hearthdeep.debug.parseRiftCode(hearthdeep.RUN.rift.share) }));
   check(seal.dare && seal.ok && seal.last === seal.share, 'a sealed rift offers its challenge link (' + seal.share + ')');
   // 6. a controller: stick moves the hero, key caps follow the pad in hand, feedback rumbles, Start pauses, keyboard takes over again
-  // (back in the village first: a hero left standing in a rift gets frozen, swarmed or killed mid-check)
+  // (back in the village first: a hero left standing in a rift gets frozen, swarmed or killed mid-check. Then wait for
+  // the village to hold still, clicking through anything that opens: on a slow machine a second level load or a
+  // late dialogue can land seconds after the first "ready".)
   await page.evaluate(() => hearthdeep.debug.returnToTown(false));
-  await page.waitForFunction(() => hearthdeep.ready && hearthdeep.LV.type === 'town', null, { timeout: 90000 });
-  for (let i = 0; i < 20; i++) {
-    const open = await page.evaluate(() => { const d = document.querySelector('#dlg'); if (!d.hidden) { const n = document.querySelector('#dlgNext'); if (n) n.click(); return true; } if (!document.querySelector('#panel').hidden) { hearthdeep.closePanel(); return true; } return false; });
-    if (!open) break; await page.waitForTimeout(150);
+  for (let calm = 0, i = 0; calm < 6 && i < 120; i++) {
+    const st = await page.evaluate(() => { const H = hearthdeep, d = document.querySelector('#dlg'); if (!d.hidden) { const n = document.querySelector('#dlgNext'); if (n) n.click(); return 'busy'; } if (!document.querySelector('#panel').hidden) { H.closePanel(); return 'busy'; } return H.ready && H.LV.type === 'town' && !H.debug.isPaused() ? 'calm' : 'busy'; });
+    calm = st === 'calm' ? calm + 1 : 0; await page.waitForTimeout(500);
   }
+  const until = (fn, arg, ms = 20000) => page.waitForFunction(fn, arg, { timeout: ms }).then(() => true, () => false);
   const cap = () => page.evaluate(() => document.querySelector('#actionBar .slot .k').textContent);
   const kbCap = await cap();
-  const x0 = await page.evaluate(() => { window.__padOn = true; window.__pad.axes[0] = 1; return hearthdeep.P.x; });
-  await page.waitForTimeout(2500);
-  const moved = await page.evaluate((x0) => { window.__pad.axes[0] = 0; const H = hearthdeep; return { dx: Math.abs(H.P.x - x0), cls: document.body.classList.contains('pad') }; }, x0);
-  check(moved.cls && moved.dx > 0.3, `the left stick moves the hero (${moved.dx.toFixed(1)} tiles)`);
-  check(await cap() === 'A', 'the action bar shows Xbox button names with an Xbox pad');
-  await page.evaluate(() => { window.__pad.id = 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)'; });
-  await page.waitForTimeout(600);
-  check(await cap() === '✕', 'and PlayStation symbols with a DualSense');
+  await page.evaluate(() => { window.__x0 = hearthdeep.P.x; window.__z0 = hearthdeep.P.z; window.__padOn = true; window.__pad.axes[0] = 1; });
+  const moved = await until(() => document.body.classList.contains('pad') && Math.hypot(hearthdeep.P.x - window.__x0, hearthdeep.P.z - window.__z0) > 0.3);
+  await page.evaluate(() => { window.__pad.axes[0] = 0; });
+  check(moved, 'the left stick moves the hero');
+  check(await until(() => document.querySelector('#actionBar .slot .k').textContent === 'A'), 'the action bar shows Xbox button names with an Xbox pad');
+  await page.evaluate(() => { window.__pad.id = 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)'; window.__pad.timestamp++; });
+  check(await until(() => document.querySelector('#actionBar .slot .k').textContent === '✕'), 'and PlayStation symbols with a DualSense');
   await page.evaluate(() => hearthdeep.debug.haptic(60)); // the call every hit, parry and level-up makes
   await page.waitForTimeout(300);
   check(await page.evaluate(() => window.__rumbles > 0), 'game feedback rumbles the controller');
