@@ -550,7 +550,7 @@ function updInteract() {
   if (best !== nearI) {
     nearI = best;
     const el = $('#prompt');
-    if (best) { el.innerHTML = `${touchMode ? '' : '<kbd>E</kbd>'}<span>${esc(best.verb)}</span>`; el.hidden = false; }
+    if (best) { el.innerHTML = `${touchMode ? '' : `<kbd>${pad.on ? esc(padKey(2)) : 'E'}</kbd>`}<span>${esc(best.verb)}</span>`; el.hidden = false; }
     else el.hidden = true;
     $('#tUse').classList.toggle('ready', !!best);
   }

@@ -22,6 +22,13 @@ const base = `http://127.0.0.1:${server.address().port}/`;
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined, args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 640, height: 360 } }); // small and on Low: software rendering is slow
+// a scripted controller: the test flips window.__padOn and pokes axes and buttons the way a real pad reports them
+await page.addInitScript(() => {
+  window.__rumbles = 0; window.__padOn = false;
+  window.__pad = { id: 'Xbox 360 Controller (XInput STANDARD GAMEPAD)', index: 0, connected: true, mapping: 'standard', timestamp: 1, axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })), vibrationActuator: { playEffect() { window.__rumbles++; return Promise.resolve('complete'); } } };
+  window.__press = (i, on) => { window.__pad.buttons[i] = { pressed: on, touched: on, value: on ? 1 : 0 }; window.__pad.timestamp++; };
+  navigator.getGamepads = () => (window.__padOn ? [window.__pad] : []);
+});
 const problems = [];
 page.on('pageerror', (e) => problems.push('page error: ' + String(e).slice(0, 300)));
 page.on('console', (m) => { if (m.type() === 'error' && !/fonts\.|net::ERR_/.test(m.text())) problems.push('console error: ' + m.text().slice(0, 300)); });
@@ -76,6 +83,59 @@ try {
   await page.waitForTimeout(1500);
   const seal = await page.evaluate(() => ({ dare: !!document.querySelector('.toast.dare button'), share: hearthdeep.RUN.rift.share, last: hearthdeep.S.lastRift && hearthdeep.S.lastRift.code, ok: !!hearthdeep.debug.parseRiftCode(hearthdeep.RUN.rift.share) }));
   check(seal.dare && seal.ok && seal.last === seal.share, 'a sealed rift offers its challenge link (' + seal.share + ')');
+  // 6. a controller: stick moves the hero, key caps follow the pad in hand, feedback rumbles, Start pauses, keyboard takes over again
+  // (back in the village first: a hero left standing in a rift gets frozen, swarmed or killed mid-check. Then wait for
+  // the village to hold still, clicking through anything that opens: on a slow machine a second level load or a
+  // late dialogue can land seconds after the first "ready".)
+  await page.evaluate(() => hearthdeep.debug.returnToTown(false));
+  for (let calm = 0, i = 0; calm < 6 && i < 120; i++) {
+    const st = await page.evaluate(() => { const H = hearthdeep, d = document.querySelector('#dlg'); if (!d.hidden) { const n = document.querySelector('#dlgNext'); if (n) n.click(); return 'busy'; } if (!document.querySelector('#panel').hidden) { H.closePanel(); return 'busy'; } return H.ready && H.LV.type === 'town' && !H.debug.isPaused() ? 'calm' : 'busy'; });
+    calm = st === 'calm' ? calm + 1 : 0; await page.waitForTimeout(500);
+  }
+  const until = (fn, arg, ms = 20000) => page.waitForFunction(fn, arg, { timeout: ms }).then(() => true, () => false);
+  const cap = () => page.evaluate(() => document.querySelector('#actionBar .slot .k').textContent);
+  const kbCap = await cap();
+  await page.evaluate(() => { window.__x0 = hearthdeep.P.x; window.__z0 = hearthdeep.P.z; window.__padOn = true; window.__pad.axes[0] = 1; });
+  const moved = await until(() => document.body.classList.contains('pad') && Math.hypot(hearthdeep.P.x - window.__x0, hearthdeep.P.z - window.__z0) > 0.3);
+  await page.evaluate(() => { window.__pad.axes[0] = 0; });
+  check(moved, 'the left stick moves the hero');
+  check(await until(() => document.querySelector('#actionBar .slot .k').textContent === 'A'), 'the action bar shows Xbox button names with an Xbox pad');
+  await page.evaluate(() => { window.__pad.id = 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)'; window.__pad.timestamp++; });
+  check(await until(() => document.querySelector('#actionBar .slot .k').textContent === '✕'), 'and PlayStation symbols with a DualSense');
+  // a button tap held across several rendered frames, however slow the machine: the game reads the pad once a frame
+  const frames = (n) => page.evaluate((n) => new Promise((done) => { const step = () => (n-- > 0 ? requestAnimationFrame(step) : done()); step(); }), n);
+  const tap = async (i) => { await page.evaluate((i) => window.__press(i, true), i); await frames(8); await page.waitForTimeout(250); await page.evaluate((i) => window.__press(i, false), i); await frames(8); await page.waitForTimeout(250); };
+  await page.evaluate(() => hearthdeep.debug.haptic(60)); // the call every hit, parry and level-up makes
+  await page.waitForTimeout(300);
+  check(await page.evaluate(() => window.__rumbles > 0), 'game feedback rumbles the controller');
+  await tap(9);
+  const paused = await page.evaluate(() => ({ title: !document.querySelector('#title').hidden, focus: document.querySelector('#title').contains(document.activeElement) }));
+  check(paused.title && paused.focus, 'Start opens the menu with a button focused');
+  await tap(9);
+  check(await page.evaluate(() => document.querySelector('#title').hidden), 'Start again resumes');
+  // 7. the parts that used to need a mouse or keyboard: zoom, typing, photo mode
+  await page.evaluate(() => hearthdeep.debug.setCamMode('top'));
+  await tap(10);
+  check(await page.evaluate(() => hearthdeep.debug.camZoom < 0.9), 'L3 steps the camera zoom');
+  await page.evaluate(() => { hearthdeep.openPanel('delve', 'rift'); const i = document.querySelector('#seedIn'); i.value = ''; i.focus(); });
+  await page.waitForTimeout(400); await tap(0);
+  check(await page.evaluate(() => !!document.querySelector('#osk')), 'A on a text box opens the on-screen keyboard');
+  for (const ch of ['H', 'D', '-']) { await page.evaluate((ch) => { const b = [...document.querySelectorAll('#osk [data-osk]')].find((x) => x.dataset.osk.toUpperCase() === ch); b.focus(); }, ch); await tap(0); }
+  await tap(2); // X deletes the dash
+  const typed = await page.evaluate(() => document.querySelector('#seedIn').value);
+  await tap(9); // Start: done
+  check(typed.toUpperCase() === 'HD' && await page.evaluate(() => !document.querySelector('#osk') && document.activeElement.id === 'seedIn'), `typing with the pad fills the field ("${typed}") and Start closes the keyboard`);
+  await tap(1); // B closes the panel
+  check(await page.evaluate(() => document.querySelector('#panel').hidden), 'B closes the panel');
+  await tap(9); await page.evaluate(() => document.querySelector('#mPhoto').focus()); await tap(0);
+  const ph0 = await page.evaluate(() => { const P = hearthdeep.debug.PHOTO; window.__pad.axes[2] = 1; window.__pad.axes[1] = -1; window.__pad.timestamp++; return { on: P.on, yaw: P.yaw, tx: P.tx, tz: P.tz }; });
+  await page.waitForTimeout(1500);
+  const ph1 = await page.evaluate(() => { const P = hearthdeep.debug.PHOTO; window.__pad.axes[2] = 0; window.__pad.axes[1] = 0; return { yaw: P.yaw, tx: P.tx, tz: P.tz, help: document.querySelector('#photo .hint').textContent }; });
+  check(ph0.on && Math.abs(ph1.yaw - ph0.yaw) > 0.1 && Math.hypot(ph1.tx - ph0.tx, ph1.tz - ph0.tz) > 0.2 && /orbit/.test(ph1.help), 'photo mode opens from the menu and the sticks fly and orbit the camera');
+  await tap(1);
+  check(await page.evaluate(() => !hearthdeep.debug.PHOTO.on), 'B leaves photo mode');
+  await page.keyboard.press('F8'); await page.evaluate(() => { window.__padOn = false; }); await page.waitForTimeout(500);
+  check(await cap() === kbCap && !(await page.evaluate(() => document.body.classList.contains('pad'))), 'touching the keyboard brings the key names back');
 } catch (err) { problems.push('test crashed: ' + String(err).slice(0, 400)); }
 await browser.close(); server.close();
 if (problems.length) { console.error('\n' + problems.length + ' problem(s):\n- ' + [...new Set(problems)].join('\n- ')); process.exit(1); }

@@ -3172,11 +3172,11 @@ const G_PORTAL = new THREE.CircleGeometry(1, 48);
 // Each fires once per hero. Touch and gamepad players get their own wording for controls.
 const HINTS = {
   move: { k: 'Getting around', d: 'WASD to move, mouse to aim. Walk to the glowing gate at the south of town to begin a descent.', t: 'Left stick to move. Walk to the glowing gate at the south of town to begin a descent.', p: 'Left stick to move, right stick to aim. Walk to the glowing gate at the south of town.' },
-  fight: { k: 'Fight', d: 'Click (or hold) to attack. Space rolls through danger, and you cannot be hit mid-roll.', t: 'Hold Strike to attack; it aims for you. Roll through danger.', p: 'A to attack, B to roll. You cannot be hit mid-roll.' },
-  loot: { k: 'Loot', d: 'Walk over drops to pick them up. Press I to open your bag and compare gear.', t: 'Walk over drops to pick them up. The bag button shows and compares your gear.', p: 'Walk over drops to pick them up. Back opens your bag.' },
-  potion: { k: 'Low health', d: 'Press Q to drink a Healing Draught (R for a Greater one).', t: 'Tap the red flask to drink a Healing Draught.', p: 'Y drinks a Healing Draught.' },
-  level: { k: 'Level up', d: 'Every level gives a talent point. Press K to spend it.', t: 'Every level gives a talent point. Open the bag and choose Talents.', p: 'Every level gives a talent point. Back opens your bag; Talents is the last tab.' },
-  skill: { k: 'New skill', d: 'A new skill is ready on the action bar. Press its number key.', t: 'A new skill button has lit up by your thumb.', p: 'Skills are on LB, RB and LT.' },
+  fight: { k: 'Fight', d: 'Click (or hold) to attack. Space rolls through danger, and you cannot be hit mid-roll.', t: 'Hold Strike to attack; it aims for you. Roll through danger.', p: '{A} to attack, {B} to roll. You cannot be hit mid-roll.' },
+  loot: { k: 'Loot', d: 'Walk over drops to pick them up. Press I to open your bag and compare gear.', t: 'Walk over drops to pick them up. The bag button shows and compares your gear.', p: 'Walk over drops to pick them up. {Back} opens your bag.' },
+  potion: { k: 'Low health', d: 'Press Q to drink a Healing Draught (R for a Greater one).', t: 'Tap the red flask to drink a Healing Draught.', p: '{Y} drinks a Healing Draught.' },
+  level: { k: 'Level up', d: 'Every level gives a talent point. Press K to spend it.', t: 'Every level gives a talent point. Open the bag and choose Talents.', p: 'Every level gives a talent point. {Back} opens your bag; Talents is the last tab.' },
+  skill: { k: 'New skill', d: 'A new skill is ready on the action bar. Press its number key.', t: 'A new skill button has lit up by your thumb.', p: 'Skills are on {LB}, {RB} and {LT}.' },
   stairs: { k: 'Going deeper', d: 'Stairs lead down; each depth is harder and richer. Read a Portal Scroll (T) to go home with your loot.', t: 'Stairs lead down. The scroll button opens a way home.', p: 'Stairs lead down. D-pad down reads a Portal Scroll.' },
   boss: { k: 'Boss', d: 'Bosses warn before big attacks: red circles on the ground. Step out before they fill.', t: 'Bosses warn before big attacks: red circles on the ground. Step out before they fill.', p: 'Bosses warn before big attacks: red circles on the ground. Step out before they fill.' },
   home: { k: 'Back home', d: 'Sell spare loot at the Copper Lantern, craft at Home, and ask Elder Maren for work.', t: 'Sell spare loot at the Copper Lantern, craft at Home, and ask Elder Maren for work.', p: 'Sell spare loot at the Copper Lantern, craft at Home, and ask Elder Maren for work.' },
@@ -3184,7 +3184,11 @@ const HINTS = {
   set: { k: 'Set item', d: 'Set pieces (green) grant bonuses when you wear two or three of the same set.', t: 'Set pieces (green) grant bonuses when you wear two or three of the same set.', p: 'Set pieces (green) grant bonuses when you wear two or three of the same set.' },
   rift: { k: 'Rifts', d: 'Rifts are three-floor trials with modifiers. Beat the clock for shards to spend at the caravan.', t: 'Rifts are three-floor trials with modifiers. Beat the clock for shards.', p: 'Rifts are three-floor trials with modifiers. Beat the clock for shards.' },
 };
-let hintQ = [], hintT = 0;
+let hintQ = [], hintT = 0, hintCur = null;
+function hintDraw(el, h) { // worded for the input in hand; redrawn if that changes while the hint is up
+  const txt = pad.on ? padText(h.p) : touchMode ? h.t : h.d;
+  el.innerHTML = `<b>${esc(h.k)}</b><span>${esc(txt)}</span><button type="button" class="btn ghost sm" id="hintOk">Got it</button>`;
+}
 function hint(id) {
   if (!S || !S.hints || S.hints[id] || SET.hints === false || !HINTS[id]) return;
   S.hints[id] = 1;
@@ -3196,8 +3200,8 @@ function updHints(dt) {
   if (LV && LV.type === 'dungeon' && RUN && RUN.kills >= 12) hint('stairs');
   if (hintT > 0) { if (performance.now() > hintT) { hintT = 0; el.classList.remove('on'); } return; }
   if (!hintQ.length || isPaused()) return;
-  const h = HINTS[hintQ.shift()], txt = pad.on ? h.p : touchMode ? h.t : h.d;
-  el.innerHTML = `<b>${esc(h.k)}</b><span>${esc(txt)}</span><button type="button" class="btn ghost sm" id="hintOk">Got it</button>`;
+  const h = hintCur = HINTS[hintQ.shift()];
+  hintDraw(el, h);
   el.classList.add('on'); hintT = performance.now() + 7500;
 }
 function dismissHint() { hintT = 1; }
@@ -4120,7 +4124,7 @@ function updInteract() {
   if (best !== nearI) {
     nearI = best;
     const el = $('#prompt');
-    if (best) { el.innerHTML = `${touchMode ? '' : '<kbd>E</kbd>'}<span>${esc(best.verb)}</span>`; el.hidden = false; }
+    if (best) { el.innerHTML = `${touchMode ? '' : `<kbd>${pad.on ? esc(padKey(2)) : 'E'}</kbd>`}<span>${esc(best.verb)}</span>`; el.hidden = false; }
     else el.hidden = true;
     $('#tUse').classList.toggle('ready', !!best);
   }
@@ -6354,11 +6358,42 @@ function loadoutsHtml() {
 // A attack, B roll, X use, Y draught, LB/RB/LT skills, RT attack, R3 lock on, d-pad: up greater draught,
 // down portal scroll, left cycle lock, right change view; Start menu, Back bag.
 // In panels and menus: d-pad or left stick moves focus, A presses, B closes, LB/RB switch tabs.
-const pad = { on: false, atk: false, aim: null, prev: [], navT: 0, idx: -1 };
-const DEAD = 0.22;
-const dz = (v) => (Math.abs(v) < DEAD ? 0 : (v - Math.sign(v) * DEAD) / (1 - DEAD));
+// Button names follow the controller in hand (Xbox, PlayStation or Nintendo), on the action bar, the interact prompt
+// and the first-time hints. The controller rumbles on hits where the browser supports it.
+const pad = { on: false, atk: false, aim: null, prev: [], navT: 0, idx: -1, kind: 'xbox', g: null, shown: '' };
+const DEAD = 0.2;
+// radial dead zone: the stick's direction is kept exactly, so diagonals do not snap to the axes
+function dzStick(x, y) { const m = Math.hypot(x, y); if (m < DEAD) return [0, 0]; const k = Math.min(1, (m - DEAD) / (1 - DEAD)) / m; return [x * k, y * k]; }
+// names by standard-mapping button index; Nintendo pads report the same positions under different letters
+const PAD_GLYPHS = {
+  xbox: ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'View', 'Menu', 'L3', 'R3', 'D-pad up', 'D-pad down', 'D-pad left', 'D-pad right'],
+  ps: ['Cross', 'Circle', 'Square', 'Triangle', 'L1', 'R1', 'L2', 'R2', 'Create', 'Options', 'L3', 'R3', 'D-pad up', 'D-pad down', 'D-pad left', 'D-pad right'],
+  nintendo: ['B', 'A', 'Y', 'X', 'L', 'R', 'ZL', 'ZR', 'Minus', 'Plus', 'L3', 'R3', 'D-pad up', 'D-pad down', 'D-pad left', 'D-pad right'],
+};
+const PAD_SHORT = { Cross: '✕', Circle: '○', Square: '□', Triangle: '△', 'D-pad up': '▲', 'D-pad down': '▼', 'D-pad left': '◀', 'D-pad right': '▶', Minus: '−', Plus: '+', View: 'View', Menu: 'Menu', Create: 'Create', Options: 'Opt' };
+const padKindOf = (id) => (/054c|dualsense|dualshock|playstation|ps[345]/i.test(id) ? 'ps' : /057e|nintendo|switch|joy-?con/i.test(id) ? 'nintendo' : 'xbox');
+const padGlyph = (i) => PAD_GLYPHS[pad.kind][i];
+const padKey = (i) => PAD_SHORT[padGlyph(i)] || padGlyph(i); // the short form for key caps
+const PAD_TOKENS = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7, Back: 8, Start: 9 };
+const padText = (str) => str.replace(/\{(\w+)\}/g, (m, k) => (k in PAD_TOKENS ? padGlyph(PAD_TOKENS[k]) : m)); // "{A} to attack" in the layout in hand
+const PAD_SLOT = { atk: 0, dodge: 1, sk0: 4, sk1: 5, sk2: 6, pot: 3, gpot: 12, scroll: 13, bag: 8 };
+function padLabels() { // key caps on the action bar and the interact prompt follow whichever input was used last
+  const want = pad.on ? pad.kind : '';
+  if (pad.shown === want && (!want || ($('#actionBar .slot') && $('#actionBar .slot').dataset.pad === want))) return;
+  pad.shown = want; document.body.classList.toggle('pad', pad.on); nearI = undefined;
+  if (hintT > 0 && hintCur && $('#hint')) hintDraw($('#hint'), hintCur);
+  if (!want) { buildActionBar(); return; }
+  document.querySelectorAll('#actionBar .slot').forEach((el) => { el.dataset.pad = want; const k = el.querySelector('.k'), i = PAD_SLOT[el.dataset.slot]; if (k && i !== undefined) k.textContent = padKey(i); });
+}
+function padRumble(p) { // p: milliseconds, or a [buzz, gap, buzz] pattern as navigator.vibrate takes
+  const g = pad.g, act = g && g.vibrationActuator; if (!act || !act.playEffect) return;
+  const ms = Array.isArray(p) ? p.reduce((a, b) => a + b, 0) : p, peak = Array.isArray(p) ? Math.max(...p) : p;
+  const strong = peak >= 100 ? 1 : peak >= 50 ? 0.7 : peak >= 30 ? 0.35 : 0, weak = peak >= 100 ? 0.8 : peak >= 50 ? 0.6 : 0.4;
+  try { const r = act.playEffect('dual-rumble', { startDelay: 0, duration: Math.max(40, Math.min(400, ms * 1.6)), strongMagnitude: strong, weakMagnitude: weak }); if (r && r.catch) r.catch(() => {}); } catch (err) { /* unsupported */ }
+}
+function padRoot() { return OSK.el ? OSK.el : !$('#dlg').hidden ? $('#dlg') : !$('#share').hidden ? $('#share') : !$('#ending').hidden ? $('#ending') : !$('#panel').hidden ? $('#panel') : !$('#title').hidden ? $('#title') : !$('#death').hidden ? $('#death') : PHOTO.on ? $('#photo') : null; }
 function padFocusables() {
-  const root = !$('#dlg').hidden ? $('#dlg') : !$('#share').hidden ? $('#share') : !$('#ending').hidden ? $('#ending') : !$('#panel').hidden ? $('#panel') : !$('#title').hidden ? $('#title') : !$('#death').hidden ? $('#death') : PHOTO.on ? $('#photo') : null;
+  const root = padRoot();
   if (!root) return [];
   return [...root.querySelectorAll('button:not([disabled]), [data-act]:not([disabled]), input, textarea')].filter((b) => b.offsetParent !== null);
 }
@@ -6382,47 +6417,121 @@ function padTab(dir) {
   const i = tabs.findIndex((t) => t.classList.contains('on') || t.getAttribute('aria-selected') === 'true');
   tabs[(i + dir + tabs.length) % tabs.length].click();
 }
+// ---- on-screen keyboard: A on a text field opens it, so codes and names can be typed without a keyboard ----
+const OSK = { el: null, target: null, shift: false };
+const OSK_ROWS = ['1234567890', 'QWERTYUIOP', 'ASDFGHJKL-', "ZXCVBNM'.,"];
+function oskOpen(input) {
+  if (OSK.el) oskClose(false);
+  OSK.target = input; OSK.shift = !input.value || /code/i.test(input.id + ' ' + input.className); // names start with a capital; codes are read in either case
+  const el = document.createElement('div'); el.id = 'osk'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'On-screen keyboard');
+  document.body.appendChild(el); OSK.el = el; oskDraw();
+  const first = el.querySelector('[data-osk="Q"], [data-osk="q"]'); if (first) first.focus();
+}
+function oskDraw(keep) {
+  const t = OSK.target, v = t.value, c = (ch) => (OSK.shift ? ch : ch.toLowerCase());
+  OSK.el.innerHTML = `<div class="osk-in"><div class="osk-v" aria-live="polite">${esc(v) || `<i>${esc(t.getAttribute('placeholder') || t.getAttribute('aria-label') || 'Type here')}</i>`}<b></b></div>
+    ${OSK_ROWS.map((r) => `<div class="osk-r">${[...r].map((ch) => `<button type="button" data-osk="${esc(c(ch))}">${esc(c(ch))}</button>`).join('')}</div>`).join('')}
+    <div class="osk-r"><button type="button" data-osk="shift" class="${OSK.shift ? 'on' : ''}">Shift <kbd>${esc(padKey(10))}</kbd></button><button type="button" data-osk="space" class="wide">Space <kbd>${esc(padKey(3))}</kbd></button><button type="button" data-osk="back">Delete <kbd>${esc(padKey(2))}</kbd></button><button type="button" data-osk="done" class="btn">Done <kbd>${esc(padKey(9))}</kbd></button></div></div>`;
+  if (keep) { const b = OSK.el.querySelector(`[data-osk="${CSS.escape(keep)}"]`) || OSK.el.querySelector(`[data-osk="${CSS.escape(keep.toUpperCase())}"]`) || OSK.el.querySelector(`[data-osk="${CSS.escape(keep.toLowerCase())}"]`); if (b) b.focus(); }
+}
+function oskKey(k) {
+  const t = OSK.target; if (!t) return;
+  const max = t.maxLength > 0 ? t.maxLength : 4000;
+  if (k === 'done') { oskClose(true); return; }
+  if (k === 'shift') OSK.shift = !OSK.shift;
+  else if (k === 'back') t.value = t.value.slice(0, -1);
+  else if (t.value.length < max) { t.value += k === 'space' ? ' ' : k; if (OSK.shift && t.value.length === 1 && !/code/i.test(t.id + ' ' + t.className)) OSK.shift = false; } // names drop to lower case after the first letter; code boxes stay in capitals
+  if (k !== 'shift') t.dispatchEvent(new Event('input', { bubbles: true }));
+  sfx('page'); oskDraw(k);
+}
+function oskClose(commit) {
+  const t = OSK.target, el = OSK.el; OSK.el = null; OSK.target = null; if (el) el.remove();
+  if (t && document.contains(t)) { if (commit) t.dispatchEvent(new Event('change', { bubbles: true })); if (document.contains(t)) t.focus(); }
+}
+document.addEventListener('click', (ev) => { const b = ev.target && ev.target.closest && ev.target.closest('[data-osk]'); if (b && OSK.el) oskKey(b.dataset.osk); });
+// ---- photo mode: fly, orbit, zoom, lens and filters without a mouse ----
+function padPhoto(g, b, hit, lx, ly, rx, ry, dt) {
+  const k = 5 * dt;
+  PHOTO.tx += (Math.cos(PHOTO.yaw) * lx + Math.sin(PHOTO.yaw) * ly) * k; PHOTO.tz += (-Math.sin(PHOTO.yaw) * lx + Math.cos(PHOTO.yaw) * ly) * k;
+  PHOTO.yaw -= rx * dt * 2.2 * SET.sens; PHOTO.pitch = clamp(PHOTO.pitch + (SET.padInvY ? -ry : ry) * dt * 1.5 * SET.sens, -0.3, 1.45);
+  const lt = g.buttons[6] ? g.buttons[6].value : 0, rt = g.buttons[7] ? g.buttons[7].value : 0;
+  PHOTO.ty = clamp(PHOTO.ty + (rt - lt) * k * 0.6, 0.2, 8);
+  if (b[4]) PHOTO.dist = clamp(PHOTO.dist * (1 + dt * 1.4), 1.2, 30); if (b[5]) PHOTO.dist = clamp(PHOTO.dist * (1 - dt * 1.4), 1.2, 30);
+  const fov = (b[12] ? -1 : 0) + (b[13] ? 1 : 0); if (fov) { PHOTO.fov = clamp(PHOTO.fov + fov * dt * 30, 20, 90); const r = $('#phFov'); if (r) r.value = PHOTO.fov; }
+  if (hit(14) || hit(15)) { const ks = Object.keys(FILTERS), i = ks.indexOf(PHOTO.filter); applyFilter(ks[(i + (hit(15) ? 1 : ks.length - 1)) % ks.length]); renderPhotoBar(); }
+  if (hit(0)) { const u = captureFrame(); if (u) { sfx('page'); showShare(u, 'Photo'); } }
+  if (hit(1) || hit(9)) exitPhoto();
+}
+const padPhotoHelp = () => `Sticks move and orbit · ${padGlyph(4)} / ${padGlyph(5)} zoom · ${padGlyph(6)} / ${padGlyph(7)} lower and raise · D-pad: lens and filter · ${padGlyph(0)} capture · ${padGlyph(1)} done`;
+// the element a stick should scroll: the nearest scrolling box around the focused control, else the panel body
+function padScroller(root) {
+  for (let n = document.activeElement; n && n !== document.body && root.contains(n); n = n.parentElement) if (n.scrollHeight > n.clientHeight + 4 && /auto|scroll/.test(getComputedStyle(n).overflowY)) return n;
+  return [root.querySelector('#pBody'), root.querySelector('.share-in'), root.querySelector('.over-in'), root].find((n) => n && n.scrollHeight > n.clientHeight + 4) || null;
+}
+const ZOOMS = [1, 0.72, 1.3]; // overhead: default, close, far
 function pollPad(dt) {
   const gps = navigator.getGamepads ? navigator.getGamepads() : [];
-  let g = null; for (const q of gps) if (q && q.connected) { g = q; break; }
-  if (!g) { if (pad.on) { pad.on = false; pad.atk = false; pad.aim = null; stick.x = stick.y = 0; } return; }
+  // with several controllers plugged in, the one touched most recently plays
+  let g = null; for (const q of gps) if (q && q.connected && (!g || (q.mapping === 'standard' && g.mapping !== 'standard') || (q.mapping === g.mapping && q.timestamp > g.timestamp))) g = q;
+  if (!g) { if (pad.on) { pad.on = false; pad.atk = false; pad.aim = null; pad.g = null; stick.x = stick.y = 0; padLabels(); } return; }
   const b = g.buttons.map((x) => x.pressed || x.value > 0.5), was = pad.prev, hit = (i) => b[i] && !was[i];
-  const lx = dz(g.axes[0] || 0), ly = dz(g.axes[1] || 0), rx = dz(g.axes[2] || 0), ry = dz(g.axes[3] || 0);
+  const [lx, ly] = dzStick(g.axes[0] || 0, g.axes[1] || 0), [rx, ry] = dzStick(g.axes[2] || 0, g.axes[3] || 0);
   const any = b.some(Boolean) || lx || ly || rx || ry;
   if (any && !pad.on) { pad.on = true; if (touchMode) setTouchMode(false); }
   if (!pad.on) { pad.prev = b; return; }
+  pad.g = g; pad.kind = padKindOf(g.id || ''); padLabels();
   const ui = !$('#panel').hidden || !$('#title').hidden || !$('#death').hidden || !$('#dlg').hidden || !$('#share').hidden || !$('#ending').hidden || PHOTO.on;
+  if (PHOTO.on && $('#share').hidden && !OSK.el) { pad.atk = false; stick.x = stick.y = 0; padPhoto(g, b, hit, lx, ly, rx, ry, dt); pad.prev = b; return; }
   if (ui) {
     pad.atk = false; stick.x = stick.y = 0;
+    if (OSK.el) { // typing: X deletes, Y is space, L3 shifts, Start finishes, B cancels
+      if (hit(2)) oskKey('back'); if (hit(3)) oskKey('space'); if (hit(10)) oskKey('shift'); if (hit(9)) oskKey('done');
+      if (hit(1)) { oskClose(false); pad.prev = b; return; }
+    }
+    if (ry) { const sc = padScroller(padRoot() || document.body); if (sc) sc.scrollTop += ry * dt * 900; }
+    const root = padRoot(); if (root && !root.contains(document.activeElement)) { const l = padFocusables(); if (l[0]) l[0].focus({ preventScroll: true }); }
     pad.navT -= dt;
     let mx = (b[15] ? 1 : 0) - (b[14] ? 1 : 0), my = (b[13] ? 1 : 0) - (b[12] ? 1 : 0);
     if (!mx && !my && (Math.abs(lx) > 0.5 || Math.abs(ly) > 0.5)) { if (Math.abs(lx) > Math.abs(ly)) mx = Math.sign(lx); else my = Math.sign(ly); }
     if ((mx || my) && pad.navT <= 0) { padMove(mx, my); pad.navT = was.some(Boolean) && pad.navT > -0.05 ? 0.12 : 0.28; }
     if (!mx && !my) pad.navT = 0;
-    if (hit(0)) { const f = document.activeElement; if (f && f !== document.body && f.click) f.click(); else { const l = padFocusables(); if (l[0]) l[0].focus(); } }
-    if (hit(1)) { if (!$('#dlg').hidden) dlgNext(); else if (!$('#share').hidden) $('#share').hidden = true; else if (PHOTO.on) exitPhoto(); else if (!$('#panel').hidden) closePanel(); else if (!$('#title').hidden && started) resume(); }
-    if (hit(4)) padTab(-1); if (hit(5)) padTab(1);
-    if (hit(9) && !$('#title').hidden && started) resume();
+    if (hit(0)) { const f = document.activeElement; if (f && !OSK.el && ((f.tagName === 'INPUT' && (!f.type || f.type === 'text' || f.type === 'search')) || (f.tagName === 'TEXTAREA' && !f.readOnly))) oskOpen(f); else if (f && f !== document.body && f.click) f.click(); else { const l = padFocusables(); if (l[0]) l[0].focus(); } }
+    if (hit(1) && OSK.el) { /* handled above */ } else if (hit(1)) { if (!$('#dlg').hidden) dlgNext(); else if (!$('#share').hidden) $('#share').hidden = true; else if (PHOTO.on) exitPhoto(); else if (!$('#panel').hidden) closePanel(); else if (!$('#title').hidden && started) resume(); }
+    if (!OSK.el) { if (hit(4)) padTab(-1); if (hit(5)) padTab(1); }
+    if (hit(9) && !OSK.el && !$('#title').hidden && started) resume();
     pad.prev = b; return;
   }
   // in play
   stick.x = lx; stick.y = ly;
   pad.atk = b[0] || b[7];
   if (SET.cam === 'top') pad.aim = rx || ry ? Math.atan2(rx, ry) : null;
-  else if (rx || ry) { CAM.yaw -= rx * dt * 2.6 * SET.sens; CAM.pitch = clamp(CAM.pitch + ry * dt * 1.6 * SET.sens, -0.5, 1.1); }
+  else if (rx || ry) { CAM.yaw -= rx * dt * 2.6 * SET.sens; CAM.pitch = clamp(CAM.pitch + (SET.padInvY ? -ry : ry) * dt * 1.6 * SET.sens, -0.5, 1.1); }
   if (hit(1)) tryDodge();
   if (hit(2)) interact();
   if (hit(3)) usePotion(false);
   if (hit(12)) usePotion(true);
   if (hit(13)) useScroll();
   if (hit(4)) useSkill(0); if (hit(5)) useSkill(1); if (hit(6)) useSkill(2);
-  if (hit(11) || hit(14)) cycleLock();
+  if (hit(11)) cycleLock();
+  if (hit(14)) { if (lockT) releaseLock(); else cycleLock(); } // d-pad left: lock on, or let go
+  if (hit(10)) { // L3: answer an on-screen offer if there is one, otherwise step the camera in and out
+    const offer = document.querySelector('#toasts .toast.dare button');
+    if (offer) offer.click();
+    else if (SET.cam === 'top') { camZoom = ZOOMS[(ZOOMS.findIndex((z) => Math.abs(z - camZoom) < 0.06) + 1) % ZOOMS.length]; toast(camZoom < 1 ? 'Camera: close' : camZoom > 1 ? 'Camera: far' : 'Camera: default', 'var(--muted)'); }
+    else if (SET.cam === 'third') { CAM.dist = CAM.dist < 4 ? 5.5 : CAM.dist < 7 ? 8.5 : 3; }
+  }
   if (hit(15)) cycleCam();
   if (hit(9)) showTitle();
   if (hit(8)) openPanel('bag');
   pad.prev = b;
 }
-window.addEventListener('gamepadconnected', () => toast('Controller connected', 'var(--ok)'));
+window.addEventListener('gamepadconnected', (ev) => { const k = padKindOf((ev.gamepad && ev.gamepad.id) || ''); toast(`Controller connected (${k === 'ps' ? 'PlayStation' : k === 'nintendo' ? 'Nintendo' : 'Xbox'} layout)`, 'var(--ok)'); });
+// a controller that drops out mid-fight (flat battery, lost signal) pauses the game instead of leaving the hero standing
+window.addEventListener('gamepaddisconnected', () => { if (OSK.el) oskClose(false); if (!pad.on) return; pad.on = false; pad.atk = false; pad.aim = null; pad.g = null; stick.x = stick.y = 0; padLabels(); toast('Controller disconnected', 'var(--bad)'); if (started && !isPaused()) showTitle(); });
+// picking the keyboard or mouse back up returns the key caps and hints to keys
+const padYield = () => { if (pad.on) { pad.on = false; pad.atk = false; pad.aim = null; padLabels(); } };
+window.addEventListener('keydown', (ev) => { if (ev.isTrusted !== false) padYield(); }, true);
+window.addEventListener('mousedown', padYield, true);
 document.addEventListener('click', (ev) => { if (ev.target && ev.target.id === 'hintOk') dismissHint(); });
 // ================= sharing: frame capture, run card, photo mode =================
 function captureFrame() { Post.render(); try { return renderer.domElement.toDataURL('image/png'); } catch (err) { return null; } }
@@ -6539,7 +6648,7 @@ function renderPhotoBar() {
   $('#photo').innerHTML = `<div class="ph-in"><span class="ph-t">Photo mode</span><div class="ph-f">${Object.keys(FILTERS).map((k) => `<button type="button" class="tog${PHOTO.filter === k ? ' on' : ''}" data-ph="${k}">${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}</div>
     <label class="ph-fov">Lens <input type="range" min="20" max="90" value="${PHOTO.fov}" id="phFov"></label>
     <div class="ph-a"><button class="btn" type="button" id="phShot">Capture</button><button class="btn ghost" type="button" id="phExit">Done</button></div>
-    <span class="hint">Drag to orbit · wheel to zoom · WASD to move</span></div>`;
+    <span class="hint">${pad.on ? esc(padPhotoHelp()) : 'Drag to orbit · wheel to zoom · WASD to move'}</span></div>`;
 }
 function updPhoto(dt) {
   const k = 4 * dt;
@@ -6603,7 +6712,7 @@ function copyChallenge(code, secs) {
 function dareToast(code, secs) {
   const box = $('#toasts'), el = document.createElement('div'); el.className = 'toast big dare';
   const s = document.createElement('span'); s.textContent = `Sealed in ${fmtClock(secs)}. Dare a friend to beat it.`;
-  const b = document.createElement('button'); b.type = 'button'; b.className = 'btn sm'; b.textContent = canLink() ? (navigator.share && window.matchMedia('(pointer: coarse)').matches ? 'Send challenge' : 'Copy challenge link') : 'Copy code';
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'btn sm'; b.textContent = (pad.on ? padKey(10) + ' · ' : '') + (canLink() ? (navigator.share && window.matchMedia('(pointer: coarse)').matches ? 'Send challenge' : 'Copy challenge link') : 'Copy code');
   b.addEventListener('click', () => { copyChallenge(code, secs); el.remove(); });
   el.append(s, b); box.prepend(el); setTimeout(() => el.remove(), 14000);
 }
@@ -6762,7 +6871,7 @@ function applyA11y() {
   document.body.classList.toggle('calm', !!SET.motion);
 }
 const calm = () => !!SET.motion; // reduced motion: no shake, hit-stop, slow motion, lens kicks or flashes
-function haptic(p) { if (SET.haptics !== false && touchMode && navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) { try { navigator.vibrate(p); } catch (err) { /* unsupported */ } } }
+function haptic(p) { if (SET.haptics !== false && pad.on) { padRumble(p); return; } if (SET.haptics !== false && touchMode && navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) { try { navigator.vibrate(p); } catch (err) { /* unsupported */ } } }
 
 // difficulty is per hero
 const DIFF = {
@@ -6792,7 +6901,8 @@ function settingsHtml(tab) {
     ${row('Battery saver', 'Caps the frame rate at 30 and keeps resolution low. Good for phones and long sessions.', seg('battery', [[false, 'Off'], [true, 'On']]))}
     ${row('Look speed', '', seg('sens', [[0.6, 'Slow'], [1, 'Normal'], [1.6, 'Fast']]))}
     ${row('Music', '', seg('music', [[true, 'On'], [false, 'Off']]))}
-    ${row('Vibration', 'Short buzzes on hits, level-ups and big moments (phones that support it).', seg('haptics', [[true, 'On'], [false, 'Off']]))}
+    ${row('Vibration', 'Short buzzes on hits, level-ups and big moments (phones and controllers that support it).', seg('haptics', [[true, 'On'], [false, 'Off']]))}
+    ${row('Controller look', 'Up and down on the right stick in the close views.', seg('padInvY', [[false, 'Normal'], [true, 'Inverted']]))}
     ${row('Loot filter', 'Turns low items into Arcane Essence the moment you pick them up. Set and legendary items are always kept.', seg('filter', [['none', 'Keep all'], ['common', 'Salvage common'], ['uncommon', 'Salvage common and uncommon']], true))}</div>`;
 }
 function settingsAct(d) {
@@ -7223,7 +7333,7 @@ function refreshKeyList() {
   const k = (a) => esc(keyLabel(KB[a]));
   $('#keyList').innerHTML = [
     [`${k('up')}${k('left')}${k('down')}${k('right')}`, 'Move'], ['Mouse', 'Aim or look'], ['Left click', 'Attack (hold)'], [k('roll'), 'Roll'], [`${k('skill1')} ${k('skill2')} ${k('skill3')}`, 'Skills'], [k('lock'), 'Lock on / next'], [k('unlock'), 'Release lock'], [k('use'), 'Use, open, talk'], [k('view'), 'Switch view'], ['Wheel', 'Zoom'], [`${k('potion')} / ${k('gpotion')}`, 'Draught / Greater'], [k('scroll'), 'Portal scroll'], [k('bag'), 'Bag and character'], [k('talents'), 'Talents'], [k('codex'), 'Codex'], [k('photo'), 'Photo mode'], ['Alt', 'Show all item names'], ['Esc', 'Menu'], ['`', 'Performance readout'],
-  ].map(([a, v]) => `<div><kbd>${a}</kbd><span>${v}</span></div>`).join('') + '<div><kbd>Touch</kbd><span>Stick moves; drag the screen to look in close views</span></div>';
+  ].map(([a, v]) => `<div><kbd>${a}</kbd><span>${v}</span></div>`).join('') + '<div><kbd>Touch</kbd><span>Stick moves; drag the screen to look in close views</span></div><div><kbd>Gamepad</kbd><span>Sticks move and aim; A attack, B roll, X use, Y draught; bumpers and left trigger skills; R3 lock on, D-pad left lock or release, up and down greater draught and scroll, right view; L3 zoom; View bag, Menu everything else. A on a text box opens a keyboard</span></div>';
 }
 
 // ================= performance readout & adaptive resolution =================
@@ -7340,5 +7450,5 @@ function boot(data) {
 }
 if (window.claude && window.claude.hot && window.claude.hot.snapshot) window.claude.hot.snapshot(() => ({ S, started }));
 if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(boot); else boot((window.claude && window.claude.hot && window.claude.hot.data) || {});
-return { get S() { return S; }, get RUN() { return RUN; }, get P() { return P; }, get LV() { return LV; }, enemies, renderer, startDelve, begin, freshHero, openPanel, closePanel, loadDungeon, get ready() { return levelReady; }, perf, debug: { damageEnemy, parseRiftCode, setTouchMode, returnToTown, afterGear, DBG, stick, interacts, interact, usePotion, get skillCd() { return skillCd; }, isPaused, snapCamera, nextFloor, loadTown, rollCaravan, startRift, startArena, die, gainXP, hurtPlayer, calcStats, xpNeed, ARCH, BIOMES, genItem, makeSetItem, scene, sun, hemi, sky, walkable, spawnEnemy, bossPattern, get LVL() { return LV; }, applyTimeOfDay, get pet() { return pet; }, villagers, zones, chooseClass, checkAch, playerAttack, CAM, setCamMode, useSkill, cycleLock, get lockT() { return lockT; }, corpses, skillCd, questEvent, makeQuestOffers, claimQuest, get trail() { return trail; }, spawnDrop, bossIntro, LEGENDS, applyLoadout, ascend, gainParagon, GUARDIANS, season, minions, remains, initOnline, ONLINE, submitBoard, get drops() { return drops; } } };
+return { get S() { return S; }, get RUN() { return RUN; }, get P() { return P; }, get LV() { return LV; }, enemies, renderer, startDelve, begin, freshHero, openPanel, closePanel, loadDungeon, get ready() { return levelReady; }, perf, debug: { get camZoom() { return camZoom; }, PHOTO, haptic, damageEnemy, parseRiftCode, setTouchMode, returnToTown, afterGear, DBG, stick, interacts, interact, usePotion, get skillCd() { return skillCd; }, isPaused, snapCamera, nextFloor, loadTown, rollCaravan, startRift, startArena, die, gainXP, hurtPlayer, calcStats, xpNeed, ARCH, BIOMES, genItem, makeSetItem, scene, sun, hemi, sky, walkable, spawnEnemy, bossPattern, get LVL() { return LV; }, applyTimeOfDay, get pet() { return pet; }, villagers, zones, chooseClass, checkAch, playerAttack, CAM, setCamMode, useSkill, cycleLock, get lockT() { return lockT; }, corpses, skillCd, questEvent, makeQuestOffers, claimQuest, get trail() { return trail; }, spawnDrop, bossIntro, LEGENDS, applyLoadout, ascend, gainParagon, GUARDIANS, season, minions, remains, initOnline, ONLINE, submitBoard, get drops() { return drops; } } };
 };

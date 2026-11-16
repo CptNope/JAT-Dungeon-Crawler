@@ -25,7 +25,7 @@ function applyA11y() {
   document.body.classList.toggle('calm', !!SET.motion);
 }
 const calm = () => !!SET.motion; // reduced motion: no shake, hit-stop, slow motion, lens kicks or flashes
-function haptic(p) { if (SET.haptics !== false && touchMode && navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) { try { navigator.vibrate(p); } catch (err) { /* unsupported */ } } }
+function haptic(p) { if (SET.haptics !== false && pad.on) { padRumble(p); return; } if (SET.haptics !== false && touchMode && navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) { try { navigator.vibrate(p); } catch (err) { /* unsupported */ } } }
 
 // difficulty is per hero
 const DIFF = {
@@ -55,7 +55,8 @@ function settingsHtml(tab) {
     ${row('Battery saver', 'Caps the frame rate at 30 and keeps resolution low. Good for phones and long sessions.', seg('battery', [[false, 'Off'], [true, 'On']]))}
     ${row('Look speed', '', seg('sens', [[0.6, 'Slow'], [1, 'Normal'], [1.6, 'Fast']]))}
     ${row('Music', '', seg('music', [[true, 'On'], [false, 'Off']]))}
-    ${row('Vibration', 'Short buzzes on hits, level-ups and big moments (phones that support it).', seg('haptics', [[true, 'On'], [false, 'Off']]))}
+    ${row('Vibration', 'Short buzzes on hits, level-ups and big moments (phones and controllers that support it).', seg('haptics', [[true, 'On'], [false, 'Off']]))}
+    ${row('Controller look', 'Up and down on the right stick in the close views.', seg('padInvY', [[false, 'Normal'], [true, 'Inverted']]))}
     ${row('Loot filter', 'Turns low items into Arcane Essence the moment you pick them up. Set and legendary items are always kept.', seg('filter', [['none', 'Keep all'], ['common', 'Salvage common'], ['uncommon', 'Salvage common and uncommon']], true))}</div>`;
 }
 function settingsAct(d) {
