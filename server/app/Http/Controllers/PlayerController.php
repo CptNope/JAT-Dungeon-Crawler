@@ -3,10 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Player;
+use App\Support\Boards;
 use App\Support\Names;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class PlayerController extends Controller
@@ -43,7 +43,7 @@ class PlayerController extends Controller
             return response()->json(['message' => 'That name cannot be used. Try 2 to 16 letters or numbers.'], 422);
         }
         $player->update(['name' => $name]);
-        Cache::increment('hd:boards');
+        Boards::changed();
 
         return response()->json(['id' => $player->id, 'name' => $player->name]);
     }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Entry;
+use App\Support\Boards;
 use App\Support\Week;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,7 +19,7 @@ class BoardController extends Controller
         $week = preg_match('/^\d{4}-W\d{1,2}$/', (string) $request->query('week')) ? (string) $request->query('week') : Week::key();
 
         // boards are read far more than written: hold each for a few seconds, and drop them when any score changes
-        $version = (int) Cache::get('hd:boards', 0);
+        $version = Boards::stamp();
         $rows = Cache::remember("hd:board:$version:$kind:$week:$limit", 15, function () use ($kind, $week, $limit) {
             $query = Entry::query()->with('player:id,name');
             $query = $kind === 'deep'
