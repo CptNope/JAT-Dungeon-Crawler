@@ -273,8 +273,8 @@ function renderPanel() {
     }
     case 'credits': { title = 'Credits'; sub = ''; body = creditsHtml(); break; }
     case 'online': {
-      title = 'Online'; sub = ONLINE.party ? `Party ${ONLINE.code.toUpperCase()}` : 'Leaderboards, ghosts and parties';
-      tabs = [['week', 'Weekly Rift'], ['deep', 'Deepest'], ['party', 'Party']];
+      title = 'Online'; sub = ONLINE.party ? `Party ${ONLINE.code.toUpperCase()}` : canParty() ? 'Leaderboards, ghosts and parties' : 'Leaderboards and ghosts';
+      tabs = [['week', 'Weekly Rift'], ['deep', 'Deepest'], ...(canParty() ? [['party', 'Party']] : [])];
       body = '<p class="hint">Loading\u2026</p>';
       const want = p.tab, tk = (p.onlineTk = (p.onlineTk || 0) + 1);
       onlineHtml(want).then((h) => { if (Panel.kind === 'online' && Panel.tab === want && p.onlineTk === tk) $('#pBody').innerHTML = h; });

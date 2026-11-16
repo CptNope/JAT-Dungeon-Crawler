@@ -187,6 +187,8 @@ src/            game source (edit these)
   head.html / body.html
 build.sh        assembles game.js, index.html, sw.js and dist/hearthdeep.html
 tools/          autoplay bot, headless smoke test, press capture, itch.io packaging
+server/         Laravel leaderboard API (optional)
+wordpress/      WordPress plugin: the [hearthdeep] shortcode
 press/          press kit: fact sheet, screenshots, gameplay GIF, share image
 manifest.webmanifest, icons/   installable web app
 vendor/         three.js r186 (MIT, see THREE-LICENSE)
@@ -223,6 +225,14 @@ Draw calls are counted across every render pass in a frame (shadow maps, scene, 
 ## Balance
 
 Enemy scaling was tuned against a simulated climb (one pass from depth 1, killing most of each floor, wearing rare gear of the current depth, no talents, gems or upgrades). With those assumptions a normal foe takes one or two hits to kill early and three to five by depth 40, a player survives about 25 hits from a common foe at depth 1 and about nine at depth 37, and a boss takes 15 to 25 seconds of plain attacks to kill up to depth 25. Talents, sets, gems and upgrades are the margin for going deeper. Past depth 25 an extra ramp builds steadily instead of jumping at once.
+
+## Online: your own leaderboard server
+
+`server/` is a small Laravel API that gives the game leaderboards and ghost races on any web host: deepest descent, and each week's fastest Weekly Rift with a ghost to race. Players need no account; they choose a display name in the Online panel. Deploy it (the [server README](server/README.md) has the Cloudways steps), put its address in the `hearthdeep-api` meta tag in `src/head.html`, and run `./build.sh`. With the tag empty the game is single-player, as before.
+
+## On a WordPress site
+
+`wordpress/jat-hearthdeep/` is a plugin with one shortcode. Zip the folder, upload it under Plugins, and put `[hearthdeep]` on a page: the game appears in a responsive frame, with controllers and full screen allowed. It talks to the same leaderboard server as every other copy of the game. Saves live in each visitor's browser and are kept separately for each site the game is embedded on.
 
 ## Press and sharing
 
