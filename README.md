@@ -74,7 +74,7 @@ Every key below can be rebound in **Settings → Controls** (arrow keys, Shift a
 | P | Photo mode (orbit, lens, filters, capture) |
 | Esc | Menu |
 | `` ` `` or F3 | Performance readout |
-| Gamepad | Left stick moves, right stick aims or looks; A attack, B roll, X use, Y draught; LB / RB / LT skills; R3 or d-pad left lock on; d-pad up greater draught, down portal scroll, right view; Start menu, Back bag. In menus the d-pad moves, A presses, B closes, LB / RB change tabs |
+| Gamepad | Left stick moves, right stick aims or looks; A attack (or RT), B roll, X use, Y draught; LB / RB / LT skills; R3 or d-pad left lock on; d-pad up greater draught, down portal scroll, right view; Start menu, View bag. In menus the d-pad or stick moves, A presses, B closes, LB / RB change tabs. Button names on screen follow the controller in hand (Xbox, PlayStation or Nintendo), hits rumble where the browser supports it, an unplugged controller pauses the game, and Settings can invert the look stick |
 | Touch | Left stick moves; drag the screen to look in close views; Strike aims for you (it sticks to your target and prefers foes in the direction you push); skill, lock and utility buttons around the thumbs; short vibrations on hits, level-ups and boss kills |
 
 </details>

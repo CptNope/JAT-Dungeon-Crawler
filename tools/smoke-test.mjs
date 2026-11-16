@@ -22,6 +22,13 @@ const base = `http://127.0.0.1:${server.address().port}/`;
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined, args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 640, height: 360 } }); // small and on Low: software rendering is slow
+// a scripted controller: the test flips window.__padOn and pokes axes and buttons the way a real pad reports them
+await page.addInitScript(() => {
+  window.__rumbles = 0; window.__padOn = false;
+  window.__pad = { id: 'Xbox 360 Controller (XInput STANDARD GAMEPAD)', index: 0, connected: true, mapping: 'standard', timestamp: 1, axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, touched: false, value: 0 })), vibrationActuator: { playEffect() { window.__rumbles++; return Promise.resolve('complete'); } } };
+  window.__press = (i, on) => { window.__pad.buttons[i] = { pressed: on, touched: on, value: on ? 1 : 0 }; window.__pad.timestamp++; };
+  navigator.getGamepads = () => (window.__padOn ? [window.__pad] : []);
+});
 const problems = [];
 page.on('pageerror', (e) => problems.push('page error: ' + String(e).slice(0, 300)));
 page.on('console', (m) => { if (m.type() === 'error' && !/fonts\.|net::ERR_/.test(m.text())) problems.push('console error: ' + m.text().slice(0, 300)); });
@@ -76,6 +83,27 @@ try {
   await page.waitForTimeout(1500);
   const seal = await page.evaluate(() => ({ dare: !!document.querySelector('.toast.dare button'), share: hearthdeep.RUN.rift.share, last: hearthdeep.S.lastRift && hearthdeep.S.lastRift.code, ok: !!hearthdeep.debug.parseRiftCode(hearthdeep.RUN.rift.share) }));
   check(seal.dare && seal.ok && seal.last === seal.share, 'a sealed rift offers its challenge link (' + seal.share + ')');
+  // 6. a controller: stick moves the hero, key caps follow the pad in hand, hits rumble, Start pauses, keyboard takes over again
+  const cap = () => page.evaluate(() => document.querySelector('#actionBar .slot .k').textContent);
+  const kbCap = await cap();
+  const x0 = await page.evaluate(() => { window.__padOn = true; window.__pad.axes[0] = 1; return hearthdeep.P.x; });
+  await page.waitForTimeout(2500);
+  const moved = await page.evaluate((x0) => { window.__pad.axes[0] = 0; const H = hearthdeep; return { dx: Math.abs(H.P.x - x0), cls: document.body.classList.contains('pad') }; }, x0);
+  check(moved.cls && moved.dx > 0.3, `the left stick moves the hero (${moved.dx.toFixed(1)} tiles)`);
+  check(await cap() === 'A', 'the action bar shows Xbox button names with an Xbox pad');
+  await page.evaluate(() => { window.__pad.id = 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)'; });
+  await page.waitForTimeout(600);
+  check(await cap() === '✕', 'and PlayStation symbols with a DualSense');
+  await page.evaluate(() => hearthdeep.debug.hurtPlayer(5));
+  await page.waitForTimeout(300);
+  check(await page.evaluate(() => window.__rumbles > 0), 'taking a hit rumbles the controller');
+  await page.evaluate(() => window.__press(9, true)); await page.waitForTimeout(500); await page.evaluate(() => window.__press(9, false)); await page.waitForTimeout(300);
+  const paused = await page.evaluate(() => ({ title: !document.querySelector('#title').hidden, focus: document.querySelector('#title').contains(document.activeElement) }));
+  check(paused.title && paused.focus, 'Start opens the menu with a button focused');
+  await page.evaluate(() => window.__press(9, true)); await page.waitForTimeout(500); await page.evaluate(() => window.__press(9, false)); await page.waitForTimeout(300);
+  check(await page.evaluate(() => document.querySelector('#title').hidden), 'Start again resumes');
+  await page.keyboard.press('F8'); await page.evaluate(() => { window.__padOn = false; }); await page.waitForTimeout(500);
+  check(await cap() === kbCap && !(await page.evaluate(() => document.body.classList.contains('pad'))), 'touching the keyboard brings the key names back');
 } catch (err) { problems.push('test crashed: ' + String(err).slice(0, 400)); }
 await browser.close(); server.close();
 if (problems.length) { console.error('\n' + problems.length + ' problem(s):\n- ' + [...new Set(problems)].join('\n- ')); process.exit(1); }

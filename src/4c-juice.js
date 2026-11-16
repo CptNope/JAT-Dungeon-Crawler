@@ -2,11 +2,11 @@
 // Each fires once per hero. Touch and gamepad players get their own wording for controls.
 const HINTS = {
   move: { k: 'Getting around', d: 'WASD to move, mouse to aim. Walk to the glowing gate at the south of town to begin a descent.', t: 'Left stick to move. Walk to the glowing gate at the south of town to begin a descent.', p: 'Left stick to move, right stick to aim. Walk to the glowing gate at the south of town.' },
-  fight: { k: 'Fight', d: 'Click (or hold) to attack. Space rolls through danger, and you cannot be hit mid-roll.', t: 'Hold Strike to attack; it aims for you. Roll through danger.', p: 'A to attack, B to roll. You cannot be hit mid-roll.' },
-  loot: { k: 'Loot', d: 'Walk over drops to pick them up. Press I to open your bag and compare gear.', t: 'Walk over drops to pick them up. The bag button shows and compares your gear.', p: 'Walk over drops to pick them up. Back opens your bag.' },
-  potion: { k: 'Low health', d: 'Press Q to drink a Healing Draught (R for a Greater one).', t: 'Tap the red flask to drink a Healing Draught.', p: 'Y drinks a Healing Draught.' },
-  level: { k: 'Level up', d: 'Every level gives a talent point. Press K to spend it.', t: 'Every level gives a talent point. Open the bag and choose Talents.', p: 'Every level gives a talent point. Back opens your bag; Talents is the last tab.' },
-  skill: { k: 'New skill', d: 'A new skill is ready on the action bar. Press its number key.', t: 'A new skill button has lit up by your thumb.', p: 'Skills are on LB, RB and LT.' },
+  fight: { k: 'Fight', d: 'Click (or hold) to attack. Space rolls through danger, and you cannot be hit mid-roll.', t: 'Hold Strike to attack; it aims for you. Roll through danger.', p: '{A} to attack, {B} to roll. You cannot be hit mid-roll.' },
+  loot: { k: 'Loot', d: 'Walk over drops to pick them up. Press I to open your bag and compare gear.', t: 'Walk over drops to pick them up. The bag button shows and compares your gear.', p: 'Walk over drops to pick them up. {Back} opens your bag.' },
+  potion: { k: 'Low health', d: 'Press Q to drink a Healing Draught (R for a Greater one).', t: 'Tap the red flask to drink a Healing Draught.', p: '{Y} drinks a Healing Draught.' },
+  level: { k: 'Level up', d: 'Every level gives a talent point. Press K to spend it.', t: 'Every level gives a talent point. Open the bag and choose Talents.', p: 'Every level gives a talent point. {Back} opens your bag; Talents is the last tab.' },
+  skill: { k: 'New skill', d: 'A new skill is ready on the action bar. Press its number key.', t: 'A new skill button has lit up by your thumb.', p: 'Skills are on {LB}, {RB} and {LT}.' },
   stairs: { k: 'Going deeper', d: 'Stairs lead down; each depth is harder and richer. Read a Portal Scroll (T) to go home with your loot.', t: 'Stairs lead down. The scroll button opens a way home.', p: 'Stairs lead down. D-pad down reads a Portal Scroll.' },
   boss: { k: 'Boss', d: 'Bosses warn before big attacks: red circles on the ground. Step out before they fill.', t: 'Bosses warn before big attacks: red circles on the ground. Step out before they fill.', p: 'Bosses warn before big attacks: red circles on the ground. Step out before they fill.' },
   home: { k: 'Back home', d: 'Sell spare loot at the Copper Lantern, craft at Home, and ask Elder Maren for work.', t: 'Sell spare loot at the Copper Lantern, craft at Home, and ask Elder Maren for work.', p: 'Sell spare loot at the Copper Lantern, craft at Home, and ask Elder Maren for work.' },
@@ -14,7 +14,11 @@ const HINTS = {
   set: { k: 'Set item', d: 'Set pieces (green) grant bonuses when you wear two or three of the same set.', t: 'Set pieces (green) grant bonuses when you wear two or three of the same set.', p: 'Set pieces (green) grant bonuses when you wear two or three of the same set.' },
   rift: { k: 'Rifts', d: 'Rifts are three-floor trials with modifiers. Beat the clock for shards to spend at the caravan.', t: 'Rifts are three-floor trials with modifiers. Beat the clock for shards.', p: 'Rifts are three-floor trials with modifiers. Beat the clock for shards.' },
 };
-let hintQ = [], hintT = 0;
+let hintQ = [], hintT = 0, hintCur = null;
+function hintDraw(el, h) { // worded for the input in hand; redrawn if that changes while the hint is up
+  const txt = pad.on ? padText(h.p) : touchMode ? h.t : h.d;
+  el.innerHTML = `<b>${esc(h.k)}</b><span>${esc(txt)}</span><button type="button" class="btn ghost sm" id="hintOk">Got it</button>`;
+}
 function hint(id) {
   if (!S || !S.hints || S.hints[id] || SET.hints === false || !HINTS[id]) return;
   S.hints[id] = 1;
@@ -26,8 +30,8 @@ function updHints(dt) {
   if (LV && LV.type === 'dungeon' && RUN && RUN.kills >= 12) hint('stairs');
   if (hintT > 0) { if (performance.now() > hintT) { hintT = 0; el.classList.remove('on'); } return; }
   if (!hintQ.length || isPaused()) return;
-  const h = HINTS[hintQ.shift()], txt = pad.on ? h.p : touchMode ? h.t : h.d;
-  el.innerHTML = `<b>${esc(h.k)}</b><span>${esc(txt)}</span><button type="button" class="btn ghost sm" id="hintOk">Got it</button>`;
+  const h = hintCur = HINTS[hintQ.shift()];
+  hintDraw(el, h);
   el.classList.add('on'); hintT = performance.now() + 7500;
 }
 function dismissHint() { hintT = 1; }

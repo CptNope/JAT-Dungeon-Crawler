@@ -39,6 +39,7 @@
 html,body{height:100%;margin:0;background:var(--ink);color:var(--fg);overflow:hidden;font-family:var(--f-body);font-size:15px;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
 button{font:inherit;color:inherit}
 button:focus-visible{outline:2px solid var(--brass-2);outline-offset:2px}
+body.pad button:focus,body.pad [data-act]:focus,body.pad input:focus,body.pad textarea:focus{outline:2px solid var(--brass-2);outline-offset:2px}
 #stage{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;background:var(--ink)}
 #hud{position:fixed;inset:0;pointer-events:none;z-index:2}
 .hud-tl{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));left:calc(12px + env(safe-area-inset-left,0px));width:min(280px,46vw);display:grid;gap:6px}
@@ -3732,11 +3733,11 @@ const G_PORTAL = new THREE.CircleGeometry(1, 48);
 // Each fires once per hero. Touch and gamepad players get their own wording for controls.
 const HINTS = {
   move: { k: 'Getting around', d: 'WASD to move, mouse to aim. Walk to the glowing gate at the south of town to begin a descent.', t: 'Left stick to move. Walk to the glowing gate at the south of town to begin a descent.', p: 'Left stick to move, right stick to aim. Walk to the glowing gate at the south of town.' },
-  fight: { k: 'Fight', d: 'Click (or hold) to attack. Space rolls through danger, and you cannot be hit mid-roll.', t: 'Hold Strike to attack; it aims for you. Roll through danger.', p: 'A to attack, B to roll. You cannot be hit mid-roll.' },
-  loot: { k: 'Loot', d: 'Walk over drops to pick them up. Press I to open your bag and compare gear.', t: 'Walk over drops to pick them up. The bag button shows and compares your gear.', p: 'Walk over drops to pick them up. Back opens your bag.' },
-  potion: { k: 'Low health', d: 'Press Q to drink a Healing Draught (R for a Greater one).', t: 'Tap the red flask to drink a Healing Draught.', p: 'Y drinks a Healing Draught.' },
-  level: { k: 'Level up', d: 'Every level gives a talent point. Press K to spend it.', t: 'Every level gives a talent point. Open the bag and choose Talents.', p: 'Every level gives a talent point. Back opens your bag; Talents is the last tab.' },
-  skill: { k: 'New skill', d: 'A new skill is ready on the action bar. Press its number key.', t: 'A new skill button has lit up by your thumb.', p: 'Skills are on LB, RB and LT.' },
+  fight: { k: 'Fight', d: 'Click (or hold) to attack. Space rolls through danger, and you cannot be hit mid-roll.', t: 'Hold Strike to attack; it aims for you. Roll through danger.', p: '{A} to attack, {B} to roll. You cannot be hit mid-roll.' },
+  loot: { k: 'Loot', d: 'Walk over drops to pick them up. Press I to open your bag and compare gear.', t: 'Walk over drops to pick them up. The bag button shows and compares your gear.', p: 'Walk over drops to pick them up. {Back} opens your bag.' },
+  potion: { k: 'Low health', d: 'Press Q to drink a Healing Draught (R for a Greater one).', t: 'Tap the red flask to drink a Healing Draught.', p: '{Y} drinks a Healing Draught.' },
+  level: { k: 'Level up', d: 'Every level gives a talent point. Press K to spend it.', t: 'Every level gives a talent point. Open the bag and choose Talents.', p: 'Every level gives a talent point. {Back} opens your bag; Talents is the last tab.' },
+  skill: { k: 'New skill', d: 'A new skill is ready on the action bar. Press its number key.', t: 'A new skill button has lit up by your thumb.', p: 'Skills are on {LB}, {RB} and {LT}.' },
   stairs: { k: 'Going deeper', d: 'Stairs lead down; each depth is harder and richer. Read a Portal Scroll (T) to go home with your loot.', t: 'Stairs lead down. The scroll button opens a way home.', p: 'Stairs lead down. D-pad down reads a Portal Scroll.' },
   boss: { k: 'Boss', d: 'Bosses warn before big attacks: red circles on the ground. Step out before they fill.', t: 'Bosses warn before big attacks: red circles on the ground. Step out before they fill.', p: 'Bosses warn before big attacks: red circles on the ground. Step out before they fill.' },
   home: { k: 'Back home', d: 'Sell spare loot at the Copper Lantern, craft at Home, and ask Elder Maren for work.', t: 'Sell spare loot at the Copper Lantern, craft at Home, and ask Elder Maren for work.', p: 'Sell spare loot at the Copper Lantern, craft at Home, and ask Elder Maren for work.' },
@@ -3744,7 +3745,11 @@ const HINTS = {
   set: { k: 'Set item', d: 'Set pieces (green) grant bonuses when you wear two or three of the same set.', t: 'Set pieces (green) grant bonuses when you wear two or three of the same set.', p: 'Set pieces (green) grant bonuses when you wear two or three of the same set.' },
   rift: { k: 'Rifts', d: 'Rifts are three-floor trials with modifiers. Beat the clock for shards to spend at the caravan.', t: 'Rifts are three-floor trials with modifiers. Beat the clock for shards.', p: 'Rifts are three-floor trials with modifiers. Beat the clock for shards.' },
 };
-let hintQ = [], hintT = 0;
+let hintQ = [], hintT = 0, hintCur = null;
+function hintDraw(el, h) { // worded for the input in hand; redrawn if that changes while the hint is up
+  const txt = pad.on ? padText(h.p) : touchMode ? h.t : h.d;
+  el.innerHTML = `<b>${esc(h.k)}</b><span>${esc(txt)}</span><button type="button" class="btn ghost sm" id="hintOk">Got it</button>`;
+}
 function hint(id) {
   if (!S || !S.hints || S.hints[id] || SET.hints === false || !HINTS[id]) return;
   S.hints[id] = 1;
@@ -3756,8 +3761,8 @@ function updHints(dt) {
   if (LV && LV.type === 'dungeon' && RUN && RUN.kills >= 12) hint('stairs');
   if (hintT > 0) { if (performance.now() > hintT) { hintT = 0; el.classList.remove('on'); } return; }
   if (!hintQ.length || isPaused()) return;
-  const h = HINTS[hintQ.shift()], txt = pad.on ? h.p : touchMode ? h.t : h.d;
-  el.innerHTML = `<b>${esc(h.k)}</b><span>${esc(txt)}</span><button type="button" class="btn ghost sm" id="hintOk">Got it</button>`;
+  const h = hintCur = HINTS[hintQ.shift()];
+  hintDraw(el, h);
   el.classList.add('on'); hintT = performance.now() + 7500;
 }
 function dismissHint() { hintT = 1; }
@@ -4680,7 +4685,7 @@ function updInteract() {
   if (best !== nearI) {
     nearI = best;
     const el = $('#prompt');
-    if (best) { el.innerHTML = `${touchMode ? '' : '<kbd>E</kbd>'}<span>${esc(best.verb)}</span>`; el.hidden = false; }
+    if (best) { el.innerHTML = `${touchMode ? '' : `<kbd>${pad.on ? esc(padKey(2)) : 'E'}</kbd>`}<span>${esc(best.verb)}</span>`; el.hidden = false; }
     else el.hidden = true;
     $('#tUse').classList.toggle('ready', !!best);
   }
@@ -6914,11 +6919,42 @@ function loadoutsHtml() {
 // A attack, B roll, X use, Y draught, LB/RB/LT skills, RT attack, R3 lock on, d-pad: up greater draught,
 // down portal scroll, left cycle lock, right change view; Start menu, Back bag.
 // In panels and menus: d-pad or left stick moves focus, A presses, B closes, LB/RB switch tabs.
-const pad = { on: false, atk: false, aim: null, prev: [], navT: 0, idx: -1 };
-const DEAD = 0.22;
-const dz = (v) => (Math.abs(v) < DEAD ? 0 : (v - Math.sign(v) * DEAD) / (1 - DEAD));
+// Button names follow the controller in hand (Xbox, PlayStation or Nintendo), on the action bar, the interact prompt
+// and the first-time hints. The controller rumbles on hits where the browser supports it.
+const pad = { on: false, atk: false, aim: null, prev: [], navT: 0, idx: -1, kind: 'xbox', g: null, shown: '' };
+const DEAD = 0.2;
+// radial dead zone: the stick's direction is kept exactly, so diagonals do not snap to the axes
+function dzStick(x, y) { const m = Math.hypot(x, y); if (m < DEAD) return [0, 0]; const k = Math.min(1, (m - DEAD) / (1 - DEAD)) / m; return [x * k, y * k]; }
+// names by standard-mapping button index; Nintendo pads report the same positions under different letters
+const PAD_GLYPHS = {
+  xbox: ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'View', 'Menu', 'L3', 'R3', 'D-pad up', 'D-pad down', 'D-pad left', 'D-pad right'],
+  ps: ['Cross', 'Circle', 'Square', 'Triangle', 'L1', 'R1', 'L2', 'R2', 'Create', 'Options', 'L3', 'R3', 'D-pad up', 'D-pad down', 'D-pad left', 'D-pad right'],
+  nintendo: ['B', 'A', 'Y', 'X', 'L', 'R', 'ZL', 'ZR', 'Minus', 'Plus', 'L3', 'R3', 'D-pad up', 'D-pad down', 'D-pad left', 'D-pad right'],
+};
+const PAD_SHORT = { Cross: '✕', Circle: '○', Square: '□', Triangle: '△', 'D-pad up': '▲', 'D-pad down': '▼', 'D-pad left': '◀', 'D-pad right': '▶', Minus: '−', Plus: '+', View: 'View', Menu: 'Menu', Create: 'Create', Options: 'Opt' };
+const padKindOf = (id) => (/054c|dualsense|dualshock|playstation|ps[345]/i.test(id) ? 'ps' : /057e|nintendo|switch|joy-?con/i.test(id) ? 'nintendo' : 'xbox');
+const padGlyph = (i) => PAD_GLYPHS[pad.kind][i];
+const padKey = (i) => PAD_SHORT[padGlyph(i)] || padGlyph(i); // the short form for key caps
+const PAD_TOKENS = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7, Back: 8, Start: 9 };
+const padText = (str) => str.replace(/\{(\w+)\}/g, (m, k) => (k in PAD_TOKENS ? padGlyph(PAD_TOKENS[k]) : m)); // "{A} to attack" in the layout in hand
+const PAD_SLOT = { atk: 0, dodge: 1, sk0: 4, sk1: 5, sk2: 6, pot: 3, gpot: 12, scroll: 13, bag: 8 };
+function padLabels() { // key caps on the action bar and the interact prompt follow whichever input was used last
+  const want = pad.on ? pad.kind : '';
+  if (pad.shown === want && (!want || ($('#actionBar .slot') && $('#actionBar .slot').dataset.pad === want))) return;
+  pad.shown = want; document.body.classList.toggle('pad', pad.on); nearI = undefined;
+  if (hintT > 0 && hintCur && $('#hint')) hintDraw($('#hint'), hintCur);
+  if (!want) { buildActionBar(); return; }
+  document.querySelectorAll('#actionBar .slot').forEach((el) => { el.dataset.pad = want; const k = el.querySelector('.k'), i = PAD_SLOT[el.dataset.slot]; if (k && i !== undefined) k.textContent = padKey(i); });
+}
+function padRumble(p) { // p: milliseconds, or a [buzz, gap, buzz] pattern as navigator.vibrate takes
+  const g = pad.g, act = g && g.vibrationActuator; if (!act || !act.playEffect) return;
+  const ms = Array.isArray(p) ? p.reduce((a, b) => a + b, 0) : p, peak = Array.isArray(p) ? Math.max(...p) : p;
+  const strong = peak >= 100 ? 1 : peak >= 50 ? 0.7 : peak >= 30 ? 0.35 : 0, weak = peak >= 100 ? 0.8 : peak >= 50 ? 0.6 : 0.4;
+  try { const r = act.playEffect('dual-rumble', { startDelay: 0, duration: Math.max(40, Math.min(400, ms * 1.6)), strongMagnitude: strong, weakMagnitude: weak }); if (r && r.catch) r.catch(() => {}); } catch (err) { /* unsupported */ }
+}
+function padRoot() { return !$('#dlg').hidden ? $('#dlg') : !$('#share').hidden ? $('#share') : !$('#ending').hidden ? $('#ending') : !$('#panel').hidden ? $('#panel') : !$('#title').hidden ? $('#title') : !$('#death').hidden ? $('#death') : PHOTO.on ? $('#photo') : null; }
 function padFocusables() {
-  const root = !$('#dlg').hidden ? $('#dlg') : !$('#share').hidden ? $('#share') : !$('#ending').hidden ? $('#ending') : !$('#panel').hidden ? $('#panel') : !$('#title').hidden ? $('#title') : !$('#death').hidden ? $('#death') : PHOTO.on ? $('#photo') : null;
+  const root = padRoot();
   if (!root) return [];
   return [...root.querySelectorAll('button:not([disabled]), [data-act]:not([disabled]), input, textarea')].filter((b) => b.offsetParent !== null);
 }
@@ -6944,16 +6980,19 @@ function padTab(dir) {
 }
 function pollPad(dt) {
   const gps = navigator.getGamepads ? navigator.getGamepads() : [];
-  let g = null; for (const q of gps) if (q && q.connected) { g = q; break; }
-  if (!g) { if (pad.on) { pad.on = false; pad.atk = false; pad.aim = null; stick.x = stick.y = 0; } return; }
+  // with several controllers plugged in, the one touched most recently plays
+  let g = null; for (const q of gps) if (q && q.connected && (!g || (q.mapping === 'standard' && g.mapping !== 'standard') || (q.mapping === g.mapping && q.timestamp > g.timestamp))) g = q;
+  if (!g) { if (pad.on) { pad.on = false; pad.atk = false; pad.aim = null; pad.g = null; stick.x = stick.y = 0; padLabels(); } return; }
   const b = g.buttons.map((x) => x.pressed || x.value > 0.5), was = pad.prev, hit = (i) => b[i] && !was[i];
-  const lx = dz(g.axes[0] || 0), ly = dz(g.axes[1] || 0), rx = dz(g.axes[2] || 0), ry = dz(g.axes[3] || 0);
+  const [lx, ly] = dzStick(g.axes[0] || 0, g.axes[1] || 0), [rx, ry] = dzStick(g.axes[2] || 0, g.axes[3] || 0);
   const any = b.some(Boolean) || lx || ly || rx || ry;
   if (any && !pad.on) { pad.on = true; if (touchMode) setTouchMode(false); }
   if (!pad.on) { pad.prev = b; return; }
+  pad.g = g; pad.kind = padKindOf(g.id || ''); padLabels();
   const ui = !$('#panel').hidden || !$('#title').hidden || !$('#death').hidden || !$('#dlg').hidden || !$('#share').hidden || !$('#ending').hidden || PHOTO.on;
   if (ui) {
     pad.atk = false; stick.x = stick.y = 0;
+    const root = padRoot(); if (root && !root.contains(document.activeElement)) { const l = padFocusables(); if (l[0]) l[0].focus({ preventScroll: true }); }
     pad.navT -= dt;
     let mx = (b[15] ? 1 : 0) - (b[14] ? 1 : 0), my = (b[13] ? 1 : 0) - (b[12] ? 1 : 0);
     if (!mx && !my && (Math.abs(lx) > 0.5 || Math.abs(ly) > 0.5)) { if (Math.abs(lx) > Math.abs(ly)) mx = Math.sign(lx); else my = Math.sign(ly); }
@@ -6969,7 +7008,7 @@ function pollPad(dt) {
   stick.x = lx; stick.y = ly;
   pad.atk = b[0] || b[7];
   if (SET.cam === 'top') pad.aim = rx || ry ? Math.atan2(rx, ry) : null;
-  else if (rx || ry) { CAM.yaw -= rx * dt * 2.6 * SET.sens; CAM.pitch = clamp(CAM.pitch + ry * dt * 1.6 * SET.sens, -0.5, 1.1); }
+  else if (rx || ry) { CAM.yaw -= rx * dt * 2.6 * SET.sens; CAM.pitch = clamp(CAM.pitch + (SET.padInvY ? -ry : ry) * dt * 1.6 * SET.sens, -0.5, 1.1); }
   if (hit(1)) tryDodge();
   if (hit(2)) interact();
   if (hit(3)) usePotion(false);
@@ -6982,7 +7021,13 @@ function pollPad(dt) {
   if (hit(8)) openPanel('bag');
   pad.prev = b;
 }
-window.addEventListener('gamepadconnected', () => toast('Controller connected', 'var(--ok)'));
+window.addEventListener('gamepadconnected', (ev) => { const k = padKindOf((ev.gamepad && ev.gamepad.id) || ''); toast(`Controller connected (${k === 'ps' ? 'PlayStation' : k === 'nintendo' ? 'Nintendo' : 'Xbox'} layout)`, 'var(--ok)'); });
+// a controller that drops out mid-fight (flat battery, lost signal) pauses the game instead of leaving the hero standing
+window.addEventListener('gamepaddisconnected', () => { if (!pad.on) return; pad.on = false; pad.atk = false; pad.aim = null; pad.g = null; stick.x = stick.y = 0; padLabels(); toast('Controller disconnected', 'var(--bad)'); if (started && !isPaused()) showTitle(); });
+// picking the keyboard or mouse back up returns the key caps and hints to keys
+const padYield = () => { if (pad.on) { pad.on = false; pad.atk = false; pad.aim = null; padLabels(); } };
+window.addEventListener('keydown', (ev) => { if (ev.isTrusted !== false) padYield(); }, true);
+window.addEventListener('mousedown', padYield, true);
 document.addEventListener('click', (ev) => { if (ev.target && ev.target.id === 'hintOk') dismissHint(); });
 // ================= sharing: frame capture, run card, photo mode =================
 function captureFrame() { Post.render(); try { return renderer.domElement.toDataURL('image/png'); } catch (err) { return null; } }
@@ -7322,7 +7367,7 @@ function applyA11y() {
   document.body.classList.toggle('calm', !!SET.motion);
 }
 const calm = () => !!SET.motion; // reduced motion: no shake, hit-stop, slow motion, lens kicks or flashes
-function haptic(p) { if (SET.haptics !== false && touchMode && navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) { try { navigator.vibrate(p); } catch (err) { /* unsupported */ } } }
+function haptic(p) { if (SET.haptics !== false && pad.on) { padRumble(p); return; } if (SET.haptics !== false && touchMode && navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) { try { navigator.vibrate(p); } catch (err) { /* unsupported */ } } }
 
 // difficulty is per hero
 const DIFF = {
@@ -7352,7 +7397,8 @@ function settingsHtml(tab) {
     ${row('Battery saver', 'Caps the frame rate at 30 and keeps resolution low. Good for phones and long sessions.', seg('battery', [[false, 'Off'], [true, 'On']]))}
     ${row('Look speed', '', seg('sens', [[0.6, 'Slow'], [1, 'Normal'], [1.6, 'Fast']]))}
     ${row('Music', '', seg('music', [[true, 'On'], [false, 'Off']]))}
-    ${row('Vibration', 'Short buzzes on hits, level-ups and big moments (phones that support it).', seg('haptics', [[true, 'On'], [false, 'Off']]))}
+    ${row('Vibration', 'Short buzzes on hits, level-ups and big moments (phones and controllers that support it).', seg('haptics', [[true, 'On'], [false, 'Off']]))}
+    ${row('Controller look', 'Up and down on the right stick in the close views.', seg('padInvY', [[false, 'Normal'], [true, 'Inverted']]))}
     ${row('Loot filter', 'Turns low items into Arcane Essence the moment you pick them up. Set and legendary items are always kept.', seg('filter', [['none', 'Keep all'], ['common', 'Salvage common'], ['uncommon', 'Salvage common and uncommon']], true))}</div>`;
 }
 function settingsAct(d) {
@@ -7783,7 +7829,7 @@ function refreshKeyList() {
   const k = (a) => esc(keyLabel(KB[a]));
   $('#keyList').innerHTML = [
     [`${k('up')}${k('left')}${k('down')}${k('right')}`, 'Move'], ['Mouse', 'Aim or look'], ['Left click', 'Attack (hold)'], [k('roll'), 'Roll'], [`${k('skill1')} ${k('skill2')} ${k('skill3')}`, 'Skills'], [k('lock'), 'Lock on / next'], [k('unlock'), 'Release lock'], [k('use'), 'Use, open, talk'], [k('view'), 'Switch view'], ['Wheel', 'Zoom'], [`${k('potion')} / ${k('gpotion')}`, 'Draught / Greater'], [k('scroll'), 'Portal scroll'], [k('bag'), 'Bag and character'], [k('talents'), 'Talents'], [k('codex'), 'Codex'], [k('photo'), 'Photo mode'], ['Alt', 'Show all item names'], ['Esc', 'Menu'], ['`', 'Performance readout'],
-  ].map(([a, v]) => `<div><kbd>${a}</kbd><span>${v}</span></div>`).join('') + '<div><kbd>Touch</kbd><span>Stick moves; drag the screen to look in close views</span></div>';
+  ].map(([a, v]) => `<div><kbd>${a}</kbd><span>${v}</span></div>`).join('') + '<div><kbd>Touch</kbd><span>Stick moves; drag the screen to look in close views</span></div><div><kbd>Gamepad</kbd><span>Sticks move and aim; A attack, B roll, X use, Y draught, bumpers and left trigger for skills</span></div>';
 }
 
 // ================= performance readout & adaptive resolution =================
