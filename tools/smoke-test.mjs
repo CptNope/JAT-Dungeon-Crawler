@@ -114,8 +114,9 @@ try {
   await tap(9);
   check(await page.evaluate(() => document.querySelector('#title').hidden), 'Start again resumes');
   // 7. the parts that used to need a mouse or keyboard: zoom, typing, photo mode
+  await page.evaluate(() => hearthdeep.debug.setCamMode('top'));
   await tap(10);
-  check(await page.evaluate(() => /Camera: close/.test(document.querySelector('#toasts').textContent)), 'L3 steps the camera zoom');
+  check(await page.evaluate(() => hearthdeep.debug.camZoom < 0.9), 'L3 steps the camera zoom');
   await page.evaluate(() => { hearthdeep.openPanel('delve', 'rift'); const i = document.querySelector('#seedIn'); i.value = ''; i.focus(); });
   await page.waitForTimeout(400); await tap(0);
   check(await page.evaluate(() => !!document.querySelector('#osk')), 'A on a text box opens the on-screen keyboard');
