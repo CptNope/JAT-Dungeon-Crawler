@@ -76,8 +76,8 @@ class PartyRoomTest extends TestCase
         foreach ([['k' => 'chat', 'text' => 'hello'], ['k' => 'go', 'code' => '<img src=x>'], ['k' => 'done', 't' => 'fast'], 'plain string'] as $bad) {
             $this->withToken($a['token'])->postJson('/api/v1/rooms/abc12/emit', ['data' => $bad])->assertStatus(422);
         }
-        $this->postJson('/api/v1/rooms/abc12/sync', [])->assertStatus(401);
         $this->sync($a, 'NOT-A-CODE')->assertStatus(404);
+        $this->flushHeaders()->postJson('/api/v1/rooms/abc12/sync', [])->assertStatus(401); // flushHeaders: the test client was still carrying Asha's token
     }
 
     public function test_leaving_or_going_quiet_takes_you_out_of_the_room(): void
