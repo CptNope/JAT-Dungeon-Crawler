@@ -102,16 +102,18 @@ try {
   check(await until(() => document.querySelector('#actionBar .slot .k').textContent === 'A'), 'the action bar shows Xbox button names with an Xbox pad');
   await page.evaluate(() => { window.__pad.id = 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)'; window.__pad.timestamp++; });
   check(await until(() => document.querySelector('#actionBar .slot .k').textContent === '✕'), 'and PlayStation symbols with a DualSense');
+  // a button tap held across several rendered frames, however slow the machine: the game reads the pad once a frame
+  const frames = (n) => page.evaluate((n) => new Promise((done) => { const step = () => (n-- > 0 ? requestAnimationFrame(step) : done()); step(); }), n);
+  const tap = async (i) => { await page.evaluate((i) => window.__press(i, true), i); await frames(8); await page.waitForTimeout(250); await page.evaluate((i) => window.__press(i, false), i); await frames(8); await page.waitForTimeout(250); };
   await page.evaluate(() => hearthdeep.debug.haptic(60)); // the call every hit, parry and level-up makes
   await page.waitForTimeout(300);
   check(await page.evaluate(() => window.__rumbles > 0), 'game feedback rumbles the controller');
-  await page.evaluate(() => window.__press(9, true)); await page.waitForTimeout(500); await page.evaluate(() => window.__press(9, false)); await page.waitForTimeout(300);
+  await tap(9);
   const paused = await page.evaluate(() => ({ title: !document.querySelector('#title').hidden, focus: document.querySelector('#title').contains(document.activeElement) }));
   check(paused.title && paused.focus, 'Start opens the menu with a button focused');
-  await page.evaluate(() => window.__press(9, true)); await page.waitForTimeout(500); await page.evaluate(() => window.__press(9, false)); await page.waitForTimeout(300);
+  await tap(9);
   check(await page.evaluate(() => document.querySelector('#title').hidden), 'Start again resumes');
   // 7. the parts that used to need a mouse or keyboard: zoom, typing, photo mode
-  const tap = async (i) => { await page.evaluate((i) => window.__press(i, true), i); await page.waitForTimeout(450); await page.evaluate((i) => window.__press(i, false), i); await page.waitForTimeout(300); };
   await tap(10);
   check(await page.evaluate(() => /Camera: close/.test(document.querySelector('#toasts').textContent)), 'L3 steps the camera zoom');
   await page.evaluate(() => { hearthdeep.openPanel('delve', 'rift'); const i = document.querySelector('#seedIn'); i.value = ''; i.focus(); });
