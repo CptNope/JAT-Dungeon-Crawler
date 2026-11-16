@@ -37,7 +37,8 @@ class EntryController extends Controller
             'para' => ['nullable', 'integer', 'min:0', 'max:'.$lim['paragon']],
             'week' => ['nullable', 'string', 'regex:/^\d{4}-W\d{1,2}$/'],
             'time' => ['nullable', 'numeric', 'min:'.$lim['time_min'], 'max:'.$lim['time_max']],
-            'ghost' => ['nullable', 'string', 'max:'.$lim['ghost_chars'], 'regex:/^[0-9.,\-]*$/'],
+            // a path is "floor.x.z" points, comma-separated, one every quarter second
+            'ghost' => ['nullable', 'string', 'max:'.$lim['ghost_chars'], 'regex:/^\d{1,2}\.-?\d{1,5}\.-?\d{1,5}(,\d{1,2}\.-?\d{1,5}\.-?\d{1,5})*$/'],
             'gcls' => ['nullable', Rule::in([...$classes, ''])],
         ]);
 
@@ -56,6 +57,15 @@ class EntryController extends Controller
             $entry->gcls = null;
         }
         $time = isset($data['time']) ? round((float) $data['time'], 1) : null;
+        $ghost = (string) ($data['ghost'] ?? '');
+        if ($time !== null && $ghost !== '') {
+            // The game records a point every 250 ms of the run, up to 4,800. A path much shorter than the time
+            // claimed did not come from that run.
+            $points = substr_count($ghost, ',') + 1;
+            if ($points < min(4800, (int) floor($time * 4 * 0.85))) {
+                return response()->json(['message' => 'The recorded path does not match the time.'], 422);
+            }
+        }
         if ($time !== null && ($data['week'] ?? '') === $now && ($entry->time === null || $time < $entry->time)) {
             $entry->time = $time;
             $entry->ghost = ($data['ghost'] ?? '') !== '' ? $data['ghost'] : null;

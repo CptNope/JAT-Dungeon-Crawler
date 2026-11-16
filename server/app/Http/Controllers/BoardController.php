@@ -21,7 +21,11 @@ class BoardController extends Controller
         // boards are read far more than written: hold each for a few seconds, and drop them when any score changes
         $version = Boards::stamp();
         $rows = Cache::remember("hd:board:$version:$kind:$week:$limit", 15, function () use ($kind, $week, $limit) {
-            $query = Entry::query()->with('player:id,name');
+            // the recorded paths can be 60 KB each: a board only needs to know whether one exists
+            $query = Entry::query()
+                ->select(['player_id', 'best', 'cls', 'lvl', 'para', 'week', 'time', 'gcls', 'updated_at'])
+                ->selectRaw('ghost IS NOT NULL as has_ghost')
+                ->with('player:id,name');
             $query = $kind === 'deep'
                 ? $query->where('best', '>', 0)->orderByDesc('best')->orderBy('updated_at')
                 : $query->where('week', $week)->whereNotNull('time')->orderBy('time')->orderBy('updated_at');

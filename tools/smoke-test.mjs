@@ -148,7 +148,7 @@ try {
     await page.evaluate((tag) => { document.querySelector('#olName').value = tag; document.querySelector('[data-act="olName"]').click(); }, tag);
     check(await until((tag) => { try { const j = JSON.parse(localStorage.getItem('hearthdeep-online')); return j && j.token && j.name === tag; } catch (e) { return false; } }, tag), 'saving a name joins the boards and remembers this browser');
     await page.evaluate(() => { hearthdeep.S.best = Math.max(hearthdeep.S.best || 0, 7); return hearthdeep.debug.submitBoard(); });
-    await page.evaluate(() => hearthdeep.debug.submitBoard({ time: 123.4, ghost: '1.10.10,1.11.10,1.12.10' }));
+    await page.evaluate(() => hearthdeep.debug.submitBoard({ time: 123.4, ghost: Array.from({ length: 500 }, (v, i) => `1.${100 + (i % 40)}.120`).join(',') })); // a path as long as the run, as the game records it
     await page.evaluate(() => { hearthdeep.closePanel(); hearthdeep.openPanel('online', 'deep'); });
     check(await until((tag) => { const b = document.querySelector('#pBody .board'); return !!b && b.textContent.includes(tag) && /Depth \d+/.test(b.textContent); }, tag), 'the depth board lists this player');
     await page.evaluate(() => { hearthdeep.closePanel(); hearthdeep.openPanel('online', 'week'); });

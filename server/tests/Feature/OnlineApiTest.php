@@ -17,6 +17,12 @@ class OnlineApiTest extends TestCase
         return $this->postJson('/api/v1/players', $name === '' ? [] : ['name' => $name])->assertCreated()->json();
     }
 
+    /** A recorded path long enough for a run of that many seconds: one point every quarter second. */
+    private function path(float $seconds, string $mark = '10'): string
+    {
+        return implode(',', array_fill(0, (int) ceil($seconds * 4), "1.$mark.12"));
+    }
+
     private function send(array $who, array $line)
     {
         return $this->withToken($who['token'])->putJson('/api/v1/me/entry', $line + ['best' => 1, 'cls' => 'mage', 'lvl' => 5, 'para' => 0]);
@@ -81,11 +87,52 @@ class OnlineApiTest extends TestCase
     {
         $p = $this->join('Swift');
         $wk = Week::key();
-        $this->send($p, ['week' => $wk, 'time' => 300.44, 'ghost' => '1.10.12,1.11.12', 'gcls' => 'mage'])->assertOk()->assertJsonPath('data.time', 300.4)->assertJsonPath('data.ghost', '1');
-        $this->send($p, ['week' => $wk, 'time' => 320, 'ghost' => '1.1.1'])->assertOk()->assertJsonPath('data.time', 300.4);
-        $this->send($p, ['week' => '1999-W1', 'time' => 100, 'ghost' => '1.2.2'])->assertOk()->assertJsonPath('data.time', 300.4);
-        $this->send($p, ['week' => $wk, 'time' => 250.5, 'ghost' => '1.3.3'])->assertOk()->assertJsonPath('data.time', 250.5);
-        $this->getJson("/api/v1/players/{$p['id']}/entry")->assertOk()->assertJson(['exists' => true, 'data' => ['ghost' => '1.3.3', 'gcls' => 'mage', 'week' => $wk]]);
+        $this->send($p, ['week' => $wk, 'time' => 300.44, 'ghost' => $this->path(300.44), 'gcls' => 'mage'])->assertOk()->assertJsonPath('data.time', 300.4)->assertJsonPath('data.ghost', '1');
+        $this->send($p, ['week' => $wk, 'time' => 320, 'ghost' => $this->path(320)])->assertOk()->assertJsonPath('data.time', 300.4);
+        $this->send($p, ['week' => '1999-W1', 'time' => 100, 'ghost' => $this->path(100)])->assertOk()->assertJsonPath('data.time', 300.4);
+        $this->send($p, ['week' => $wk, 'time' => 250.5, 'ghost' => $this->path(250.5, '33')])->assertOk()->assertJsonPath('data.time', 250.5);
+        $this->getJson("/api/v1/players/{$p['id']}/entry")->assertOk()->assertJson(['exists' => true, 'data' => ['ghost' => $this->path(250.5, '33'), 'gcls' => 'mage', 'week' => $wk]]);
+    }
+
+    public function test_a_recorded_path_must_fit_the_time_claimed(): void
+    {
+        $p = $this->join('Ghost');
+        $wk = Week::key();
+        $this->send($p, ['week' => $wk, 'time' => 300, 'ghost' => '1.10.12,1.11.12'])->assertStatus(422);              // two points for a five-minute run
+        $this->send($p, ['week' => $wk, 'time' => 300, 'ghost' => $this->path(300).',1.x.2'])->assertStatus(422);      // not a path
+        $this->send($p, ['week' => $wk, 'time' => 300, 'ghost' => $this->path(280)])->assertOk();                      // a little short is fine: timers and recording drift
+        $this->send($p, ['week' => $wk, 'time' => 290])->assertOk()->assertJsonPath('data.time', 290);                  // a time with no path is allowed
+    }
+
+    public function test_housekeeping_commands(): void
+    {
+        $a = $this->join('Asha');
+        $b = $this->join('Brom');
+        $this->send($a, ['best' => 9])->assertOk();
+
+        $this->artisan('hearthdeep:players', ['search' => 'Ash'])->expectsOutputToContain('Asha')->assertExitCode(0);
+        $this->artisan('hearthdeep:rename', ['id' => $a['id'], 'name' => 'Asha the Bold'])->assertExitCode(0);
+        $this->assertSame('Asha the Bold', $this->getJson('/api/v1/board?kind=deep')->json('rows.0.name'));
+
+        $this->travel(40)->days();
+        $this->artisan('hearthdeep:prune')->expectsOutputToContain('Removed 1 player')->assertExitCode(0); // Brom never sent a score
+        $this->assertDatabaseMissing('players', ['id' => $b['id']]);
+        $this->assertDatabaseHas('players', ['id' => $a['id']]);
+
+        $this->artisan('hearthdeep:remove', ['id' => $a['id']])->assertExitCode(0);
+        $this->assertDatabaseCount('players', 0);
+        $this->assertDatabaseCount('entries', 0);
+        $this->assertSame([], $this->getJson('/api/v1/board?kind=deep')->json('rows'));
+        $this->withToken($a['token'])->getJson('/api/v1/me')->assertStatus(401);
+        $this->artisan('hearthdeep:remove', ['id' => 'nobody'])->assertExitCode(1);
+    }
+
+    public function test_the_setup_checker_runs_and_flags_what_is_wrong(): void
+    {
+        // the test environment is deliberately not production: http and one origin
+        $this->artisan('hearthdeep:check')->expectsOutputToContain('Database connects')->expectsOutputToContain('APP_URL is https')->assertExitCode(1);
+        config(['app.url' => 'https://play.example.com', 'app.debug' => false]);
+        $this->artisan('hearthdeep:check')->expectsOutputToContain('Ready.')->assertExitCode(0);
     }
 
     public function test_a_new_week_clears_last_weeks_time(): void
@@ -101,8 +148,8 @@ class OnlineApiTest extends TestCase
         $a = $this->join('Asha');
         $b = $this->join('Brom');
         $c = $this->join('Cole');
-        $this->send($a, ['best' => 10, 'week' => $wk, 'time' => 400, 'ghost' => '1.1.1']);
-        $this->send($b, ['best' => 30, 'week' => $wk, 'time' => 200, 'ghost' => '1.2.2']);
+        $this->send($a, ['best' => 10, 'week' => $wk, 'time' => 400, 'ghost' => $this->path(400)])->assertOk();
+        $this->send($b, ['best' => 30, 'week' => $wk, 'time' => 200, 'ghost' => $this->path(200)])->assertOk();
         $this->send($c, ['best' => 20]);
 
         $deep = $this->getJson('/api/v1/board?kind=deep')->assertOk()->json('rows');
@@ -113,6 +160,7 @@ class OnlineApiTest extends TestCase
         $this->assertSame(['Brom', 'Asha'], array_column($week, 'name'));
         $this->assertSame(['1', '1'], array_column($week, 'ghost'));
         $this->assertSame($b['id'], $week[0]['id']);
+        $this->assertLessThan(2000, strlen(json_encode($week))); // no recorded paths in a board
 
         // a new score shows up straight away, not after the cache runs out
         $this->send($c, ['best' => 20, 'week' => $wk, 'time' => 100]);

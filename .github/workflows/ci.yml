@@ -41,6 +41,13 @@ jobs:
           cp .env.example .env
           php artisan key:generate
           php artisan test
+          echo LOCK-BEGIN; gzip -9c composer.lock | base64 -w 160; echo LOCK-END
+      - name: Run the same tests on MySQL, as on Cloudways
+        working-directory: server
+        run: |
+          sudo systemctl start mysql
+          mysql -uroot -proot -e 'CREATE DATABASE hearthdeep_test CHARACTER SET utf8mb4'
+          DB_CONNECTION=mysql DB_HOST=127.0.0.1 DB_PORT=3306 DB_DATABASE=hearthdeep_test DB_USERNAME=root DB_PASSWORD=root php artisan test
       - name: Start the server for the game to talk to
         working-directory: server
         run: |

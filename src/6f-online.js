@@ -10,14 +10,17 @@ const PARTY_RE = /^[a-z0-9]{5}$/;
 // The address comes from <meta name="hearthdeep-api"> in src/head.html. The server is spoken to through the same
 // small doc / collection / user shapes the published page's database offers, so the code below does not care which
 // one it has. There are no accounts: the server hands this browser a random token the first time a score is sent.
-const REST = { base: '', id: null, token: null, name: '', names: new Map(), msg: '', typed: '' };
+const REST = { base: '', id: null, token: null, name: '', names: new Map(), msg: '', typed: '', pending: null };
 const REST_KEY = 'hearthdeep-online';
 const restBase = () => { const m = document.querySelector('meta[name="hearthdeep-api"]'); return String(window.HEARTHDEEP_API || (m && m.content) || '').trim().replace(/\/+$/, ''); };
-function restSave() { try { localStorage.setItem(REST_KEY, JSON.stringify({ base: REST.base, id: REST.id, token: REST.token, name: REST.name })); } catch (err) { /* storage unavailable: the identity lasts for this visit */ } }
+function restSave() { try { localStorage.setItem(REST_KEY, JSON.stringify({ base: REST.base, id: REST.id, token: REST.token, name: REST.name, pending: REST.pending })); } catch (err) { /* storage unavailable: the identity lasts for this visit */ } }
 async function restCall(method, path, body, auth) {
   const headers = { Accept: 'application/json' }; if (body) headers['Content-Type'] = 'application/json'; if (auth && REST.token) headers.Authorization = 'Bearer ' + REST.token;
-  const r = await fetch(REST.base + '/api/v1' + path, { method, headers, body: body ? JSON.stringify(body) : undefined, credentials: 'omit' });
+  // a server that hangs must not hang the panel: give up after 8 seconds
+  const ctl = typeof AbortController === 'function' ? new AbortController() : null, timer = ctl ? setTimeout(() => ctl.abort(), 8000) : 0;
+  let r; try { r = await fetch(REST.base + '/api/v1' + path, { method, headers, body: body ? JSON.stringify(body) : undefined, credentials: 'omit', signal: ctl ? ctl.signal : undefined }); } finally { clearTimeout(timer); }
   const j = await r.json().catch(() => null);
+  if (r.status === 401 && auth) { REST.id = null; REST.token = null; REST.pending = null; ONLINE.me = null; restSave(); } // the server no longer knows this browser: join afresh next time
   if (!r.ok) { const e = new Error((j && j.message) || 'HTTP ' + r.status); e.status = r.status; throw e; }
   return j || {};
 }
@@ -27,6 +30,13 @@ async function restJoin(name) { // become a player on the server (once per brows
   if (!j.id || !j.token) throw new Error('bad reply');
   REST.id = String(j.id); REST.token = String(j.token); REST.name = String(j.name || ''); REST.names.set(REST.id, REST.name); restSave(); ONLINE.me = REST.id;
   return REST.id;
+}
+// A weekly time that could not be sent (server down, no signal) is kept and sent with the next successful call.
+// Depth needs no such care: it is read from the save and sent again every time the hero comes home.
+async function restFlush() {
+  const p = REST.pending; if (!p || !REST.token) return;
+  try { await restCall('PUT', '/me/entry', p, true); REST.pending = null; restSave(); }
+  catch (err) { if (err.status >= 400 && err.status < 500 && err.status !== 429) { REST.pending = null; restSave(); } else throw err; } // refused for good (a week gone by): let it go
 }
 async function restRename(name) {
   if (!REST.token) { await restJoin(name); return REST.name; }
@@ -39,7 +49,11 @@ function restDb() {
       const id = String(path).split('/')[1];
       return {
         async get() { if (!id || id === 'null') return { exists: false, data: () => ({}) }; const j = await restCall('GET', '/players/' + encodeURIComponent(id) + '/entry'); return { exists: !!j.exists, data: () => j.data || {} }; },
-        async set(v) { await restJoin(); await restCall('PUT', '/me/entry', { best: v.best | 0, cls: v.cls, lvl: v.lvl | 0, para: v.para | 0, week: v.week || null, time: v.time || null, ghost: v.ghost || null, gcls: v.gcls || null }, true); },
+        async set(v) {
+          const line = { best: v.best | 0, cls: v.cls, lvl: v.lvl | 0, para: v.para | 0, week: v.week || null, time: v.time || null, ghost: v.ghost || null, gcls: v.gcls || null };
+          try { await restJoin(); await restFlush(); await restCall('PUT', '/me/entry', line, true); }
+          catch (err) { if (line.time && !(err.status >= 400 && err.status < 500 && err.status !== 429) && (!REST.pending || REST.pending.week !== line.week || line.time < REST.pending.time)) { REST.pending = line; restSave(); } throw err; }
+        },
       };
     },
     collection() {
@@ -60,11 +74,12 @@ const restUser = {
 };
 async function initRestOnline() {
   REST.base = restBase(); if (!/^https?:\/\//.test(REST.base)) return;
-  try { const j = JSON.parse(localStorage.getItem(REST_KEY) || 'null'); if (j && j.base === REST.base && j.token) { REST.id = j.id; REST.token = j.token; REST.name = j.name || ''; REST.names.set(REST.id, REST.name); } } catch (err) { /* start fresh */ }
+  try { const j = JSON.parse(localStorage.getItem(REST_KEY) || 'null'); if (j && j.base === REST.base && j.token) { REST.id = j.id; REST.token = j.token; REST.name = j.name || ''; REST.pending = j.pending && typeof j.pending === 'object' ? j.pending : null; REST.names.set(REST.id, REST.name); } } catch (err) { /* start fresh */ }
   try { const st = await restCall('GET', '/status'); if (!st.ok) return; } catch (err) { return; } // server down or not allowed from this page: stay single-player
   Object.assign(ONLINE, { db: restDb(), user: restUser, room: null, rest: true, me: REST.id, ready: true });
   document.body.classList.add('online');
   if (Panel.kind === 'online') renderPanel();
+  restFlush().catch(() => {});
 }
 function restNameRow() { // a display name for the boards; the only thing the server knows about a player besides their scores
   return `<div class="row" style="margin-bottom:12px"><div><div class="t">Your name on the boards<small>no account or email; this browser is remembered</small></div><div class="d" id="olMsg" role="status">${REST.msg ? esc(REST.msg) : REST.token ? '' : 'You join the boards the first time you come home from a delve, or when you save a name here.'}</div></div>

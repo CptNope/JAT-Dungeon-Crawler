@@ -1,9 +1,8 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
-    "name": "laravel/laravel",
+    "name": "cptnope/hearthdeep-online",
     "type": "project",
-    "description": "The skeleton application for the Laravel framework.",
-    "keywords": ["laravel", "framework"],
+    "description": "Leaderboards and ghost races for Hearthdeep.",
     "license": "MIT",
     "require": {
         "php": "^8.3",
@@ -32,18 +31,6 @@
         }
     },
     "scripts": {
-        "setup": [
-            "composer install",
-            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
-            "@php artisan key:generate",
-            "@php artisan migrate --force",
-            "npm install --ignore-scripts",
-            "npm run build"
-        ],
-        "dev": [
-            "Composer\\Config::disableProcessTimeout",
-            "@php artisan dev"
-        ],
         "test": [
             "@php artisan config:clear --ansi @no_additional_args",
             "@php artisan test"
@@ -79,6 +66,9 @@
         "allow-plugins": {
             "pestphp/pest-plugin": true,
             "php-http/discovery": true
+        },
+        "platform": {
+            "php": "8.3.0"
         }
     },
     "minimum-stability": "stable",
