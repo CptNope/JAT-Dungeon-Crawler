@@ -113,7 +113,7 @@ function renderPhotoBar() {
   $('#photo').innerHTML = `<div class="ph-in"><span class="ph-t">Photo mode</span><div class="ph-f">${Object.keys(FILTERS).map((k) => `<button type="button" class="tog${PHOTO.filter === k ? ' on' : ''}" data-ph="${k}">${k[0].toUpperCase() + k.slice(1)}</button>`).join('')}</div>
     <label class="ph-fov">Lens <input type="range" min="20" max="90" value="${PHOTO.fov}" id="phFov"></label>
     <div class="ph-a"><button class="btn" type="button" id="phShot">Capture</button><button class="btn ghost" type="button" id="phExit">Done</button></div>
-    <span class="hint">Drag to orbit · wheel to zoom · WASD to move</span></div>`;
+    <span class="hint">${pad.on ? esc(padPhotoHelp()) : 'Drag to orbit · wheel to zoom · WASD to move'}</span></div>`;
 }
 function updPhoto(dt) {
   const k = 4 * dt;
@@ -177,7 +177,7 @@ function copyChallenge(code, secs) {
 function dareToast(code, secs) {
   const box = $('#toasts'), el = document.createElement('div'); el.className = 'toast big dare';
   const s = document.createElement('span'); s.textContent = `Sealed in ${fmtClock(secs)}. Dare a friend to beat it.`;
-  const b = document.createElement('button'); b.type = 'button'; b.className = 'btn sm'; b.textContent = canLink() ? (navigator.share && window.matchMedia('(pointer: coarse)').matches ? 'Send challenge' : 'Copy challenge link') : 'Copy code';
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'btn sm'; b.textContent = (pad.on ? padKey(10) + ' · ' : '') + (canLink() ? (navigator.share && window.matchMedia('(pointer: coarse)').matches ? 'Send challenge' : 'Copy challenge link') : 'Copy code');
   b.addEventListener('click', () => { copyChallenge(code, secs); el.remove(); });
   el.append(s, b); box.prepend(el); setTimeout(() => el.remove(), 14000);
 }

@@ -110,6 +110,27 @@ try {
   check(paused.title && paused.focus, 'Start opens the menu with a button focused');
   await page.evaluate(() => window.__press(9, true)); await page.waitForTimeout(500); await page.evaluate(() => window.__press(9, false)); await page.waitForTimeout(300);
   check(await page.evaluate(() => document.querySelector('#title').hidden), 'Start again resumes');
+  // 7. the parts that used to need a mouse or keyboard: zoom, typing, photo mode
+  const tap = async (i) => { await page.evaluate((i) => window.__press(i, true), i); await page.waitForTimeout(450); await page.evaluate((i) => window.__press(i, false), i); await page.waitForTimeout(300); };
+  await tap(10);
+  check(await page.evaluate(() => /Camera: close/.test(document.querySelector('#toasts').textContent)), 'L3 steps the camera zoom');
+  await page.evaluate(() => { hearthdeep.openPanel('delve', 'rift'); const i = document.querySelector('#seedIn'); i.value = ''; i.focus(); });
+  await page.waitForTimeout(400); await tap(0);
+  check(await page.evaluate(() => !!document.querySelector('#osk')), 'A on a text box opens the on-screen keyboard');
+  for (const ch of ['H', 'D', '-']) { await page.evaluate((ch) => { const b = [...document.querySelectorAll('#osk [data-osk]')].find((x) => x.dataset.osk.toUpperCase() === ch); b.focus(); }, ch); await tap(0); }
+  await tap(2); // X deletes the dash
+  const typed = await page.evaluate(() => document.querySelector('#seedIn').value);
+  await tap(9); // Start: done
+  check(typed.toUpperCase() === 'HD' && await page.evaluate(() => !document.querySelector('#osk') && document.activeElement.id === 'seedIn'), `typing with the pad fills the field ("${typed}") and Start closes the keyboard`);
+  await tap(1); // B closes the panel
+  check(await page.evaluate(() => document.querySelector('#panel').hidden), 'B closes the panel');
+  await tap(9); await page.evaluate(() => document.querySelector('#mPhoto').focus()); await tap(0);
+  const ph0 = await page.evaluate(() => { const P = hearthdeep.debug.PHOTO; window.__pad.axes[2] = 1; window.__pad.axes[1] = -1; window.__pad.timestamp++; return { on: P.on, yaw: P.yaw, tx: P.tx, tz: P.tz }; });
+  await page.waitForTimeout(1500);
+  const ph1 = await page.evaluate(() => { const P = hearthdeep.debug.PHOTO; window.__pad.axes[2] = 0; window.__pad.axes[1] = 0; return { yaw: P.yaw, tx: P.tx, tz: P.tz, help: document.querySelector('#photo .hint').textContent }; });
+  check(ph0.on && Math.abs(ph1.yaw - ph0.yaw) > 0.1 && Math.hypot(ph1.tx - ph0.tx, ph1.tz - ph0.tz) > 0.2 && /orbit/.test(ph1.help), 'photo mode opens from the menu and the sticks fly and orbit the camera');
+  await tap(1);
+  check(await page.evaluate(() => !hearthdeep.debug.PHOTO.on), 'B leaves photo mode');
   await page.keyboard.press('F8'); await page.evaluate(() => { window.__padOn = false; }); await page.waitForTimeout(500);
   check(await cap() === kbCap && !(await page.evaluate(() => document.body.classList.contains('pad'))), 'touching the keyboard brings the key names back');
 } catch (err) { problems.push('test crashed: ' + String(err).slice(0, 400)); }
