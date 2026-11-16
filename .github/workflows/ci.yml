@@ -33,6 +33,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3' # the oldest version the server supports, and the one composer.lock is resolved for
+          extensions: mbstring, pdo_mysql, pdo_sqlite
+          coverage: none
       - name: Install the server and run its tests
         working-directory: server
         run: |
@@ -41,7 +46,6 @@ jobs:
           cp .env.example .env
           php artisan key:generate
           php artisan test
-          echo LOCK-BEGIN; gzip -9c composer.lock | base64 -w 160; echo LOCK-END
       - name: Run the same tests on MySQL, as on Cloudways
         working-directory: server
         run: |

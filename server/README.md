@@ -28,7 +28,7 @@ All under `/api/v1`. Replies are JSON.
 | `GET /me`, `PATCH /me` | token | Read or change the display name |
 | `PUT /me/entry` | token | Send the line after a run |
 
-The server decides what a sent line changes: depth only ever rises, a weekly time is kept only when it is for the current week and faster than the stored one, and a new week clears the last. Values outside the bounds in `config/hearthdeep.php` are refused. These checks stop typos and casual tampering; scores still come from the player's browser, so a determined cheat can post a false one. Delete a row from `players` to remove someone (their entry goes with it).
+The server decides what a sent line changes: depth only ever rises, a weekly time is kept only when it is for the current week and faster than the stored one, and a new week clears the last. Values outside the bounds in `config/hearthdeep.php` are refused, and a weekly time must come with a recorded path long enough to have taken that time. These checks stop typos and casual tampering; scores still come from the player's browser, so a determined cheat can post a false one. `php artisan hearthdeep:remove <id>` takes someone off the boards.
 
 ## Run it locally
 
@@ -41,6 +41,8 @@ php artisan test
 php artisan serve --port=8123
 ```
 
+`composer.lock` is committed and resolved for PHP 8.3, so every install gets the same package versions.
+
 Point a local copy of the game at it by opening the game with `window.HEARTHDEEP_API = 'http://127.0.0.1:8123'` set before `game.js` loads, or by putting that address in the `hearthdeep-api` meta tag in `src/head.html` and running `./build.sh`. Add the game's own address (for example `http://localhost:8000`) to `HEARTHDEEP_ORIGINS` in `.env`.
 
 ## Deploy on Cloudways
@@ -52,14 +54,9 @@ Names of screens are as Cloudways labelled them when this was written; they move
 3. **Point the web root at the server.** The repository holds the game at its top level and this server in `server/`. In Application Settings, set the webroot to `public_html/server/public`.
 4. **Install and configure**, over SSH, in `public_html/server`:
    ```bash
-   composer install --no-dev --optimize-autoloader
-   cp .env.example .env && php artisan key:generate
+   bash deploy.sh
    ```
-   Edit `.env`: set `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL` to the application's https address, `DB_CONNECTION=mysql` with the database name, user and password from the application's Access Details, and `HEARTHDEEP_ORIGINS` (below). Then:
-   ```bash
-   php artisan migrate --force
-   php artisan config:cache && php artisan route:cache
-   ```
+   The first run installs the dependencies, creates `.env` and stops. Edit `.env`: set `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL` to the application's https address, `DB_CONNECTION=mysql` with the database name, user and password from the application's Access Details, and `HEARTHDEEP_ORIGINS` (below). Then run `bash deploy.sh` again: it creates the tables, caches the configuration and finishes with a checklist that names anything still wrong.
 5. **Turn on SSL** for the application's domain (SSL Certificate, Let's Encrypt). The game is served over https and browsers will not let it call a plain http server.
 6. **Check it.** `https://your-domain/api/v1/status` should answer `{"ok":true,"week":"…"}`.
 7. **Tell the game.** Put the address in `src/head.html`:
@@ -84,5 +81,19 @@ A WordPress page that embeds the game with the `[hearthdeep]` shortcode does not
 
 ```bash
 git pull   # or the Pull button in Cloudways
-cd server && composer install --no-dev --optimize-autoloader && php artisan migrate --force && php artisan config:cache && php artisan route:cache
+bash server/deploy.sh
 ```
+
+## Looking after it
+
+There is no admin website. These run over SSH in `server/`:
+
+| Command | Does |
+| --- | --- |
+| `php artisan hearthdeep:check` | The setup checklist: database, cache, permissions, https, allowed websites |
+| `php artisan hearthdeep:players [search]` | The 50 newest players, or those matching part of a name or id |
+| `php artisan hearthdeep:rename <id> "<name>"` | Change a display name |
+| `php artisan hearthdeep:remove <id>` | Remove a player and their scores |
+| `php artisan hearthdeep:prune` | Drop players who joined over 30 days ago and never sent a score |
+
+`hearthdeep:prune` is safe to run from a daily cron job. Nothing else needs scheduling.
