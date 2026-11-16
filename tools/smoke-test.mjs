@@ -83,7 +83,14 @@ try {
   await page.waitForTimeout(1500);
   const seal = await page.evaluate(() => ({ dare: !!document.querySelector('.toast.dare button'), share: hearthdeep.RUN.rift.share, last: hearthdeep.S.lastRift && hearthdeep.S.lastRift.code, ok: !!hearthdeep.debug.parseRiftCode(hearthdeep.RUN.rift.share) }));
   check(seal.dare && seal.ok && seal.last === seal.share, 'a sealed rift offers its challenge link (' + seal.share + ')');
-  // 6. a controller: stick moves the hero, key caps follow the pad in hand, hits rumble, Start pauses, keyboard takes over again
+  // 6. a controller: stick moves the hero, key caps follow the pad in hand, feedback rumbles, Start pauses, keyboard takes over again
+  // (back in the village first: a hero left standing in a rift gets frozen, swarmed or killed mid-check)
+  await page.evaluate(() => hearthdeep.debug.returnToTown(false));
+  await page.waitForFunction(() => hearthdeep.ready && hearthdeep.LV.type === 'town', null, { timeout: 90000 });
+  for (let i = 0; i < 20; i++) {
+    const open = await page.evaluate(() => { const d = document.querySelector('#dlg'); if (!d.hidden) { const n = document.querySelector('#dlgNext'); if (n) n.click(); return true; } if (!document.querySelector('#panel').hidden) { hearthdeep.closePanel(); return true; } return false; });
+    if (!open) break; await page.waitForTimeout(150);
+  }
   const cap = () => page.evaluate(() => document.querySelector('#actionBar .slot .k').textContent);
   const kbCap = await cap();
   const x0 = await page.evaluate(() => { window.__padOn = true; window.__pad.axes[0] = 1; return hearthdeep.P.x; });
@@ -94,9 +101,9 @@ try {
   await page.evaluate(() => { window.__pad.id = 'DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)'; });
   await page.waitForTimeout(600);
   check(await cap() === '✕', 'and PlayStation symbols with a DualSense');
-  await page.evaluate(() => hearthdeep.debug.hurtPlayer(5));
+  await page.evaluate(() => hearthdeep.debug.haptic(60)); // the call every hit, parry and level-up makes
   await page.waitForTimeout(300);
-  check(await page.evaluate(() => window.__rumbles > 0), 'taking a hit rumbles the controller');
+  check(await page.evaluate(() => window.__rumbles > 0), 'game feedback rumbles the controller');
   await page.evaluate(() => window.__press(9, true)); await page.waitForTimeout(500); await page.evaluate(() => window.__press(9, false)); await page.waitForTimeout(300);
   const paused = await page.evaluate(() => ({ title: !document.querySelector('#title').hidden, focus: document.querySelector('#title').contains(document.activeElement) }));
   check(paused.title && paused.focus, 'Start opens the menu with a button focused');
