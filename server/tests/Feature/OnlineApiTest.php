@@ -167,6 +167,20 @@ class OnlineApiTest extends TestCase
         $this->assertSame('Cole', $this->getJson('/api/v1/board?kind=week')->json('rows.0.name'));
     }
 
+    public function test_each_limit_counts_only_its_own_kind_of_request(): void
+    {
+        for ($i = 0; $i < 30; $i++) {
+            $this->getJson('/api/v1/board?kind=deep')->assertOk();   // browsing the boards...
+        }
+        $p = $this->join('Late Joiner');                              // ...must not use up the allowance for joining
+        for ($i = 0; $i < 11; $i++) {
+            $this->join("Delver $i");
+        }
+        $this->postJson('/api/v1/players', ['name' => 'One Too Many'])->assertStatus(429); // 12 joins an hour from one address
+        $this->getJson('/api/v1/status')->assertOk();                                       // and reading still works
+        $this->send($p, ['best' => 3])->assertOk();                                         // as does sending a score
+    }
+
     public function test_names_can_be_looked_up_by_id(): void
     {
         $a = $this->join('Asha');

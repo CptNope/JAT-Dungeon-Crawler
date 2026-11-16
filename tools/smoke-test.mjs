@@ -160,13 +160,16 @@ try {
     // 9. a party: a second player (played by this script, straight against the server) joins the hero's room
     const call = async (method, path, body, token) => { const r = await fetch(API + '/api/v1' + path, { method, headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) }, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, json: await r.json().catch(() => null) }; };
     const room = Math.random().toString(36).slice(2, 7).padEnd(5, 'x');
-    const friend = (await call('POST', '/players', { name: 'Friend ' + room.slice(0, 3) })).json;
+    const made = await call('POST', '/players', { name: 'Friend ' + Math.floor(Math.random() * 900 + 100) });
+    check(made.status === 201, 'a second player can join the server (HTTP ' + made.status + ')');
+    const friend = made.json || {};
     await page.evaluate((room) => hearthdeep.debug.partyJoin(room), room);
     check(await until(() => !!hearthdeep.debug.ONLINE.party), 'the hero starts a party on the server');
     const here = await page.evaluate(() => ({ x: hearthdeep.P.x, z: hearthdeep.P.z }));
     const say = (since) => call('POST', `/rooms/${room}/sync`, { presence: { cls: 'ranger', lvl: 9, sc: 'town', x: here.x + 2, z: here.z + 1, f: 0, hp: 77 }, since }, friend.token);
     const first = await say(null);
-    check(first.status === 200 && first.json.peers.length === 2, 'a friend joins with the party code');
+    check(first.status === 200 && first.json.peers.length === 2, 'a friend joins with the party code (HTTP ' + first.status + ')');
+    if (first.status !== 200) throw new Error('the friend could not enter the room: ' + JSON.stringify(first.json));
     const keep = setInterval(() => say(first.json.cursor).catch(() => {}), 1500); // the friend keeps saying where they are
     try {
       check(await until(() => hearthdeep.debug.ONLINE.peers.length === 1 && hearthdeep.debug.ONLINE.avatars.size === 1, null, 25000), 'the friend appears in the village as an avatar');
