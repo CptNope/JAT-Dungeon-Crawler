@@ -445,7 +445,7 @@ function doAct(d) {
     case 'pit': startArena(); return;
     case 'daily': { const c = parseRiftCode(dailyCode()); if (c) startRift(0, false, c); return; }
     case 'seedGo': { const inp = $('#seedIn'), c = findRiftCode(inp && inp.value); if (!c) { const m = $('#seedMsg'); if (m) m.textContent = 'That is not a rift code. Codes look like HD-4-SB-1A2B3C.'; return; } pendingRift = null; startRift(0, false, c); return; }
-    case 'copyCode': { const link = canLink(), t = link ? `Race me in Hearthdeep, same floors, same foes: ${riftLink(d.code)}` : d.code; try { navigator.clipboard.writeText(t).then(() => toast(link ? 'Challenge link copied. Send it to a friend.' : 'Code copied: ' + t, 'var(--ok)'), () => toast(t, 'var(--muted)', true)); } catch (err) { toast(t, 'var(--muted)', true); } return; }
+    case 'copyCode': { copyChallenge(d.code, +d.secs || 0); return; }
     case 'cvBuy': caravanBuy(+d.i); break;
     case 'cvLook': Panel.cvLook = +d.i; break;
     default: if (settingsAct(d) || onlineAct(d)) break; if (metaAct(d, it) === 'stop') return;

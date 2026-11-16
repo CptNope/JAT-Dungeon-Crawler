@@ -408,9 +408,9 @@ function updCamera(dt) {
 function lightForView() {
   if (!LV || LV.type !== 'dungeon') return;
   const top = SET.cam === 'top';
-  torch.intensity = top ? 85 : 30; torch.distance = top ? 32 : 22;
+  torch.intensity = top ? 96 : 30; torch.distance = top ? 34 : 22;
   if (riftMod('dark')) { torch.distance *= 0.55; torch.intensity *= 0.75; }
-  hemi.intensity = top ? 3.0 : 2.4;
+  hemi.intensity = top ? 3.7 : 2.4;
   // overhead, the lantern is high and its shadows barely show, while its six-sided shadow pass is the costliest
   // thing in the frame; contact shadows carry the overhead look instead. Toggling it rebuilds shaders, so warm them.
   const cast = Q.torchShadow && !top;
@@ -654,6 +654,7 @@ function normalizeSave(s) {
   if (typeof s.shards !== 'number') s.shards = 0;
   if (!s.story || typeof s.story !== 'object' || !Array.isArray(s.story.pages)) s.story = null;
   if (!s.seedBest || typeof s.seedBest !== 'object') s.seedBest = {};
+  if (s.lastRift && (typeof s.lastRift !== 'object' || typeof s.lastRift.code !== 'string' || !isFinite(s.lastRift.secs))) delete s.lastRift;
   if (!s.rift || typeof s.rift !== 'object') s.rift = { max: 1, best: {} };
   // repair anything a bad write or an old version could have left behind
   for (const k of ['gold', 'xp', 'kills', 'deaths', 'runs', 'best', 'bossKills', 'potions', 'gpotions', 'scrolls', 'shards', 'time']) if (!Number.isFinite(s[k]) || s[k] < 0) s[k] = d[k] || 0;

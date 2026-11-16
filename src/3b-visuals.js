@@ -169,6 +169,7 @@ function buildDungeonVisuals() {
   makeEnv(tint(B.amb, 0.6), tint(B.fog, 2.5), 0x050508, B.torch);
   scene.environmentIntensity = 0.5;
 }
+const _capTint = new THREE.Color();
 function wallHeight() { return SET.cam === 'top' ? 1.35 : 3.4; }
 function layoutWalls() {
   const L = LV; if (!L || L.type !== 'dungeon') return;
@@ -180,6 +181,8 @@ function layoutWalls() {
     walls.push({ x: t.i + 0.5, y: h / 2, z: t.j + 0.5, sx: 1, sy: h, sz: 1, c: grey(t.v) });
     caps.push({ x: t.i + 0.5, y: h + 0.02, z: t.j + 0.5, sx: 1.02, sy: 0.04, sz: 1.02 });
   }
+  // wall tops take a little of the biome's stone colour, so the mass of the walls reads apart from the unlit void beyond
+  W.cap.color.setHex(0x15151c).lerp(_capTint.setHex(B.wall), 0.3);
   const objs = [];
   objs.push(instanced(G.box, W.wall, walls, { keep: true, cast: true }));
   objs.push(instanced(G.box, W.cap, caps, { keep: true, receive: false }));

@@ -75,6 +75,7 @@ button:focus-visible{outline:2px solid var(--brass-2);outline-offset:2px}
 #toasts{position:absolute;right:calc(12px + env(safe-area-inset-right,0px));top:calc(222px + env(safe-area-inset-top,0px));display:grid;gap:4px;justify-items:end;width:min(320px,60vw)}
 .toast{padding:5px 10px;background:var(--shade);border-left:3px solid var(--brass);font-size:14px;animation:tin .25s ease-out;max-width:100%}
 .toast.big{font-family:var(--f-display);font-size:18px}
+.toast.dare{display:grid;gap:6px;justify-items:end;pointer-events:auto;padding:8px 10px}
 @keyframes tin{from{transform:translateX(16px);opacity:0}to{transform:none;opacity:1}}
 #banner{position:absolute;top:28%;left:50%;transform:translateX(-50%);text-align:center;font-family:var(--f-display);font-size:clamp(28px,6vw,52px);color:var(--brass-2);text-shadow:0 3px 14px #000;opacity:0;transition:opacity .4s;width:90%;text-wrap:balance}
 #banner small{display:block;font-family:var(--f-body);font-size:15px;color:var(--fg);letter-spacing:.12em;text-transform:uppercase;margin-top:6px}

@@ -27,7 +27,7 @@ No download, no account. Keyboard and mouse, gamepad or touch. Installs to a pho
 - **Loot worth chasing.** Five rarities, sets, gems and sockets, sixteen legendary powers, Ancient and Primal gear, crafting, upgrades and imprinting.
 - **A home to build.** House, workbench, garden, kennel, trophy hall and a yard, in a village with a day and night cycle, weather and seasonal festivals.
 - **Three ways to look at it.** Overhead, third person and first person, switchable at any moment.
-- **Race your friends.** Every rift has a code. Copy a challenge link and anyone who opens it plays the same floors and the same foes; there is a daily seed and a weekly rift for everyone.
+- **Race your friends.** Every rift has a code. Seal one and the game offers a challenge link with your time on the spot; anyone who opens it plays the same floors and the same foes. There is a daily seed and a weekly rift for everyone.
 - **Built for everyone.** Colour-blind palettes, four interface sizes, reduce-motion, three difficulties, full key rebinding and screen-reader roles.
 
 It is about 7,300 lines of plain JavaScript on [three.js](https://threejs.org/) r186 with no other dependencies and no build tooling beyond a shell script. Every texture, model, sound effect and piece of music is generated in code; the repository holds no art or audio files beyond the app icons.
@@ -36,7 +36,7 @@ It is about 7,300 lines of plain JavaScript on [three.js](https://threejs.org/) 
 
 **In the browser:** <https://cptnope.github.io/JAT-Dungeon-Crawler/>
 
-**Challenge a friend:** at the Delve, open Rift Trials and press *Copy challenge link*. The link looks like `https://cptnope.github.io/JAT-Dungeon-Crawler/?rift=HD-4-SB-1A2B3C`; whoever opens it finds the same rift waiting for them. Pasting a whole message into *Play a code* works too.
+**Challenge a friend:** seal any rift and press *Copy challenge link* when it is offered (on a phone, *Send challenge* opens the share sheet), or find your last rift and the daily seed under Rift Trials at the Delve. The link looks like `https://cptnope.github.io/JAT-Dungeon-Crawler/?rift=HD-4-SB-1A2B3C`; whoever opens it finds the same rift waiting for them. Pasting a whole message into *Play a code* works too.
 
 **Host it yourself:** any static host works (GitHub Pages: Settings → Pages → deploy from `main`, root). Locally, ES modules need a server:
 
@@ -117,7 +117,7 @@ Every key below can be rebound in **Settings → Controls** (arrow keys, Shift a
 - **Story**: Elder Maren tells an eight-chapter tale as you slay each biome's keeper, sixteen pages of Aldric's journal lie in the deep, and the first time you reach depth 40 the last keeper is the Hollow King, with an ending. The deep goes on after it.
 - **Elements and combos**: weapons hit physical (staves arcane); Ember Nova and Meteor burn, Blink freezes, Rain of Arrows is lightning. Every biome resists some elements and fears others. Chill a chilled foe to freeze it; a critical or heavy hit shatters a frozen foe; fire on a chilled foe is a thermal shock; lightning on a burning foe overloads.
 - **Perfect rolls and parries**: roll through a blow at the last moment, or swing into an enemy's strike as it lands, for a guaranteed critical (and, for rolls, a moment of slow motion and shorter cooldowns).
-- **Sharing**: a run card image of your hero and records, a photo mode, and rift seed codes (a daily code everyone shares, or any code a friend sends). On a web host a code travels as a challenge link (`?rift=HD-4-SB-1A2B3C`) that leaves the rift waiting at the Delve for whoever opens it.
+- **Sharing**: a run card image of your hero and records, a photo mode, and rift seed codes (a daily code everyone shares, or any code a friend sends). On a web host a code travels as a challenge link (`?rift=HD-4-SB-1A2B3C`) that leaves the rift waiting at the Delve for whoever opens it. Every rift now has a seed of its own, so any run can be shared after the fact, and ordinary rifts draw their guardian from all five instead of always meeting the first.
 - **Rift Trials**: three-floor timed runs from the Delve with one to three modifiers (Swift, Brutal, Horde, Elite, Glass, Lightless, Volatile, Draining, Frenzied) and a Rift Guardian sealing the last floor. Beat par to unlock the next tier and double the rift shards.
 - **Weekly Rift**: the same seeded floors and modifiers for everyone each week, with your best time recorded.
 - **The Pit**: endless arena waves that grow deeper, with a pack leader every fifth wave and a Pit Champion every tenth; leave between waves to keep your winnings, and falling there costs no gold.

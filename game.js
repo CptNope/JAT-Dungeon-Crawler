@@ -1752,6 +1752,7 @@ function buildDungeonVisuals() {
   makeEnv(tint(B.amb, 0.6), tint(B.fog, 2.5), 0x050508, B.torch);
   scene.environmentIntensity = 0.5;
 }
+const _capTint = new THREE.Color();
 function wallHeight() { return SET.cam === 'top' ? 1.35 : 3.4; }
 function layoutWalls() {
   const L = LV; if (!L || L.type !== 'dungeon') return;
@@ -1763,6 +1764,8 @@ function layoutWalls() {
     walls.push({ x: t.i + 0.5, y: h / 2, z: t.j + 0.5, sx: 1, sy: h, sz: 1, c: grey(t.v) });
     caps.push({ x: t.i + 0.5, y: h + 0.02, z: t.j + 0.5, sx: 1.02, sy: 0.04, sz: 1.02 });
   }
+  // wall tops take a little of the biome's stone colour, so the mass of the walls reads apart from the unlit void beyond
+  W.cap.color.setHex(0x15151c).lerp(_capTint.setHex(B.wall), 0.3);
   const objs = [];
   objs.push(instanced(G.box, W.wall, walls, { keep: true, cast: true }));
   objs.push(instanced(G.box, W.cap, caps, { keep: true, receive: false }));
@@ -3975,9 +3978,9 @@ function updCamera(dt) {
 function lightForView() {
   if (!LV || LV.type !== 'dungeon') return;
   const top = SET.cam === 'top';
-  torch.intensity = top ? 85 : 30; torch.distance = top ? 32 : 22;
+  torch.intensity = top ? 96 : 30; torch.distance = top ? 34 : 22;
   if (riftMod('dark')) { torch.distance *= 0.55; torch.intensity *= 0.75; }
-  hemi.intensity = top ? 3.0 : 2.4;
+  hemi.intensity = top ? 3.7 : 2.4;
   // overhead, the lantern is high and its shadows barely show, while its six-sided shadow pass is the costliest
   // thing in the frame; contact shadows carry the overhead look instead. Toggling it rebuilds shaders, so warm them.
   const cast = Q.torchShadow && !top;
@@ -4221,6 +4224,7 @@ function normalizeSave(s) {
   if (typeof s.shards !== 'number') s.shards = 0;
   if (!s.story || typeof s.story !== 'object' || !Array.isArray(s.story.pages)) s.story = null;
   if (!s.seedBest || typeof s.seedBest !== 'object') s.seedBest = {};
+  if (s.lastRift && (typeof s.lastRift !== 'object' || typeof s.lastRift.code !== 'string' || !isFinite(s.lastRift.secs))) delete s.lastRift;
   if (!s.rift || typeof s.rift !== 'object') s.rift = { max: 1, best: {} };
   // repair anything a bad write or an old version could have left behind
   for (const k of ['gold', 'xp', 'kills', 'deaths', 'runs', 'best', 'bossKills', 'potions', 'gpotions', 'scrolls', 'shards', 'time']) if (!Number.isFinite(s[k]) || s[k] < 0) s[k] = d[k] || 0;
@@ -5313,8 +5317,8 @@ function startRift(t, weekly, coded) {
   let mods, seed = 0;
   if (coded) { t = coded.tier; mods = coded.mods; seed = coded.seed; }
   else if (weekly) { const W = weeklyDef(); t = W.tier; mods = W.mods; seed = W.seed; }
-  else { const n = t >= 10 ? 3 : t >= 4 ? 2 : 1, keys = Object.keys(RIFT_MODS); mods = []; while (mods.length < n) { const m = pick(keys); if (!mods.includes(m)) mods.push(m); } }
-  startDelve(riftDepth(t), [], { mode: 'rift', rift: { tier: t, mods, floor: 1, t0: performance.now(), par: riftPar(t), weekly: !!weekly, seed, code: coded ? coded.code : null } });
+  else { const n = t >= 10 ? 3 : t >= 4 ? 2 : 1, keys = Object.keys(RIFT_MODS); mods = []; while (mods.length < n) { const m = pick(keys); if (!mods.includes(m)) mods.push(m); } seed = (Math.floor(Math.random() * 0xfffffffe) + 1) >>> 0; } // a seed of its own, so any rift can be shared afterwards
+  startDelve(riftDepth(t), [], { mode: 'rift', rift: { tier: t, mods, floor: 1, t0: performance.now(), par: riftPar(t), weekly: !!weekly, seed, code: coded ? coded.code : null, share: coded ? coded.code : riftCode(t, mods, seed) } });
   hint('rift'); ghostRecStart(); if (weekly) autoGhost();
   banner(weekly ? 'Weekly Rift' : coded ? 'Seeded rift' : `Rift tier ${t}`, mods.map((m) => RIFT_MODS[m].n).join(' · '));
 }
@@ -5350,6 +5354,7 @@ function riftComplete(e) {
   if (!S.rift.best[t] || secs < S.rift.best[t]) S.rift.best[t] = secs;
   if (R.code) { S.seedBest = S.seedBest || {}; if (!S.seedBest[R.code] || secs < S.seedBest[R.code]) S.seedBest[R.code] = secs; }
   if (R.weekly) { const k = weeklyDef().key; if (!S.weekly || S.weekly.key !== k) S.weekly = { key: k, best: null, tries: 0 }; if (!S.weekly.best || secs < S.weekly.best) S.weekly.best = secs; submitBoard({ time: secs, ghost: ghostString(R) }); }
+  if (R.share) { S.lastRift = { code: R.share, secs, tier: t }; dareToast(R.share, secs); }
   partyDone(secs);
   stat('rifts');
   gainXP(80 * t + 40);
@@ -5482,6 +5487,8 @@ function riftHtml() {
       <button class="btn" type="button" data-act="weekly">Enter</button></div>
     <div class="row"><div><div class="t">Daily seed<small>today's floors, the same for anyone with the code</small></div>${(() => { const c = dailyCode(), p = parseRiftCode(c), b = S.seedBest && S.seedBest[c]; return `<div class="d"><code>${c}</code> · tier ${p.tier} · ${p.mods.map((m) => RIFT_MODS[m].n).join(', ')}${b ? ` · <span style="color:var(--ok)">your best ${fmtClock(b)}</span>` : ''}</div><div class="acts"><button class="btn ghost sm" type="button" data-act="copyCode" data-code="${c}">${canLink() ? 'Copy challenge link' : 'Copy code'}</button></div>`; })()}</div>
       <button class="btn" type="button" data-act="daily">Enter</button></div>
+${S.lastRift && parseRiftCode(S.lastRift.code) ? `<div class="row"><div><div class="t">Your last rift<small>dare a friend to beat your time on the same floors</small></div><div class="d"><code>${esc(S.lastRift.code)}</code> · tier ${S.lastRift.tier} · sealed in ${fmtClock(S.lastRift.secs)}</div></div>
+      <button class="btn ghost" type="button" data-act="copyCode" data-code="${esc(S.lastRift.code)}" data-secs="${Math.round(S.lastRift.secs)}">${canLink() ? 'Copy challenge link' : 'Copy code'}</button></div>` : ''}
     <div class="row"><div><div class="t">Play a code<small>a friend's rift, floor for floor</small></div><input id="seedIn" class="code-in" type="text" placeholder="HD-4-SB-1A2B3C" value="${pendingRift ? pendingRift.code : ''}" autocomplete="off" spellcheck="false"><div class="hint" id="seedMsg"></div></div>
       <button class="btn ghost" type="button" data-act="seedGo">Play</button></div>
     </div>`;
@@ -6073,7 +6080,7 @@ function doAct(d) {
     case 'pit': startArena(); return;
     case 'daily': { const c = parseRiftCode(dailyCode()); if (c) startRift(0, false, c); return; }
     case 'seedGo': { const inp = $('#seedIn'), c = findRiftCode(inp && inp.value); if (!c) { const m = $('#seedMsg'); if (m) m.textContent = 'That is not a rift code. Codes look like HD-4-SB-1A2B3C.'; return; } pendingRift = null; startRift(0, false, c); return; }
-    case 'copyCode': { const link = canLink(), t = link ? `Race me in Hearthdeep, same floors, same foes: ${riftLink(d.code)}` : d.code; try { navigator.clipboard.writeText(t).then(() => toast(link ? 'Challenge link copied. Send it to a friend.' : 'Code copied: ' + t, 'var(--ok)'), () => toast(t, 'var(--muted)', true)); } catch (err) { toast(t, 'var(--muted)', true); } return; }
+    case 'copyCode': { copyChallenge(d.code, +d.secs || 0); return; }
     case 'cvBuy': caravanBuy(+d.i); break;
     case 'cvLook': Panel.cvLook = +d.i; break;
     default: if (settingsAct(d) || onlineAct(d)) break; if (metaAct(d, it) === 'stop') return;
@@ -6584,6 +6591,21 @@ try { pendingRift = findRiftCode(new URLSearchParams(location.search).get('rift'
 function announcePendingRift() {
   if (!pendingRift) return;
   toast(`A friend's rift is waiting: ${pendingRift.code} (tier ${pendingRift.tier}). Walk to the Delve and choose Rift Trials to race it.`, 'var(--brass)', true);
+}
+function copyChallenge(code, secs) {
+  const link = canLink(), say = secs ? `I sealed this Hearthdeep rift in ${fmtClock(secs)}. Same floors, same foes. Beat it:` : 'Race me in Hearthdeep, same floors, same foes:';
+  const t = link ? `${say} ${riftLink(code)}` : code;
+  // on a phone the share sheet is the natural way to send a link; everywhere else it goes to the clipboard
+  if (link && navigator.share && window.matchMedia('(pointer: coarse)').matches) { navigator.share({ title: 'Hearthdeep', text: say, url: riftLink(code) }).catch(() => {}); return; }
+  try { navigator.clipboard.writeText(t).then(() => toast(link ? 'Challenge link copied. Send it to a friend.' : 'Code copied: ' + t, 'var(--ok)'), () => toast(t, 'var(--muted)', true)); } catch (err) { toast(t, 'var(--muted)', true); }
+}
+// the moment a rift is sealed is when a time is worth showing off: offer the link there, and keep it in the Delve for later
+function dareToast(code, secs) {
+  const box = $('#toasts'), el = document.createElement('div'); el.className = 'toast big dare';
+  const s = document.createElement('span'); s.textContent = `Sealed in ${fmtClock(secs)}. Dare a friend to beat it.`;
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'btn sm'; b.textContent = canLink() ? (navigator.share && window.matchMedia('(pointer: coarse)').matches ? 'Send challenge' : 'Copy challenge link') : 'Copy code';
+  b.addEventListener('click', () => { copyChallenge(code, secs); el.remove(); });
+  el.append(s, b); box.prepend(el); setTimeout(() => el.remove(), 14000);
 }
 function dailyCode() {
   const d = new Date(), key = `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
@@ -7318,5 +7340,5 @@ function boot(data) {
 }
 if (window.claude && window.claude.hot && window.claude.hot.snapshot) window.claude.hot.snapshot(() => ({ S, started }));
 if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(boot); else boot((window.claude && window.claude.hot && window.claude.hot.data) || {});
-return { get S() { return S; }, get RUN() { return RUN; }, get P() { return P; }, get LV() { return LV; }, enemies, renderer, startDelve, begin, freshHero, openPanel, closePanel, loadDungeon, get ready() { return levelReady; }, perf, debug: { parseRiftCode, setTouchMode, returnToTown, afterGear, DBG, stick, interacts, interact, usePotion, get skillCd() { return skillCd; }, isPaused, snapCamera, nextFloor, loadTown, rollCaravan, startRift, startArena, die, gainXP, hurtPlayer, calcStats, xpNeed, ARCH, BIOMES, genItem, makeSetItem, scene, sun, hemi, sky, walkable, spawnEnemy, bossPattern, get LVL() { return LV; }, applyTimeOfDay, get pet() { return pet; }, villagers, zones, chooseClass, checkAch, playerAttack, CAM, setCamMode, useSkill, cycleLock, get lockT() { return lockT; }, corpses, skillCd, questEvent, makeQuestOffers, claimQuest, get trail() { return trail; }, spawnDrop, bossIntro, LEGENDS, applyLoadout, ascend, gainParagon, GUARDIANS, season, minions, remains, initOnline, ONLINE, submitBoard, get drops() { return drops; } } };
+return { get S() { return S; }, get RUN() { return RUN; }, get P() { return P; }, get LV() { return LV; }, enemies, renderer, startDelve, begin, freshHero, openPanel, closePanel, loadDungeon, get ready() { return levelReady; }, perf, debug: { damageEnemy, parseRiftCode, setTouchMode, returnToTown, afterGear, DBG, stick, interacts, interact, usePotion, get skillCd() { return skillCd; }, isPaused, snapCamera, nextFloor, loadTown, rollCaravan, startRift, startArena, die, gainXP, hurtPlayer, calcStats, xpNeed, ARCH, BIOMES, genItem, makeSetItem, scene, sun, hemi, sky, walkable, spawnEnemy, bossPattern, get LVL() { return LV; }, applyTimeOfDay, get pet() { return pet; }, villagers, zones, chooseClass, checkAch, playerAttack, CAM, setCamMode, useSkill, cycleLock, get lockT() { return lockT; }, corpses, skillCd, questEvent, makeQuestOffers, claimQuest, get trail() { return trail; }, spawnDrop, bossIntro, LEGENDS, applyLoadout, ascend, gainParagon, GUARDIANS, season, minions, remains, initOnline, ONLINE, submitBoard, get drops() { return drops; } } };
 };
