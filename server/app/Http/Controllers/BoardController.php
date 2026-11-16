@@ -38,6 +38,6 @@ class BoardController extends Controller
 
     public function status(): JsonResponse
     {
-        return response()->json(['ok' => true, 'week' => Week::key()]);
+        return response()->json(['ok' => true, 'week' => Week::key(), 'rooms' => true]); // rooms: this server can host parties
     }
 }

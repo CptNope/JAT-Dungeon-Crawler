@@ -1,8 +1,8 @@
 # Hearthdeep online server
 
-A small Laravel 13 API that gives the game leaderboards and ghost races on any web host: deepest descent, and the fastest Weekly Rift each week with a ghost to race. It needs PHP 8.3 or newer and MySQL (or SQLite). There are no WebSockets and no background workers, so it runs as an ordinary Laravel application.
+A small Laravel 13 API that gives the game its online play on any web host: leaderboards (deepest descent, and the fastest Weekly Rift each week with a ghost to race) and parties (friends who share a code see each other in the village and in the same rift, and can call each other into one). It needs PHP 8.3 or newer and MySQL (or SQLite). There are no WebSockets and no background workers, so it runs as an ordinary Laravel application.
 
-Parties (seeing friends in the village, racing side by side) are not part of this server yet; they still work only on the published claude.ai page.
+Parties work by polling: each browser in a party asks the server about twice a second who is there and says where its own hero is. That is light for a few parties at once (each player costs about two small requests a second) and needs nothing beyond PHP and the database. If parties get busy, the same three room calls can be moved to WebSockets (Laravel Reverb) without changing the game. In a party each player still fights their own monsters; shared combat is not something this server does.
 
 ## What it stores
 
@@ -10,6 +10,7 @@ Parties (seeing friends in the village, racing side by side) are not part of thi
 | --- | --- |
 | `players` | A random id, the display name the player chose, and the hash of a random token. No email, password or IP address. |
 | `entries` | One line per player: deepest depth, class, level, Paragon, and this week's best rift time with its recorded path. |
+| `room_members`, `room_messages` | Who is in each party right now and where their hero is, and calls into a rift. Rows are dropped within a minute or two of going quiet. |
 
 A browser becomes a player the first time it sends a score or saves a name. The server replies with a token once; the game keeps it in the browser's storage and sends it with later scores. Clearing browser data means starting again as a new player.
 
@@ -27,6 +28,9 @@ All under `/api/v1`. Replies are JSON.
 | `POST /players` | anyone, 12 an hour per address | Join; replies `{ id, name, token }` |
 | `GET /me`, `PATCH /me` | token | Read or change the display name |
 | `PUT /me/entry` | token | Send the line after a run |
+| `POST /rooms/{code}/sync` | token, 240 a minute per player | Say where my hero is; hear who is in the party and what was said since `since` |
+| `POST /rooms/{code}/emit` | token, 20 a minute | Call the party into a rift, or announce a sealed rift |
+| `POST /rooms/{code}/leave` | token | Leave the party |
 
 The server decides what a sent line changes: depth only ever rises, a weekly time is kept only when it is for the current week and faster than the stored one, and a new week clears the last. Values outside the bounds in `config/hearthdeep.php` are refused, and a weekly time must come with a recorded path long enough to have taken that time. These checks stop typos and casual tampering; scores still come from the player's browser, so a determined cheat can post a false one. `php artisan hearthdeep:remove <id>` takes someone off the boards.
 
@@ -96,4 +100,4 @@ There is no admin website. These run over SSH in `server/`:
 | `php artisan hearthdeep:remove <id>` | Remove a player and their scores |
 | `php artisan hearthdeep:prune` | Drop players who joined over 30 days ago and never sent a score |
 
-`hearthdeep:prune` is safe to run from a daily cron job. Nothing else needs scheduling.
+`hearthdeep:prune` is safe to run from a daily cron job; it also clears out old party rows. Nothing else needs scheduling.

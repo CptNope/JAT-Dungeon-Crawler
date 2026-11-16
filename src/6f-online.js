@@ -72,11 +72,50 @@ const restUser = {
     const out = {}; for (const i of ids) out[i] = { name: REST.names.get(i) || '' }; return out;
   },
 };
+// Party rooms over plain HTTP: about twice a second this browser tells the server where its hero is and hears who
+// else is in the room and anything said since. It offers the same join / onPeers / on / presence / emit / leave
+// shape as the published page's live rooms, so the party code further down runs unchanged.
+function restRoom() {
+  return {
+    async join(name) {
+      await restJoin();
+      const code = String(name).replace(/^hd-party-/, ''), path = '/rooms/' + encodeURIComponent(code);
+      const R = { pres: {}, since: null, known: new Map(), timer: 0, gone: false, fails: 0, n: 0, peersCb: null, handlers: {},
+        onPeers(cb) { R.peersCb = cb; }, on(ev, cb) { R.handlers[ev] = cb; },
+        presence(p) { R.pres = p; return Promise.resolve(); },
+        emit(ev, data) { return restCall('POST', path + '/emit', { data }, true); },
+        async leave() { R.gone = true; clearTimeout(R.timer); try { await restCall('POST', path + '/leave', {}, true); } catch (err) { /* the server forgets a silent member in seconds */ } } };
+      const hear = (j) => {
+        const now = new Map(), joined = [], left = [];
+        for (const q of Array.isArray(j.peers) ? j.peers : []) {
+          const id = String(q.id); REST.names.set(id, String(q.name || ''));
+          let p = R.known.get(id); if (!p) { p = { peer: id, by: id, isMe: id === REST.id, presence: {} }; joined.push(p); }
+          p.presence = q.presence && typeof q.presence === 'object' ? q.presence : {}; now.set(id, p); // the same object each time: the party list holds on to it
+        }
+        for (const [id, p] of R.known) if (!now.has(id)) left.push(p);
+        R.known = now; R.n++;
+        if (R.peersCb && (joined.length || left.length || R.n % 10 === 0)) R.peersCb({ peers: [...now.values()], joined: R.n === 1 ? [] : joined, left });
+        if (typeof j.cursor === 'number') R.since = j.cursor;
+        for (const m of Array.isArray(j.messages) ? j.messages : []) if (R.handlers.party) R.handlers.party({ data: m.data, by: String(m.by), isMe: String(m.by) === REST.id });
+      };
+      const ask = () => restCall('POST', path + '/sync', { presence: R.pres, since: R.since }, true);
+      const loop = async () => {
+        if (R.gone) return;
+        try { hear(await ask()); R.fails = 0; }
+        catch (err) { R.fails++; if (err.status === 401 || err.status === 409 || R.fails > 30) { R.gone = true; if (ONLINE.party === R) { partyLeave(true); toast(err.status === 409 ? 'That party is full.' : 'Lost touch with the party.', 'var(--bad)'); } return; } }
+        R.timer = setTimeout(loop, document.hidden ? 4000 : R.fails ? 2500 : 500); // slower in a background tab or when the server is struggling
+      };
+      const first = await ask(); // a full room or a dead server fails the join here, before the party starts
+      setTimeout(() => { hear(first); R.timer = setTimeout(loop, 500); }, 0); // after the caller has attached its listeners
+      return R;
+    },
+  };
+}
 async function initRestOnline() {
   REST.base = restBase(); if (!/^https?:\/\//.test(REST.base)) return;
   try { const j = JSON.parse(localStorage.getItem(REST_KEY) || 'null'); if (j && j.base === REST.base && j.token) { REST.id = j.id; REST.token = j.token; REST.name = j.name || ''; REST.pending = j.pending && typeof j.pending === 'object' ? j.pending : null; REST.names.set(REST.id, REST.name); } } catch (err) { /* start fresh */ }
-  try { const st = await restCall('GET', '/status'); if (!st.ok) return; } catch (err) { return; } // server down or not allowed from this page: stay single-player
-  Object.assign(ONLINE, { db: restDb(), user: restUser, room: null, rest: true, me: REST.id, ready: true });
+  let st; try { st = await restCall('GET', '/status'); if (!st.ok) return; } catch (err) { return; } // server down or not allowed from this page: stay single-player
+  Object.assign(ONLINE, { db: restDb(), user: restUser, room: st.rooms ? restRoom() : null, rest: true, me: REST.id, ready: true });
   document.body.classList.add('online');
   if (Panel.kind === 'online') renderPanel();
   restFlush().catch(() => {});
@@ -181,7 +220,7 @@ function makeAvatar(cls, col, label) {
 function dropAvatar(A) { if (!A) return; world.remove(A.g); if (A.label) removeLabel(A.label); }
 function moveAvatar(A, dt) {
   const dx = A.tx - A.x, dz = A.tz - A.z, d = Math.hypot(dx, dz);
-  if (d > 6) { A.x = A.tx; A.z = A.tz; } else { const k = Math.min(1, dt * 10); A.x += dx * k; A.z += dz * k; }
+  if (d > 6) { A.x = A.tx; A.z = A.tz; } else { const k = Math.min(1, dt * (A.slow ? 4.5 : 10)); A.x += dx * k; A.z += dz * k; } // slow: positions arrive twice a second, so ease over the gap
   if (d > 0.05) A.face = Math.atan2(dx, dz);
   A.g.position.set(A.x, 0, A.z); A.g.rotation.y += angDiff(A.face, A.g.rotation.y) * Math.min(1, dt * 10);
   A.u.uWalk.value += dt * (d > 0.05 ? 9 : 0); A.u.uAmp.value = lerp(A.u.uAmp.value, d > 0.05 ? 0.8 : 0, Math.min(1, dt * 8));
@@ -212,7 +251,7 @@ async function partyJoin(code) {
     R.on('party', (m) => partyMsg(m));
     toast(`In party ${code.toUpperCase()}`, '#9fd8ff', true);
     partyPresence(true);
-  } catch (err) { toast(err && err.code === 'not_permitted' ? 'Parties are not available on this page.' : 'Could not join the party. Try again.', 'var(--bad)'); }
+  } catch (err) { toast(err && err.code === 'not_permitted' ? 'Parties are not available on this page.' : err && err.status === 409 ? 'That party is full.' : 'Could not join the party. Try again.', 'var(--bad)'); }
   if (Panel.kind === 'online') renderPanel();
 }
 async function partyLeave(quiet) {
@@ -235,7 +274,7 @@ function updParty(dt) {
     const q = p.presence || {}; if (!q.sc || q.sc !== sc || typeof q.x !== 'number' || typeof q.z !== 'number') continue;
     seen.add(p.peer);
     let A = ONLINE.avatars.get(p.peer);
-    if (!A || A.lv !== LV) { if (A) dropAvatar(A); A = makeAvatar(CLASSES[q.cls] ? q.cls : 'warrior', 0x7cff9a, 'Party member'); A.lv = LV; A.x = q.x; A.z = q.z; A.peer = p.peer; ONLINE.avatars.set(p.peer, A); nameAvatar(A, p); }
+    if (!A || A.lv !== LV) { if (A) dropAvatar(A); A = makeAvatar(CLASSES[q.cls] ? q.cls : 'warrior', 0x7cff9a, 'Party member'); A.lv = LV; A.x = q.x; A.z = q.z; A.peer = p.peer; A.slow = !!ONLINE.rest; ONLINE.avatars.set(p.peer, A); nameAvatar(A, p); }
     A.tx = clamp(q.x, 0, 200); A.tz = clamp(q.z, 0, 200); moveAvatar(A, dt);
   }
   for (const [k, A] of ONLINE.avatars) if (!seen.has(k)) { dropAvatar(A); ONLINE.avatars.delete(k); }
