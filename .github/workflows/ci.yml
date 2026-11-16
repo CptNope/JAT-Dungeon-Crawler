@@ -24,3 +24,48 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Smoke test (boot, new hero, short autoplay delve)
         run: node tools/smoke-test.mjs
+
+  leaderboard-server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3' # the oldest version the server supports, and the one composer.lock is resolved for
+          extensions: mbstring, pdo_mysql, pdo_sqlite
+          coverage: none
+      - name: Install the server and run its tests
+        working-directory: server
+        run: |
+          php -v | head -1
+          composer install --no-interaction --prefer-dist --no-progress
+          cp .env.example .env
+          php artisan key:generate
+          php artisan test
+      - name: Run the same tests on MySQL, as on Cloudways
+        working-directory: server
+        run: |
+          sudo systemctl start mysql
+          mysql -uroot -proot -e 'CREATE DATABASE hearthdeep_test CHARACTER SET utf8mb4'
+          DB_CONNECTION=mysql DB_HOST=127.0.0.1 DB_PORT=3306 DB_DATABASE=hearthdeep_test DB_USERNAME=root DB_PASSWORD=root php artisan test
+      - name: Start the server for the game to talk to
+        working-directory: server
+        run: |
+          sed -i 's|^HEARTHDEEP_ORIGINS=.*|HEARTHDEEP_ORIGINS=http://127.0.0.1:4173|' .env
+          touch database/database.sqlite
+          php artisan migrate --force
+          php artisan serve --host=127.0.0.1 --port=8123 > /tmp/server.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8123/api/v1/status && break; sleep 1; done
+      - name: Install headless Chromium
+        run: |
+          npm i --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Play the game against the real server (join, send scores, read both boards)
+        run: SMOKE_PORT=4173 SMOKE_SECONDS=20 HEARTHDEEP_API=http://127.0.0.1:8123 node tools/smoke-test.mjs
+      - name: Server log, if anything failed
+        if: failure()
+        run: tail -n 60 /tmp/server.log server/storage/logs/*.log 2>/dev/null || true

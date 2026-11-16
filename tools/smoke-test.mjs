@@ -16,7 +16,7 @@ const server = http.createServer((req, res) => {
   if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end('not found'); return; }
   res.writeHead(200, { 'content-type': types[path.extname(file)] || 'application/octet-stream' }); fs.createReadStream(file).pipe(res);
 });
-await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+await new Promise((ok) => server.listen(+(process.env.SMOKE_PORT || 0), '127.0.0.1', ok));
 const base = `http://127.0.0.1:${server.address().port}/`;
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
@@ -29,9 +29,12 @@ await page.addInitScript(() => {
   window.__press = (i, on) => { window.__pad.buttons[i] = { pressed: on, touched: on, value: on ? 1 : 0 }; window.__pad.timestamp++; };
   navigator.getGamepads = () => (window.__padOn ? [window.__pad] : []);
 });
+// HEARTHDEEP_API=http://127.0.0.1:8123 points the game at a running leaderboard server (server/) and adds the online checks
+const API = (process.env.HEARTHDEEP_API || '').replace(/\/+$/, '');
+if (API) await page.addInitScript((api) => { window.HEARTHDEEP_API = api; }, API);
 const problems = [];
 page.on('pageerror', (e) => problems.push('page error: ' + String(e).slice(0, 300)));
-page.on('console', (m) => { if (m.type() === 'error' && !/fonts\.|net::ERR_/.test(m.text())) problems.push('console error: ' + m.text().slice(0, 300)); });
+page.on('console', (m) => { if (m.type() === 'error' && !/fonts\.|net::ERR_|status of 422/.test(m.text())) problems.push('console error: ' + m.text().slice(0, 300)); });
 page.on('response', (r) => { if (r.url().startsWith(base) && r.status() >= 400) problems.push(`HTTP ${r.status()}: ${r.url()}`); });
 const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (!ok) problems.push(what); };
 const seconds = +(process.env.SMOKE_SECONDS || 60);
@@ -136,6 +139,24 @@ try {
   check(await page.evaluate(() => !hearthdeep.debug.PHOTO.on), 'B leaves photo mode');
   await page.keyboard.press('F8'); await page.evaluate(() => { window.__padOn = false; }); await page.waitForTimeout(500);
   check(await cap() === kbCap && !(await page.evaluate(() => document.body.classList.contains('pad'))), 'touching the keyboard brings the key names back');
+  // 8. your own leaderboard server, when one is given: join with a name, send a depth and a weekly time, read both boards
+  if (API) {
+    check(await until(() => document.body.classList.contains('online')), 'the game finds the leaderboard server');
+    const tag = 'Smoke ' + Math.random().toString(36).slice(2, 7);
+    await page.evaluate(() => hearthdeep.openPanel('online', 'deep'));
+    check(await until(() => !!document.querySelector('#olName')), 'the Online panel offers a display name');
+    await page.evaluate((tag) => { document.querySelector('#olName').value = tag; document.querySelector('[data-act="olName"]').click(); }, tag);
+    check(await until((tag) => { try { const j = JSON.parse(localStorage.getItem('hearthdeep-online')); return j && j.token && j.name === tag; } catch (e) { return false; } }, tag), 'saving a name joins the boards and remembers this browser');
+    await page.evaluate(() => { hearthdeep.S.best = Math.max(hearthdeep.S.best || 0, 7); return hearthdeep.debug.submitBoard(); });
+    await page.evaluate(() => hearthdeep.debug.submitBoard({ time: 123.4, ghost: Array.from({ length: 500 }, (v, i) => `1.${100 + (i % 40)}.120`).join(',') })); // a path as long as the run, as the game records it
+    await page.evaluate(() => { hearthdeep.closePanel(); hearthdeep.openPanel('online', 'deep'); });
+    check(await until((tag) => { const b = document.querySelector('#pBody .board'); return !!b && b.textContent.includes(tag) && /Depth \d+/.test(b.textContent); }, tag), 'the depth board lists this player');
+    await page.evaluate(() => { hearthdeep.closePanel(); hearthdeep.openPanel('online', 'week'); });
+    check(await until((tag) => { const b = document.querySelector('#pBody .board'); return !!b && b.textContent.includes(tag) && b.textContent.includes('2:03'); }, tag), 'the weekly board shows the time sent (2:03)');
+    await page.evaluate(() => { document.querySelector('#olName').value = '<b>x'; document.querySelector('[data-act="olName"]').click(); });
+    check(await until(() => /cannot be used/.test((document.querySelector('#olMsg') || {}).textContent || '')), 'a name the server refuses is explained, not saved');
+    await page.evaluate(() => hearthdeep.closePanel());
+  }
 } catch (err) { problems.push('test crashed: ' + String(err).slice(0, 400)); }
 await browser.close(); server.close();
 if (problems.length) { console.error('\n' + problems.length + ' problem(s):\n- ' + [...new Set(problems)].join('\n- ')); process.exit(1); }

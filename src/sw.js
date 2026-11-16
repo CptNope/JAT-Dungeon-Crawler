@@ -6,6 +6,7 @@ self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((ks) =
 self.addEventListener('fetch', (e) => {
   const r = e.request; if (r.method !== 'GET') return;
   const u = new URL(r.url);
+  if (u.pathname.includes('/api/')) return; // the leaderboard server is never answered from the cache
   if (u.origin === location.origin) {
     // the game itself: cache first, so it starts offline; a new build ships a new cache
     e.respondWith(caches.match(r, { ignoreSearch: true }).then((hit) => hit || fetch(r).then((res) => { if (res.ok) { const cp = res.clone(); caches.open(V).then((c) => c.put(r, cp)); } return res; })));
