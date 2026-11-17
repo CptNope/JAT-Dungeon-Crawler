@@ -176,7 +176,7 @@ try {
       await page.evaluate(() => hearthdeep.openPanel('online', 'party'));
       check(await until((n) => (document.querySelector('#pBody') || {}).textContent.includes(n), friend.name), 'and is listed in the party panel by name');
       await page.evaluate(() => hearthdeep.closePanel());
-      let seen = null; for (let i = 0; i < 20 && !seen; i++) { const j = (await say(first.json.cursor)).json; seen = j.peers.find((p) => p.id !== friend.id && p.presence.sc === 'town' && typeof p.presence.x === 'number') || null; if (!seen) await page.waitForTimeout(500); }
+      let seen = null; for (let i = 0; i < 20 && !seen; i++) { const j = (await say(first.json.cursor)).json; seen = j.peers.find((p) => p.id !== friend.id && p.presence.sc === 'town' && typeof p.presence.x === 'number' && typeof p.presence.vx === 'number') || null; if (!seen) await page.waitForTimeout(500); }
       check(!!seen, 'the friend is told where the hero is');
       await call('POST', `/rooms/${room}/emit`, { data: { k: 'go', code: 'HD-1-S-ABC123' } }, friend.token);
       check(await until(() => { const el = document.querySelector('#invite'); return !!el && !el.hidden && /HD-1-S-ABC123|rift/i.test(el.textContent); }, null, 25000), "the friend's call into a rift shows as an invitation");

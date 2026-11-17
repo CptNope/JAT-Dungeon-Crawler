@@ -56,7 +56,7 @@ class RoomController extends Controller
         }
 
         return response()->json([
-            'peers' => $members->map(fn ($m) => ['id' => $m->player_id, 'name' => $names[$m->player_id] ?? '', 'presence' => json_decode((string) $m->presence, true) ?: (object) []])->values(),
+            'peers' => $members->map(fn ($m) => ['id' => $m->player_id, 'name' => $names[$m->player_id] ?? '', 'age' => max(0, $now - (int) $m->seen_ms), 'presence' => json_decode((string) $m->presence, true) ?: (object) []])->values(),
             'messages' => $messages->map(fn ($m) => ['id' => $m->id, 'by' => $m->player_id, 'data' => json_decode($m->data, true)])->values(),
             'cursor' => $cursor,
         ]);
@@ -116,6 +116,8 @@ class RoomController extends Controller
             'x' => $num($in['x'] ?? null, 0, 200),
             'z' => $num($in['z'] ?? null, 0, 200),
             'f' => $num($in['f'] ?? null, -7, 7),
+            'vx' => $num($in['vx'] ?? 0, -20, 20) ?? 0,   // tiles a second: lets the others draw this hero where they are by now
+            'vz' => $num($in['vz'] ?? 0, -20, 20) ?? 0,
             'hp' => $num($in['hp'] ?? null, 0, 100),
             'rift' => null,
         ];

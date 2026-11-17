@@ -7592,9 +7592,15 @@ function restRoom() {
     async join(name) {
       await restJoin();
       const code = String(name).replace(/^hd-party-/, ''), path = '/rooms/' + encodeURIComponent(code);
-      const R = { pres: {}, since: null, known: new Map(), timer: 0, gone: false, fails: 0, n: 0, peersCb: null, handlers: {},
+      const R = { pres: {}, presT: 0, since: null, known: new Map(), timer: 0, gone: false, fails: 0, n: 0, peersCb: null, handlers: {},
         onPeers(cb) { R.peersCb = cb; }, on(ev, cb) { R.handlers[ev] = cb; },
-        presence(p) { R.pres = p; return Promise.resolve(); },
+        presence(p) { // note how fast the hero is moving, so the others can draw them where they are now, not where they were
+          const t = performance.now(), o = R.pres;
+          if (o && typeof o.x === 'number' && typeof p.x === 'number' && o.sc === p.sc && t - R.presT > 60) { const k = 1000 / (t - R.presT); p.vx = Math.round((p.x - o.x) * k * 10) / 10; p.vz = Math.round((p.z - o.z) * k * 10) / 10; R.presT = t; R.pres = p; }
+          else if (!o || typeof o.x !== 'number' || o.sc !== p.sc) { p.vx = 0; p.vz = 0; R.presT = t; R.pres = p; }
+          else { p.vx = o.vx || 0; p.vz = o.vz || 0; R.pres = Object.assign(o, p); }
+          return Promise.resolve();
+        },
         emit(ev, data) { return restCall('POST', path + '/emit', { data }, true); },
         async leave() { R.gone = true; clearTimeout(R.timer); try { await restCall('POST', path + '/leave', {}, true); } catch (err) { /* the server forgets a silent member in seconds */ } } };
       const hear = (j) => {
@@ -7602,7 +7608,14 @@ function restRoom() {
         for (const q of Array.isArray(j.peers) ? j.peers : []) {
           const id = String(q.id); REST.names.set(id, String(q.name || ''));
           let p = R.known.get(id); if (!p) { p = { peer: id, by: id, isMe: id === REST.id, presence: {} }; joined.push(p); }
-          p.presence = q.presence && typeof q.presence === 'object' ? q.presence : {}; now.set(id, p); // the same object each time: the party list holds on to it
+          // What arrives is up to a second old. x and z are read every frame by the avatar code, so they are served
+          // as "where this hero has got to by now": the reported spot carried forward along their reported heading.
+          const pr = q.presence && typeof q.presence === 'object' ? q.presence : {}, at = performance.now() - Math.max(0, Math.min(5000, +q.age || 0));
+          if (!p.isMe && typeof pr.x === 'number' && typeof pr.z === 'number' && (pr.vx || pr.vz)) {
+            const x0 = pr.x, z0 = pr.z, vx = +pr.vx || 0, vz = +pr.vz || 0, ahead = () => Math.min(0.6, (performance.now() - at) / 1000) * 0.6; // carried 60% of the way, for at most 0.6 s: about half the trailing, with little overshoot when they stop
+            Object.defineProperty(pr, 'x', { get: () => x0 + vx * ahead(), enumerable: true }); Object.defineProperty(pr, 'z', { get: () => z0 + vz * ahead(), enumerable: true });
+          }
+          p.presence = pr; now.set(id, p); // the same peer object each time: the party list holds on to it
         }
         for (const [id, p] of R.known) if (!now.has(id)) left.push(p);
         R.known = now; R.n++;
@@ -7615,10 +7628,10 @@ function restRoom() {
         if (R.gone) return;
         try { hear(await ask()); R.fails = 0; }
         catch (err) { R.fails++; if (err.status === 401 || err.status === 409 || R.fails > 30) { R.gone = true; if (ONLINE.party === R) { partyLeave(true); toast(err.status === 409 ? 'That party is full.' : 'Lost touch with the party.', 'var(--bad)'); } return; } }
-        R.timer = setTimeout(loop, document.hidden ? 4000 : R.fails ? 2500 : 500); // slower in a background tab or when the server is struggling
+        R.timer = setTimeout(loop, document.hidden ? 4000 : R.fails ? 2500 : 400); // slower in a background tab or when the server is struggling
       };
       const first = await ask(); // a full room or a dead server fails the join here, before the party starts
-      setTimeout(() => { hear(first); R.timer = setTimeout(loop, 500); }, 0); // after the caller has attached its listeners
+      setTimeout(() => { hear(first); R.timer = setTimeout(loop, 400); }, 0); // after the caller has attached its listeners
       return R;
     },
   };
@@ -7732,7 +7745,7 @@ function makeAvatar(cls, col, label) {
 function dropAvatar(A) { if (!A) return; world.remove(A.g); if (A.label) removeLabel(A.label); }
 function moveAvatar(A, dt) {
   const dx = A.tx - A.x, dz = A.tz - A.z, d = Math.hypot(dx, dz);
-  if (d > 6) { A.x = A.tx; A.z = A.tz; } else { const k = Math.min(1, dt * (A.slow ? 4.5 : 10)); A.x += dx * k; A.z += dz * k; } // slow: positions arrive twice a second, so ease over the gap
+  if (d > 6) { A.x = A.tx; A.z = A.tz; } else { const k = Math.min(1, dt * (A.slow ? 7 : 10)); A.x += dx * k; A.z += dz * k; } // slow: polled positions are carried forward between updates, so ease a little more gently
   if (d > 0.05) A.face = Math.atan2(dx, dz);
   A.g.position.set(A.x, 0, A.z); A.g.rotation.y += angDiff(A.face, A.g.rotation.y) * Math.min(1, dt * 10);
   A.u.uWalk.value += dt * (d > 0.05 ? 9 : 0); A.u.uAmp.value = lerp(A.u.uAmp.value, d > 0.05 ? 0.8 : 0, Math.min(1, dt * 8));

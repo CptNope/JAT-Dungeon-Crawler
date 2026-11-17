@@ -30,6 +30,10 @@ class PartyRoomTest extends TestCase
         $this->assertSame(['Asha', 'Brom'], array_column($peers, 'name'));
         $this->assertSame($a['id'], $peers[0]['id']);
         $this->assertSame(['cls' => 'mage', 'lvl' => 12, 'sc' => 'town', 'x' => 40.25, 'hp' => 80], array_intersect_key($peers[0]['presence'], array_flip(['cls', 'lvl', 'sc', 'x', 'hp'])));
+        $this->assertIsInt($peers[0]['age']);                                // how stale each position is, for drawing heroes where they are by now
+        $this->assertGreaterThanOrEqual(0, $peers[0]['age']);
+        $moving = $this->sync($a, 'abc12', ['sc' => 'town', 'x' => 41, 'z' => 31, 'vx' => 4.5, 'vz' => -999])->json('peers.0.presence');
+        $this->assertEquals([4.5, -20], [$moving['vx'], $moving['vz']]);
         $this->sync($a, 'zzz99')->assertOk()->assertJsonCount(1, 'peers'); // another room is another party
     }
 
