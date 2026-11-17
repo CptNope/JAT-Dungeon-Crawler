@@ -1402,8 +1402,8 @@ function weaponMesh(kind) { // points along +z from the grip at the origin
 }
 
 // ================= the delver =================
-function makeHero() {
-  const u = limbU(), C = clsOf(), ck = (S && S.cls) || 'warrior';
+function makeHero(k) { // k: build another class's hero (a party member); without it, the player's own
+  const u = limbU(), ck = (k && CLASSES[k] ? k : (S && S.cls)) || 'warrior', C = CLASSES[ck] || clsOf();
   const steel = limbMat(ck === 'warrior' ? 0x9aa4b2 : ck === 'ranger' ? 0x7a5a3e : ck === 'necro' ? 0x3a3c36 : 0x5a4a7a, { metal: ck === 'warrior' ? 0.75 : 0.1, rough: 0.55, nmap: TEX.plaster.normal, ns: 0.4 }, u), cloth = limbMat(C.col, { rough: 0.9, map: TEX.plaster.map, nmap: TEX.wood.normal, ns: 0.5 }, u), skin = limbMat(0xe2b48f, { rough: 0.6 }, u);
   const leather = limbMat(0x6a4630, { rough: 0.75, map: TEX.plaster.map, nmap: TEX.plaster.normal, ns: 0.8 }, u), hair = limbMat(0x2e2018, { rough: 0.9, nmap: TEX.wood.normal, ns: 0.8 }, u), gold = limbMat(0xe0aa50, { metal: 1, rough: 0.35 }, u);
   const g = new THREE.Group();
@@ -7079,10 +7079,10 @@ function restRoom() {
         if (R.gone) return;
         try { hear(await ask()); R.fails = 0; }
         catch (err) { R.fails++; if (err.status === 401 || err.status === 409 || R.fails > 30) { R.gone = true; if (ONLINE.party === R) { partyLeave(true); toast(err.status === 409 ? 'That party is full.' : 'Lost touch with the party.', 'var(--bad)'); } return; } }
-        R.timer = setTimeout(loop, document.hidden ? 4000 : R.fails ? 2500 : 400); // slower in a background tab or when the server is struggling
+        R.timer = setTimeout(loop, document.hidden ? 4000 : R.fails ? 2500 : 300); // slower in a background tab or when the server is struggling
       };
       const first = await ask(); // a full room or a dead server fails the join here, before the party starts
-      setTimeout(() => { hear(first); R.timer = setTimeout(loop, 400); }, 0); // after the caller has attached its listeners
+      setTimeout(() => { hear(first); R.timer = setTimeout(loop, 300); }, 0); // after the caller has attached its listeners
       return R;
     },
   };
@@ -7187,7 +7187,13 @@ async function autoGhost() { // with no ghost picked, race this week's fastest t
 }
 
 // --- avatars for ghosts and party members: a hero-shaped, translucent figure with a name ---
-function makeAvatar(cls, col, label) {
+function makeAvatar(cls, col, label, solid) {
+  if (solid) { // a party member: a real hero of their class, solid like your own, not the see-through figure a recorded ghost gets
+    const h = makeHero(cls);
+    h.g.traverse((o) => { if (o.material) { levelDisp.push(o.material); if (o.isMesh) o.castShadow = true; } });
+    world.add(h.g);
+    return { g: h.g, u: h.u, x: P.x, z: P.z, tx: P.x, tz: P.z, face: 0, label: addLabel(label, P.x, 2.4, P.z, 'npc') };
+  }
   const cr = makeCreature('villager', CLASSES[cls] ? CLASSES[cls].col : 0x7a8a9a, 0xffffff);
   cr.mats.forEach((m) => { m.transparent = true; m.opacity = 0.55; m.depthWrite = false; if (m.emissive) { m.emissive.set(col); m.emissiveIntensity = 0.5; } levelDisp.push(m); });
   world.add(cr.g);
@@ -7251,7 +7257,7 @@ function updParty(dt) {
     const q = p.presence || {}; if (!q.sc || q.sc !== sc || typeof q.x !== 'number' || typeof q.z !== 'number') continue;
     seen.add(p.peer);
     let A = ONLINE.avatars.get(p.peer);
-    if (!A || A.lv !== LV) { if (A) dropAvatar(A); A = makeAvatar(CLASSES[q.cls] ? q.cls : 'warrior', 0x7cff9a, 'Party member'); A.lv = LV; A.x = q.x; A.z = q.z; A.peer = p.peer; A.slow = !!ONLINE.rest; ONLINE.avatars.set(p.peer, A); nameAvatar(A, p); }
+    if (!A || A.lv !== LV) { if (A) dropAvatar(A); A = makeAvatar(CLASSES[q.cls] ? q.cls : 'warrior', 0x7cff9a, 'Party member', true); A.lv = LV; A.x = q.x; A.z = q.z; A.peer = p.peer; A.slow = !!ONLINE.rest; ONLINE.avatars.set(p.peer, A); nameAvatar(A, p); }
     A.tx = clamp(q.x, 0, 200); A.tz = clamp(q.z, 0, 200); moveAvatar(A, dt);
   }
   for (const [k, A] of ONLINE.avatars) if (!seen.has(k)) { dropAvatar(A); ONLINE.avatars.delete(k); }
@@ -7271,7 +7277,7 @@ async function partyMsg(m) {
 function partyDone(t) { const R = ONLINE.party; if (R) R.emit('party', { k: 'done', t: Math.round(t * 10) / 10 }).catch(() => {}); }
 function showInvite() {
   const I = ONLINE.invite, el = $('#invite'); if (!I || !el) return;
-  $('#invTxt').textContent = `${I.who} calls the party into rift ${I.code}.`;
+  { const c = parseRiftCode(I.code); $('#invTxt').textContent = `${I.who} calls the party into a tier ${c ? c.tier : '?'} rift${c && c.tier * 6 + 4 > S.level ? `. It is hard below about level ${c.tier * 6 + 4}; you are level ${S.level}` : ''}.`; }
   el.hidden = false;
 }
 function hideInvite() { const el = $('#invite'); if (el) el.hidden = true; }
@@ -7294,10 +7300,16 @@ async function onlineHtml(tab) {
       <div class="acts"><button class="btn" type="button" data-act="ptNew">Start a party</button><input id="ptCode" class="lo-name" maxlength="5" placeholder="code" aria-label="Party code" style="max-width:120px;text-transform:uppercase"><button class="btn ghost" type="button" data-act="ptJoin">Join</button></div>`;
     const ids = ONLINE.peers.map((p) => p.by || (p.presence && p.presence.uid)); const nm = await names(ids);
     const list = ONLINE.peers.map((p) => { const q = p.presence || {}, id = p.by || q.uid; return `<li><span class="who">${esc(nm[id] || 'A delver')}<small>${esc(CLASSES[q.cls] ? CLASSES[q.cls].n : '')}${q.lvl ? ` · level ${+q.lvl}` : ''} · ${q.sc === 'town' ? 'in the village' : String(q.sc || '').startsWith('rift') ? `in a rift, floor ${q.rift ? +q.rift.fl : '?'}${q.rift && q.rift.done ? ', sealed' : ''}` : 'delving'}</small></span>${typeof q.hp === 'number' ? `<b>${clamp(+q.hp, 0, 100)}%</b>` : ''}</li>`; }).join('');
-    const code = RUN && RUN.rift && RUN.rift.code ? RUN.rift.code : dailyCode();
+    // A rift the whole party can survive: its tier follows the lowest level present (and what the caller has
+    // unlocked), on fresh floors nobody has seen. The Daily Rift stays on offer for parties that want that race.
+    const low = Math.min(S.level, ...ONLINE.peers.map((p) => +(p.presence && p.presence.lvl) || 1));
+    const tier = clamp(Math.floor((low - 4) / 6), 1, riftMax());
+    if (!ONLINE.pick || ONLINE.pick.tier !== tier) { const keys = Object.keys(RIFT_MODS), mods = []; while (mods.length < (tier >= 10 ? 3 : tier >= 4 ? 2 : 1)) { const m = pick(keys); if (!mods.includes(m)) mods.push(m); } ONLINE.pick = { tier, code: riftCode(tier, mods, (Math.floor(Math.random() * 0xfffffffe) + 1) >>> 0) }; }
+    const code = RUN && RUN.rift && RUN.rift.code ? RUN.rift.code : ONLINE.pick.code, daily = dailyCode(), dT = parseRiftCode(daily).tier;
     return `<div class="purse-row"><span>Party <b>${esc(ONLINE.code.toUpperCase())}</b></span><span>${ONLINE.peers.length} other${ONLINE.peers.length === 1 ? '' : 's'} here</span></div>
       <ol class="board">${list || '<li><span class="who">Waiting for friends<small>Send them the code above</small></span></li>'}</ol>
-      <div class="acts" style="margin-top:12px"><button class="btn" type="button" data-act="ptGo" data-k="${esc(code)}"${LV.type === 'town' ? '' : ' disabled'}>Call everyone into rift ${esc(code)}</button>${ONLINE.invite ? `<button class="btn" type="button" data-act="ptAnswer">Answer ${esc(ONLINE.invite.who)}’s call</button>` : ''}<button class="btn ghost" type="button" data-act="ptLeave">Leave party</button></div>`;
+      <p class="hint" style="margin:10px 0 0">The party rift is set for the lowest level here (level ${low}). Tier ${dT} is hard below about level ${dT * 6 + 4}.</p>
+      <div class="acts" style="margin-top:12px"><button class="btn" type="button" data-act="ptGo" data-k="${esc(code)}"${LV.type === 'town' ? '' : ' disabled'}>Call everyone into a tier ${parseRiftCode(code).tier} rift</button>${daily !== code ? `<button class="btn ghost" type="button" data-act="ptGo" data-k="${esc(daily)}"${LV.type === 'town' ? '' : ' disabled'}>Call the Daily Rift (tier ${dT})</button>` : ''}${ONLINE.invite ? `<button class="btn" type="button" data-act="ptAnswer">Answer ${esc(ONLINE.invite.who)}’s call</button>` : ''}<button class="btn ghost" type="button" data-act="ptLeave">Leave party</button></div>`;
   }
   if (tab === 'day' && ONLINE.rest && REST.daily) return restNameRow() + await dailyHtml();
   return `${ONLINE.rest ? restNameRow() : ''}<p class="hint" style="margin:0 0 12px">${tab === 'deep' ? 'Deepest descent by each delver on this page.' : `This week’s rift (${esc(weeklyDef().key)}), fastest first. Race a ghost to see their path beside yours; with none chosen you race the fastest.`}</p>${await boardHtml(tab === 'deep' ? 'deep' : 'week')}`;
@@ -7309,7 +7321,7 @@ function onlineAct(d) {
     case 'ptNew': partyJoin(newPartyCode()); return true;
     case 'ptJoin': { const v = $('#ptCode'); partyJoin(v ? v.value : ''); return true; }
     case 'ptLeave': partyLeave(false); return true;
-    case 'ptGo': { const c = parseRiftCode(d.k); if (c && LV.type === 'town') { partyGo(c.code); closePanel(); startRift(0, false, c); } return true; }
+    case 'ptGo': { const c = parseRiftCode(d.k); if (c && LV.type === 'town') { partyGo(c.code); ONLINE.pick = null; closePanel(); startRift(0, false, c); } return true; }
     case 'ptAnswer': { const I = ONLINE.invite; ONLINE.invite = null; hideInvite(); const c = I && parseRiftCode(I.code); if (c && LV.type === 'town') { closePanel(); startRift(0, false, c); } return true; }
     default: return false;
   }

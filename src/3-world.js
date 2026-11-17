@@ -224,8 +224,8 @@ function weaponMesh(kind) { // points along +z from the grip at the origin
 }
 
 // ================= the delver =================
-function makeHero() {
-  const u = limbU(), C = clsOf(), ck = (S && S.cls) || 'warrior';
+function makeHero(k) { // k: build another class's hero (a party member); without it, the player's own
+  const u = limbU(), ck = (k && CLASSES[k] ? k : (S && S.cls)) || 'warrior', C = CLASSES[ck] || clsOf();
   const steel = limbMat(ck === 'warrior' ? 0x9aa4b2 : ck === 'ranger' ? 0x7a5a3e : ck === 'necro' ? 0x3a3c36 : 0x5a4a7a, { metal: ck === 'warrior' ? 0.75 : 0.1, rough: 0.55, nmap: TEX.plaster.normal, ns: 0.4 }, u), cloth = limbMat(C.col, { rough: 0.9, map: TEX.plaster.map, nmap: TEX.wood.normal, ns: 0.5 }, u), skin = limbMat(0xe2b48f, { rough: 0.6 }, u);
   const leather = limbMat(0x6a4630, { rough: 0.75, map: TEX.plaster.map, nmap: TEX.plaster.normal, ns: 0.8 }, u), hair = limbMat(0x2e2018, { rough: 0.9, nmap: TEX.wood.normal, ns: 0.8 }, u), gold = limbMat(0xe0aa50, { metal: 1, rough: 0.35 }, u);
   const g = new THREE.Group();
