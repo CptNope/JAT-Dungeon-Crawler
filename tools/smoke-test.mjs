@@ -33,10 +33,14 @@ await page.addInitScript(() => {
 const API = (process.env.HEARTHDEEP_API || '').replace(/\/+$/, '');
 if (API) await page.addInitScript((api) => { window.HEARTHDEEP_API = api; }, API);
 const problems = [];
+// if anything waits forever, say how far the run got and stop, so CI keeps the log
+let lastStep = 'starting';
+const watchdog = setTimeout(() => { console.error('\nGave up after ' + (+(process.env.SMOKE_LIMIT_MIN || 9)) + ' minutes. Last check passed or failed: ' + lastStep); process.exit(1); }, +(process.env.SMOKE_LIMIT_MIN || 9) * 60000);
+watchdog.unref();
 page.on('pageerror', (e) => problems.push('page error: ' + String(e).slice(0, 300)));
 page.on('console', (m) => { if (m.type() === 'error' && !/fonts\.|net::ERR_|status of 422/.test(m.text())) problems.push('console error: ' + m.text().slice(0, 300)); });
 page.on('response', (r) => { if (r.url().startsWith(base) && r.status() >= 400) problems.push(`HTTP ${r.status()}: ${r.url()}`); });
-const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (!ok) problems.push(what); };
+const check = (ok, what) => { lastStep = what; console.log((ok ? 'ok   ' : 'FAIL ') + what); if (!ok) problems.push(what); };
 const seconds = +(process.env.SMOKE_SECONDS || 60);
 
 try {
@@ -159,7 +163,7 @@ try {
     await page.evaluate(() => hearthdeep.closePanel());
 
     // 9. a party: a second player (played by this script, straight against the server) joins the hero's room
-    const call = async (method, path, body, token) => { const r = await fetch(API + '/api/v1' + path, { method, headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) }, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, json: await r.json().catch(() => null) }; };
+    const call = async (method, path, body, token) => { const r = await fetch(API + '/api/v1' + path, { method, signal: AbortSignal.timeout(15000), headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) }, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, json: await r.json().catch(() => null) }; };
     const room = Math.random().toString(36).slice(2, 7).padEnd(5, 'x');
     const made = await call('POST', '/players', { name: 'Friend ' + Math.floor(Math.random() * 900 + 100) });
     check(made.status === 201, 'a second player can join the server (HTTP ' + made.status + ')');
