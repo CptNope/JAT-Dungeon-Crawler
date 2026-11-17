@@ -1,6 +1,6 @@
 # Hearthdeep online server
 
-A small Laravel 13 API that gives the game its online play on any web host: leaderboards (deepest descent, and the fastest Weekly Rift each week with a ghost to race) and parties (friends who share a code see each other in the village and in the same rift, and can call each other into one). It needs PHP 8.3 or newer and MySQL (or SQLite). There are no WebSockets and no background workers, so it runs as an ordinary Laravel application.
+A small Laravel 13 API that gives the game its online play on any web host: leaderboards (deepest descent, the fastest Weekly Rift each week with a ghost to race, and each day's Daily Rift) and parties (friends who share a code see each other in the village and in the same rift, and can call each other into one). It needs PHP 8.3 or newer and MySQL (or SQLite). There are no WebSockets and no background workers, so it runs as an ordinary Laravel application.
 
 Parties work by polling: each browser in a party asks the server about twice a second who is there and says where its own hero is. That is light for a few parties at once (each player costs about two small requests a second) and needs nothing beyond PHP and the database. If parties get busy, the same three room calls can be moved to WebSockets (Laravel Reverb) without changing the game. In a party each player still fights their own monsters; shared combat is not something this server does.
 
@@ -10,6 +10,7 @@ Parties work by polling: each browser in a party asks the server about twice a s
 | --- | --- |
 | `players` | A random id, the display name the player chose, and the hash of a random token. No email, password or IP address. |
 | `entries` | One line per player: deepest depth, class, level, Paragon, and this week's best rift time with its recorded path. |
+| `daily_times` | Each player's best time on each day's Daily Rift. Pruned after two weeks. |
 | `room_members`, `room_messages` | Who is in each party right now and where their hero is, and calls into a rift. Rows are dropped within a minute or two of going quiet. |
 
 A browser becomes a player the first time it sends a score or saves a name. The server replies with a token once; the game keeps it in the browser's storage and sends it with later scores. Clearing browser data means starting again as a new player.
@@ -23,11 +24,13 @@ All under `/api/v1`. Replies are JSON.
 | `GET /status` | anyone | `{ ok, week }`: the server is up, and the week it thinks it is |
 | `GET /board?kind=deep` | anyone | Top descents |
 | `GET /board?kind=week&week=2026-W47` | anyone | That week's rift, fastest first |
+| `GET /daily?day=2026-11-16&code=HD-4-SB-1A2B3C` | anyone | That day's Daily Rift, fastest first |
 | `GET /players?ids=a,b` | anyone | Display names for ids |
 | `GET /players/{id}/entry` | anyone | One player's line, ghost path included |
 | `POST /players` | anyone, 12 an hour per address | Join; replies `{ id, name, token }` |
 | `GET /me`, `PATCH /me` | token | Read or change the display name |
 | `PUT /me/entry` | token | Send the line after a run |
+| `PUT /me/daily` | token | Send a Daily Rift time, for today or yesterday |
 | `POST /rooms/{code}/sync` | token, 240 a minute per player | Say where my hero is; hear who is in the party and what was said since `since` |
 | `POST /rooms/{code}/emit` | token, 20 a minute | Call the party into a rift, or announce a sealed rift |
 | `POST /rooms/{code}/leave` | token | Leave the party |
@@ -100,4 +103,4 @@ There is no admin website. These run over SSH in `server/`:
 | `php artisan hearthdeep:remove <id>` | Remove a player and their scores |
 | `php artisan hearthdeep:prune` | Drop players who joined over 30 days ago and never sent a score |
 
-`hearthdeep:prune` is safe to run from a daily cron job; it also clears out old party rows. Nothing else needs scheduling.
+`hearthdeep:prune` is safe to run from a daily cron job; it also clears out old party rows and Daily Rift times older than two weeks. Nothing else needs scheduling.

@@ -65,6 +65,7 @@ jobs:
           npm i --no-save playwright
           npx playwright install --with-deps chromium
       - name: Play the game against the real server (join, send scores, read both boards)
+        timeout-minutes: 12
         run: SMOKE_PORT=4173 SMOKE_SECONDS=20 HEARTHDEEP_API=http://127.0.0.1:8123 node tools/smoke-test.mjs
       - name: Server log, if anything failed
         if: failure()

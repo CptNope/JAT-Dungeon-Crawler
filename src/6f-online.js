@@ -10,10 +10,10 @@ const PARTY_RE = /^[a-z0-9]{5}$/;
 // The address comes from <meta name="hearthdeep-api"> in src/head.html. The server is spoken to through the same
 // small doc / collection / user shapes the published page's database offers, so the code below does not care which
 // one it has. There are no accounts: the server hands this browser a random token the first time a score is sent.
-const REST = { base: '', id: null, token: null, name: '', names: new Map(), msg: '', typed: '', pending: null };
+const REST = { base: '', id: null, token: null, name: '', names: new Map(), msg: '', typed: '', pending: null, pendDaily: null, daily: false };
 const REST_KEY = 'hearthdeep-online';
 const restBase = () => { const m = document.querySelector('meta[name="hearthdeep-api"]'); return String(window.HEARTHDEEP_API || (m && m.content) || '').trim().replace(/\/+$/, ''); };
-function restSave() { try { localStorage.setItem(REST_KEY, JSON.stringify({ base: REST.base, id: REST.id, token: REST.token, name: REST.name, pending: REST.pending })); } catch (err) { /* storage unavailable: the identity lasts for this visit */ } }
+function restSave() { try { localStorage.setItem(REST_KEY, JSON.stringify({ base: REST.base, id: REST.id, token: REST.token, name: REST.name, pending: REST.pending, pendDaily: REST.pendDaily })); } catch (err) { /* storage unavailable: the identity lasts for this visit */ } }
 async function restCall(method, path, body, auth) {
   const headers = { Accept: 'application/json' }; if (body) headers['Content-Type'] = 'application/json'; if (auth && REST.token) headers.Authorization = 'Bearer ' + REST.token;
   // a server that hangs must not hang the panel: give up after 8 seconds
@@ -34,9 +34,30 @@ async function restJoin(name) { // become a player on the server (once per brows
 // A weekly time that could not be sent (server down, no signal) is kept and sent with the next successful call.
 // Depth needs no such care: it is read from the save and sent again every time the hero comes home.
 async function restFlush() {
-  const p = REST.pending; if (!p || !REST.token) return;
+  if (!REST.token) return;
+  const d = REST.pendDaily;
+  if (d) { try { await restCall('PUT', '/me/daily', d, true); REST.pendDaily = null; restSave(); } catch (err) { if (err.status >= 400 && err.status < 500 && err.status !== 429) { REST.pendDaily = null; restSave(); } else throw err; } }
+  const p = REST.pending; if (!p) return;
   try { await restCall('PUT', '/me/entry', p, true); REST.pending = null; restSave(); }
   catch (err) { if (err.status >= 400 && err.status < 500 && err.status !== 429) { REST.pending = null; restSave(); } else throw err; } // refused for good (a week gone by): let it go
+}
+// The Daily Rift board lives only on your own server. A time that cannot be sent is kept and tried again later
+// (the server takes times for today and yesterday, so a day-old one that never got through is simply let go).
+async function submitDaily(day, code, secs) {
+  if (!ONLINE.rest || !REST.daily) return;
+  const line = { day, code, time: Math.round(secs * 10) / 10, cls: S.cls || 'warrior', lvl: S.level | 0 };
+  try { await restJoin(); await restCall('PUT', '/me/daily', line, true); toast('Your Daily Rift time is on the board.', '#9fd8ff'); }
+  catch (err) { if (!(err.status >= 400 && err.status < 500 && err.status !== 429) && (!REST.pendDaily || REST.pendDaily.day !== day || line.time < REST.pendDaily.time)) { REST.pendDaily = line; restSave(); } }
+}
+async function dailyHtml() {
+  const code = dailyCode(), p = parseRiftCode(code), mine = S.seedBest && S.seedBest[code];
+  const head = `<p class="hint" style="margin:0 0 12px">Today’s rift, <code>${esc(code)}</code>: tier ${p.tier}, ${p.mods.map((m) => RIFT_MODS[m].n).join(', ')}. The same floors for everyone, fastest first. A new one every day at midnight UTC. Enter it at the Delve, under Rift Trials.${mine ? ` Your best today: ${fmtClock(mine)}.` : ''}</p>`;
+  let rows = [];
+  try { const j = await restCall('GET', `/daily?day=${encodeURIComponent(dayKey())}&code=${encodeURIComponent(code)}&limit=20`); rows = Array.isArray(j.rows) ? j.rows : []; }
+  catch (err) { return head + '<p class="hint">The leaderboard could not be reached just now. Try again in a moment.</p>'; }
+  if (!rows.length) return head + '<p class="hint">Nobody has sealed today’s rift yet. Be the first.</p>';
+  const C = (k) => (CLASSES[k] ? CLASSES[k].n : '');
+  return head + `<ol class="board">${rows.map((r, i) => `<li class="${String(r.id) === ONLINE.me ? 'me' : ''}"><span class="rk">${i + 1}</span><span class="who">${esc(String(r.name || '') || (String(r.id) === ONLINE.me ? 'You' : 'A delver'))}<small>${esc(C(r.cls))} · level ${+r.lvl || 1}</small></span><b>${fmtClock(+r.time)}</b></li>`).join('')}</ol>`;
 }
 async function restRename(name) {
   if (!REST.token) { await restJoin(name); return REST.name; }
@@ -126,9 +147,10 @@ function restRoom() {
 }
 async function initRestOnline() {
   REST.base = restBase(); if (!/^https?:\/\//.test(REST.base)) return;
-  try { const j = JSON.parse(localStorage.getItem(REST_KEY) || 'null'); if (j && j.base === REST.base && j.token) { REST.id = j.id; REST.token = j.token; REST.name = j.name || ''; REST.pending = j.pending && typeof j.pending === 'object' ? j.pending : null; REST.names.set(REST.id, REST.name); } } catch (err) { /* start fresh */ }
+  try { const j = JSON.parse(localStorage.getItem(REST_KEY) || 'null'); if (j && j.base === REST.base && j.token) { REST.id = j.id; REST.token = j.token; REST.name = j.name || ''; REST.pending = j.pending && typeof j.pending === 'object' ? j.pending : null; REST.pendDaily = j.pendDaily && typeof j.pendDaily === 'object' ? j.pendDaily : null; REST.names.set(REST.id, REST.name); } } catch (err) { /* start fresh */ }
   let st; try { st = await restCall('GET', '/status'); if (!st.ok) return; } catch (err) { return; } // server down or not allowed from this page: stay single-player
   Object.assign(ONLINE, { db: restDb(), user: restUser, room: st.rooms ? restRoom() : null, rest: true, me: REST.id, ready: true });
+  REST.daily = !!st.daily;
   document.body.classList.add('online');
   if (Panel.kind === 'online') renderPanel();
   restFlush().catch(() => {});
@@ -335,6 +357,7 @@ async function onlineHtml(tab) {
       <ol class="board">${list || '<li><span class="who">Waiting for friends<small>Send them the code above</small></span></li>'}</ol>
       <div class="acts" style="margin-top:12px"><button class="btn" type="button" data-act="ptGo" data-k="${esc(code)}"${LV.type === 'town' ? '' : ' disabled'}>Call everyone into rift ${esc(code)}</button>${ONLINE.invite ? `<button class="btn" type="button" data-act="ptAnswer">Answer ${esc(ONLINE.invite.who)}’s call</button>` : ''}<button class="btn ghost" type="button" data-act="ptLeave">Leave party</button></div>`;
   }
+  if (tab === 'day' && ONLINE.rest && REST.daily) return restNameRow() + await dailyHtml();
   return `${ONLINE.rest ? restNameRow() : ''}<p class="hint" style="margin:0 0 12px">${tab === 'deep' ? 'Deepest descent by each delver on this page.' : `This week’s rift (${esc(weeklyDef().key)}), fastest first. Race a ghost to see their path beside yours; with none chosen you race the fastest.`}</p>${await boardHtml(tab === 'deep' ? 'deep' : 'week')}`;
 }
 function onlineAct(d) {
