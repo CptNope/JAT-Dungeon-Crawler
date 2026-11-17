@@ -117,7 +117,8 @@ try {
   await tap(9);
   check(await page.evaluate(() => document.querySelector('#title').hidden), 'Start again resumes');
   // 7. the parts that used to need a mouse or keyboard: zoom, typing, photo mode
-  await page.evaluate(() => hearthdeep.debug.setCamMode('top'));
+  // (L3 answers an on-screen offer first: clear the challenge offer left by the rift sealed above, or a quick run presses that instead)
+  await page.evaluate(() => { document.querySelectorAll('#toasts .toast.dare').forEach((el) => el.remove()); hearthdeep.debug.setCamMode('top'); });
   await tap(10);
   check(await page.evaluate(() => hearthdeep.debug.camZoom < 0.9), 'L3 steps the camera zoom');
   await page.evaluate(() => { hearthdeep.openPanel('delve', 'rift'); const i = document.querySelector('#seedIn'); i.value = ''; i.focus(); });
@@ -156,6 +157,34 @@ try {
     await page.evaluate(() => { document.querySelector('#olName').value = '<b>x'; document.querySelector('[data-act="olName"]').click(); });
     check(await until(() => /cannot be used/.test((document.querySelector('#olMsg') || {}).textContent || '')), 'a name the server refuses is explained, not saved');
     await page.evaluate(() => hearthdeep.closePanel());
+
+    // 9. a party: a second player (played by this script, straight against the server) joins the hero's room
+    const call = async (method, path, body, token) => { const r = await fetch(API + '/api/v1' + path, { method, headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) }, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, json: await r.json().catch(() => null) }; };
+    const room = Math.random().toString(36).slice(2, 7).padEnd(5, 'x');
+    const made = await call('POST', '/players', { name: 'Friend ' + Math.floor(Math.random() * 900 + 100) });
+    check(made.status === 201, 'a second player can join the server (HTTP ' + made.status + ')');
+    const friend = made.json || {};
+    await page.evaluate((room) => hearthdeep.debug.partyJoin(room), room);
+    check(await until(() => !!hearthdeep.debug.ONLINE.party), 'the hero starts a party on the server');
+    const here = await page.evaluate(() => ({ x: hearthdeep.P.x, z: hearthdeep.P.z }));
+    const say = (since) => call('POST', `/rooms/${room}/sync`, { presence: { cls: 'ranger', lvl: 9, sc: 'town', x: here.x + 2, z: here.z + 1, f: 0, hp: 77 }, since }, friend.token);
+    const first = await say(null);
+    check(first.status === 200 && first.json.peers.length === 2, 'a friend joins with the party code (HTTP ' + first.status + ')');
+    if (first.status !== 200) throw new Error('the friend could not enter the room: ' + JSON.stringify(first.json));
+    const keep = setInterval(() => say(first.json.cursor).catch(() => {}), 1500); // the friend keeps saying where they are
+    try {
+      check(await until(() => hearthdeep.debug.ONLINE.peers.length === 1 && hearthdeep.debug.ONLINE.avatars.size === 1, null, 25000), 'the friend appears in the village as an avatar');
+      await page.evaluate(() => hearthdeep.openPanel('online', 'party'));
+      check(await until((n) => (document.querySelector('#pBody') || {}).textContent.includes(n), friend.name), 'and is listed in the party panel by name');
+      await page.evaluate(() => hearthdeep.closePanel());
+      let seen = null; for (let i = 0; i < 20 && !seen; i++) { const j = (await say(first.json.cursor)).json; seen = j.peers.find((p) => p.id !== friend.id && p.presence.sc === 'town' && typeof p.presence.x === 'number' && typeof p.presence.vx === 'number') || null; if (!seen) await page.waitForTimeout(500); }
+      check(!!seen, 'the friend is told where the hero is');
+      await call('POST', `/rooms/${room}/emit`, { data: { k: 'go', code: 'HD-1-S-ABC123' } }, friend.token);
+      check(await until(() => { const el = document.querySelector('#invite'); return !!el && !el.hidden && /HD-1-S-ABC123|rift/i.test(el.textContent); }, null, 25000), "the friend's call into a rift shows as an invitation");
+    } finally { clearInterval(keep); }
+    await call('POST', `/rooms/${room}/leave`, {}, friend.token);
+    check(await until(() => hearthdeep.debug.ONLINE.peers.length === 0 && hearthdeep.debug.ONLINE.avatars.size === 0, null, 25000), 'when the friend leaves, their avatar goes');
+    await page.evaluate(() => hearthdeep.debug.partyLeave(true));
   }
 } catch (err) { problems.push('test crashed: ' + String(err).slice(0, 400)); }
 await browser.close(); server.close();

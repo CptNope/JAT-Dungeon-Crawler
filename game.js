@@ -7012,11 +7012,63 @@ const restUser = {
     const out = {}; for (const i of ids) out[i] = { name: REST.names.get(i) || '' }; return out;
   },
 };
+// Party rooms over plain HTTP: about twice a second this browser tells the server where its hero is and hears who
+// else is in the room and anything said since. It offers the same join / onPeers / on / presence / emit / leave
+// shape as the published page's live rooms, so the party code further down runs unchanged.
+function restRoom() {
+  return {
+    async join(name) {
+      await restJoin();
+      const code = String(name).replace(/^hd-party-/, ''), path = '/rooms/' + encodeURIComponent(code);
+      const R = { pres: {}, presT: 0, since: null, known: new Map(), timer: 0, gone: false, fails: 0, n: 0, peersCb: null, handlers: {},
+        onPeers(cb) { R.peersCb = cb; }, on(ev, cb) { R.handlers[ev] = cb; },
+        presence(p) { // note how fast the hero is moving, so the others can draw them where they are now, not where they were
+          const t = performance.now(), o = R.pres;
+          if (o && typeof o.x === 'number' && typeof p.x === 'number' && o.sc === p.sc && t - R.presT > 60) { const k = 1000 / (t - R.presT); p.vx = Math.round((p.x - o.x) * k * 10) / 10; p.vz = Math.round((p.z - o.z) * k * 10) / 10; R.presT = t; R.pres = p; }
+          else if (!o || typeof o.x !== 'number' || o.sc !== p.sc) { p.vx = 0; p.vz = 0; R.presT = t; R.pres = p; }
+          else { p.vx = o.vx || 0; p.vz = o.vz || 0; R.pres = Object.assign(o, p); }
+          return Promise.resolve();
+        },
+        emit(ev, data) { return restCall('POST', path + '/emit', { data }, true); },
+        async leave() { R.gone = true; clearTimeout(R.timer); try { await restCall('POST', path + '/leave', {}, true); } catch (err) { /* the server forgets a silent member in seconds */ } } };
+      const hear = (j) => {
+        const now = new Map(), joined = [], left = [];
+        for (const q of Array.isArray(j.peers) ? j.peers : []) {
+          const id = String(q.id); REST.names.set(id, String(q.name || ''));
+          let p = R.known.get(id); if (!p) { p = { peer: id, by: id, isMe: id === REST.id, presence: {} }; joined.push(p); }
+          // What arrives is up to a second old. x and z are read every frame by the avatar code, so they are served
+          // as "where this hero has got to by now": the reported spot carried forward along their reported heading.
+          const pr = q.presence && typeof q.presence === 'object' ? q.presence : {}, at = performance.now() - Math.max(0, Math.min(5000, +q.age || 0));
+          if (!p.isMe && typeof pr.x === 'number' && typeof pr.z === 'number' && (pr.vx || pr.vz)) {
+            const x0 = pr.x, z0 = pr.z, vx = +pr.vx || 0, vz = +pr.vz || 0, ahead = () => Math.min(0.6, (performance.now() - at) / 1000) * 0.6; // carried 60% of the way, for at most 0.6 s: about half the trailing, with little overshoot when they stop
+            Object.defineProperty(pr, 'x', { get: () => x0 + vx * ahead(), enumerable: true }); Object.defineProperty(pr, 'z', { get: () => z0 + vz * ahead(), enumerable: true });
+          }
+          p.presence = pr; now.set(id, p); // the same peer object each time: the party list holds on to it
+        }
+        for (const [id, p] of R.known) if (!now.has(id)) left.push(p);
+        R.known = now; R.n++;
+        if (R.peersCb && (joined.length || left.length || R.n % 10 === 0)) R.peersCb({ peers: [...now.values()], joined: R.n === 1 ? [] : joined, left });
+        if (typeof j.cursor === 'number') R.since = j.cursor;
+        for (const m of Array.isArray(j.messages) ? j.messages : []) if (R.handlers.party) R.handlers.party({ data: m.data, by: String(m.by), isMe: String(m.by) === REST.id });
+      };
+      const ask = () => restCall('POST', path + '/sync', { presence: R.pres, since: R.since }, true);
+      const loop = async () => {
+        if (R.gone) return;
+        try { hear(await ask()); R.fails = 0; }
+        catch (err) { R.fails++; if (err.status === 401 || err.status === 409 || R.fails > 30) { R.gone = true; if (ONLINE.party === R) { partyLeave(true); toast(err.status === 409 ? 'That party is full.' : 'Lost touch with the party.', 'var(--bad)'); } return; } }
+        R.timer = setTimeout(loop, document.hidden ? 4000 : R.fails ? 2500 : 400); // slower in a background tab or when the server is struggling
+      };
+      const first = await ask(); // a full room or a dead server fails the join here, before the party starts
+      setTimeout(() => { hear(first); R.timer = setTimeout(loop, 400); }, 0); // after the caller has attached its listeners
+      return R;
+    },
+  };
+}
 async function initRestOnline() {
   REST.base = restBase(); if (!/^https?:\/\//.test(REST.base)) return;
   try { const j = JSON.parse(localStorage.getItem(REST_KEY) || 'null'); if (j && j.base === REST.base && j.token) { REST.id = j.id; REST.token = j.token; REST.name = j.name || ''; REST.pending = j.pending && typeof j.pending === 'object' ? j.pending : null; REST.names.set(REST.id, REST.name); } } catch (err) { /* start fresh */ }
-  try { const st = await restCall('GET', '/status'); if (!st.ok) return; } catch (err) { return; } // server down or not allowed from this page: stay single-player
-  Object.assign(ONLINE, { db: restDb(), user: restUser, room: null, rest: true, me: REST.id, ready: true });
+  let st; try { st = await restCall('GET', '/status'); if (!st.ok) return; } catch (err) { return; } // server down or not allowed from this page: stay single-player
+  Object.assign(ONLINE, { db: restDb(), user: restUser, room: st.rooms ? restRoom() : null, rest: true, me: REST.id, ready: true });
   document.body.classList.add('online');
   if (Panel.kind === 'online') renderPanel();
   restFlush().catch(() => {});
@@ -7121,7 +7173,7 @@ function makeAvatar(cls, col, label) {
 function dropAvatar(A) { if (!A) return; world.remove(A.g); if (A.label) removeLabel(A.label); }
 function moveAvatar(A, dt) {
   const dx = A.tx - A.x, dz = A.tz - A.z, d = Math.hypot(dx, dz);
-  if (d > 6) { A.x = A.tx; A.z = A.tz; } else { const k = Math.min(1, dt * 10); A.x += dx * k; A.z += dz * k; }
+  if (d > 6) { A.x = A.tx; A.z = A.tz; } else { const k = Math.min(1, dt * (A.slow ? 7 : 10)); A.x += dx * k; A.z += dz * k; } // slow: polled positions are carried forward between updates, so ease a little more gently
   if (d > 0.05) A.face = Math.atan2(dx, dz);
   A.g.position.set(A.x, 0, A.z); A.g.rotation.y += angDiff(A.face, A.g.rotation.y) * Math.min(1, dt * 10);
   A.u.uWalk.value += dt * (d > 0.05 ? 9 : 0); A.u.uAmp.value = lerp(A.u.uAmp.value, d > 0.05 ? 0.8 : 0, Math.min(1, dt * 8));
@@ -7152,7 +7204,7 @@ async function partyJoin(code) {
     R.on('party', (m) => partyMsg(m));
     toast(`In party ${code.toUpperCase()}`, '#9fd8ff', true);
     partyPresence(true);
-  } catch (err) { toast(err && err.code === 'not_permitted' ? 'Parties are not available on this page.' : 'Could not join the party. Try again.', 'var(--bad)'); }
+  } catch (err) { toast(err && err.code === 'not_permitted' ? 'Parties are not available on this page.' : err && err.status === 409 ? 'That party is full.' : 'Could not join the party. Try again.', 'var(--bad)'); }
   if (Panel.kind === 'online') renderPanel();
 }
 async function partyLeave(quiet) {
@@ -7175,7 +7227,7 @@ function updParty(dt) {
     const q = p.presence || {}; if (!q.sc || q.sc !== sc || typeof q.x !== 'number' || typeof q.z !== 'number') continue;
     seen.add(p.peer);
     let A = ONLINE.avatars.get(p.peer);
-    if (!A || A.lv !== LV) { if (A) dropAvatar(A); A = makeAvatar(CLASSES[q.cls] ? q.cls : 'warrior', 0x7cff9a, 'Party member'); A.lv = LV; A.x = q.x; A.z = q.z; A.peer = p.peer; ONLINE.avatars.set(p.peer, A); nameAvatar(A, p); }
+    if (!A || A.lv !== LV) { if (A) dropAvatar(A); A = makeAvatar(CLASSES[q.cls] ? q.cls : 'warrior', 0x7cff9a, 'Party member'); A.lv = LV; A.x = q.x; A.z = q.z; A.peer = p.peer; A.slow = !!ONLINE.rest; ONLINE.avatars.set(p.peer, A); nameAvatar(A, p); }
     A.tx = clamp(q.x, 0, 200); A.tz = clamp(q.z, 0, 200); moveAvatar(A, dt);
   }
   for (const [k, A] of ONLINE.avatars) if (!seen.has(k)) { dropAvatar(A); ONLINE.avatars.delete(k); }
@@ -7541,5 +7593,5 @@ function boot(data) {
 }
 if (window.claude && window.claude.hot && window.claude.hot.snapshot) window.claude.hot.snapshot(() => ({ S, started }));
 if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(boot); else boot((window.claude && window.claude.hot && window.claude.hot.data) || {});
-return { get S() { return S; }, get RUN() { return RUN; }, get P() { return P; }, get LV() { return LV; }, enemies, renderer, startDelve, begin, freshHero, openPanel, closePanel, loadDungeon, get ready() { return levelReady; }, perf, debug: { get camZoom() { return camZoom; }, PHOTO, haptic, damageEnemy, parseRiftCode, setTouchMode, returnToTown, afterGear, DBG, stick, interacts, interact, usePotion, get skillCd() { return skillCd; }, isPaused, snapCamera, nextFloor, loadTown, rollCaravan, startRift, startArena, die, gainXP, hurtPlayer, calcStats, xpNeed, ARCH, BIOMES, genItem, makeSetItem, scene, sun, hemi, sky, walkable, spawnEnemy, bossPattern, get LVL() { return LV; }, applyTimeOfDay, get pet() { return pet; }, villagers, zones, chooseClass, checkAch, playerAttack, CAM, setCamMode, useSkill, cycleLock, get lockT() { return lockT; }, corpses, skillCd, questEvent, makeQuestOffers, claimQuest, get trail() { return trail; }, spawnDrop, bossIntro, LEGENDS, applyLoadout, ascend, gainParagon, GUARDIANS, season, minions, remains, initOnline, ONLINE, submitBoard, get drops() { return drops; } } };
+return { get S() { return S; }, get RUN() { return RUN; }, get P() { return P; }, get LV() { return LV; }, enemies, renderer, startDelve, begin, freshHero, openPanel, closePanel, loadDungeon, get ready() { return levelReady; }, perf, debug: { partyJoin, partyLeave, get camZoom() { return camZoom; }, PHOTO, haptic, damageEnemy, parseRiftCode, setTouchMode, returnToTown, afterGear, DBG, stick, interacts, interact, usePotion, get skillCd() { return skillCd; }, isPaused, snapCamera, nextFloor, loadTown, rollCaravan, startRift, startArena, die, gainXP, hurtPlayer, calcStats, xpNeed, ARCH, BIOMES, genItem, makeSetItem, scene, sun, hemi, sky, walkable, spawnEnemy, bossPattern, get LVL() { return LV; }, applyTimeOfDay, get pet() { return pet; }, villagers, zones, chooseClass, checkAch, playerAttack, CAM, setCamMode, useSkill, cycleLock, get lockT() { return lockT; }, corpses, skillCd, questEvent, makeQuestOffers, claimQuest, get trail() { return trail; }, spawnDrop, bossIntro, LEGENDS, applyLoadout, ascend, gainParagon, GUARDIANS, season, minions, remains, initOnline, ONLINE, submitBoard, get drops() { return drops; } } };
 };

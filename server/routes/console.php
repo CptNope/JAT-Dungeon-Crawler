@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\RoomController;
 use App\Models\Entry;
 use App\Models\Player;
 use App\Support\Boards;
@@ -30,7 +31,7 @@ Artisan::command('hearthdeep:check', function () {
     try {
         DB::connection()->getPdo();
         $line(true, 'Database connects ('.DB::connection()->getDriverName().')');
-        $line(DB::getSchemaBuilder()->hasTable('players') && DB::getSchemaBuilder()->hasTable('entries'), 'Tables exist', 'Run: php artisan migrate --force');
+        $line(DB::getSchemaBuilder()->hasTable('players') && DB::getSchemaBuilder()->hasTable('entries') && DB::getSchemaBuilder()->hasTable('room_members'), 'Tables exist', 'Run: php artisan migrate --force');
     } catch (Throwable $e) {
         $line(false, 'Database connects', 'Check DB_* in .env. The error was: '.Str::limit($e->getMessage(), 160));
     }
@@ -88,6 +89,7 @@ Artisan::command('hearthdeep:remove {id}', function (string $id) {
         return 1;
     }
     Entry::where('player_id', $id)->delete();
+    DB::table('room_members')->where('player_id', $id)->delete();
     $player->delete();
     Boards::changed();
     $this->info("Removed {$player->name} ($id) and their scores. Their browser will be told its token is unknown and will join again as a new player.");
@@ -96,6 +98,7 @@ Artisan::command('hearthdeep:remove {id}', function (string $id) {
 })->purpose('Remove a player and their scores');
 
 Artisan::command('hearthdeep:prune {--days=30 : Leave players who joined more recently than this}', function () {
+    RoomController::sweep();
     $n = Player::query()->whereDoesntHave('entry')->where('created_at', '<', now()->subDays(max(1, (int) $this->option('days'))))->delete();
     $this->info("Removed $n player(s) who joined and never sent a score.");
 
