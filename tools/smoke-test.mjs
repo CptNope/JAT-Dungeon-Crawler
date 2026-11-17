@@ -185,6 +185,18 @@ try {
     await call('POST', `/rooms/${room}/leave`, {}, friend.token);
     check(await until(() => hearthdeep.debug.ONLINE.peers.length === 0 && hearthdeep.debug.ONLINE.avatars.size === 0, null, 25000), 'when the friend leaves, their avatar goes');
     await page.evaluate(() => hearthdeep.debug.partyLeave(true));
+
+    // 10. the Daily Rift: seal today's seeded rift (the clock wound on to a believable time) and find it on the board
+    await page.evaluate(() => { const D = hearthdeep.debug; D.startRift(0, false, D.parseRiftCode(D.dailyCode())); });
+    await page.waitForFunction(() => hearthdeep.ready && hearthdeep.LV.type === 'dungeon' && hearthdeep.RUN.rift && hearthdeep.RUN.rift.day, null, { timeout: 90000 });
+    await page.evaluate(() => { const H = hearthdeep, D = H.debug; H.RUN.rift.t0 -= 125000; const e = D.spawnEnemy(Object.keys(D.ARCH)[0], H.P.x + 1.2, H.P.z, { leader: true }); e.riftGuard = 1; D.damageEnemy(e, 1e9, false, 0, 0, 0); });
+    await page.waitForTimeout(1500);
+    await page.evaluate(() => { document.querySelectorAll('#toasts .toast.dare').forEach((el) => el.remove()); hearthdeep.debug.returnToTown(false); });
+    await page.waitForFunction(() => hearthdeep.ready && hearthdeep.LV.type === 'town', null, { timeout: 90000 });
+    for (let i = 0; i < 20; i++) { const open = await page.evaluate(() => { const d = document.querySelector('#dlg'); if (!d.hidden) { const n = document.querySelector('#dlgNext'); if (n) n.click(); return true; } if (!document.querySelector('#panel').hidden) { hearthdeep.closePanel(); return true; } return false; }); if (!open) break; await page.waitForTimeout(150); }
+    await page.evaluate(() => hearthdeep.openPanel('online', 'day'));
+    check(await until((tag) => { const b = document.querySelector('#pBody .board'); return !!b && b.textContent.includes(tag) && /2:0\d/.test(b.textContent); }, tag), 'a sealed Daily Rift shows on today\'s board with its time (about 2:05)');
+    await page.evaluate(() => hearthdeep.closePanel());
   }
 } catch (err) { problems.push('test crashed: ' + String(err).slice(0, 400)); }
 await browser.close(); server.close();

@@ -32,7 +32,7 @@ function startRift(t, weekly, coded) {
   if (coded) { t = coded.tier; mods = coded.mods; seed = coded.seed; }
   else if (weekly) { const W = weeklyDef(); t = W.tier; mods = W.mods; seed = W.seed; }
   else { const n = t >= 10 ? 3 : t >= 4 ? 2 : 1, keys = Object.keys(RIFT_MODS); mods = []; while (mods.length < n) { const m = pick(keys); if (!mods.includes(m)) mods.push(m); } seed = (Math.floor(Math.random() * 0xfffffffe) + 1) >>> 0; } // a seed of its own, so any rift can be shared afterwards
-  startDelve(riftDepth(t), [], { mode: 'rift', rift: { tier: t, mods, floor: 1, t0: performance.now(), par: riftPar(t), weekly: !!weekly, seed, code: coded ? coded.code : null, share: coded ? coded.code : riftCode(t, mods, seed) } });
+  startDelve(riftDepth(t), [], { mode: 'rift', rift: { tier: t, mods, floor: 1, t0: performance.now(), par: riftPar(t), weekly: !!weekly, seed, code: coded ? coded.code : null, share: coded ? coded.code : riftCode(t, mods, seed), day: coded && coded.code === dailyCode() ? dayKey() : null } }); // day: set when this is today's Daily Rift
   hint('rift'); ghostRecStart(); if (weekly) autoGhost();
   banner(weekly ? 'Weekly Rift' : coded ? 'Seeded rift' : `Rift tier ${t}`, mods.map((m) => RIFT_MODS[m].n).join(' · '));
 }
@@ -69,6 +69,7 @@ function riftComplete(e) {
   if (R.code) { S.seedBest = S.seedBest || {}; if (!S.seedBest[R.code] || secs < S.seedBest[R.code]) S.seedBest[R.code] = secs; }
   if (R.weekly) { const k = weeklyDef().key; if (!S.weekly || S.weekly.key !== k) S.weekly = { key: k, best: null, tries: 0 }; if (!S.weekly.best || secs < S.weekly.best) S.weekly.best = secs; submitBoard({ time: secs, ghost: ghostString(R) }); }
   if (R.share) { S.lastRift = { code: R.share, secs, tier: t }; dareToast(R.share, secs); }
+  if (R.day && R.code) submitDaily(R.day, R.code, secs);
   partyDone(secs);
   stat('rifts');
   gainXP(80 * t + 40);

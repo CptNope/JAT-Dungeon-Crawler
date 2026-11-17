@@ -181,8 +181,9 @@ function dareToast(code, secs) {
   b.addEventListener('click', () => { copyChallenge(code, secs); el.remove(); });
   el.append(s, b); box.prepend(el); setTimeout(() => el.remove(), 14000);
 }
+const dayKey = () => { const d = new Date(); return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`; }; // the UTC day, as the Daily Rift and its board name it
 function dailyCode() {
-  const d = new Date(), key = `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
+  const key = dayKey();
   let h = 2166136261; for (const c of key + 'daily') h = Math.imul(h ^ c.charCodeAt(0), 16777619);
   const seed = h >>> 0;
   return withSeed(seed, () => { const keys = Object.keys(RIFT_MODS), mods = []; while (mods.length < 2) { const q = pick(keys); if (!mods.includes(q)) mods.push(q); } return riftCode(4, mods, seed); });

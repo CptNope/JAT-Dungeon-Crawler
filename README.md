@@ -228,7 +228,7 @@ Enemy scaling was tuned against a simulated climb (one pass from depth 1, killin
 
 ## Online: your own server
 
-`server/` is a small Laravel API that gives the game its online play on any web host: leaderboards (deepest descent, and each week's fastest Weekly Rift with a ghost to race) and parties, where friends who share a five-character code see each other in the village and the same rift and can call each other into one. Each player still fights their own monsters. Players need no account; they choose a display name in the Online panel. Deploy it (the [server README](server/README.md) has the Cloudways steps), put its address in the `hearthdeep-api` meta tag in `src/head.html`, and run `./build.sh`. With the tag empty the game is single-player, as before.
+`server/` is a small Laravel API that gives the game its online play on any web host: leaderboards (deepest descent, each week's fastest Weekly Rift with a ghost to race, and a Daily Rift board that starts fresh every day) and parties, where friends who share a five-character code see each other in the village and the same rift and can call each other into one. Each player still fights their own monsters. Players need no account; they choose a display name in the Online panel. Deploy it (the [server README](server/README.md) has the Cloudways steps), put its address in the `hearthdeep-api` meta tag in `src/head.html`, and run `./build.sh`. With the tag empty the game is single-player, as before.
 
 ## On a WordPress site
 

@@ -90,6 +90,7 @@ Artisan::command('hearthdeep:remove {id}', function (string $id) {
     }
     Entry::where('player_id', $id)->delete();
     DB::table('room_members')->where('player_id', $id)->delete();
+    DB::table('daily_times')->where('player_id', $id)->delete();
     $player->delete();
     Boards::changed();
     $this->info("Removed {$player->name} ($id) and their scores. Their browser will be told its token is unknown and will join again as a new player.");
@@ -99,6 +100,8 @@ Artisan::command('hearthdeep:remove {id}', function (string $id) {
 
 Artisan::command('hearthdeep:prune {--days=30 : Leave players who joined more recently than this}', function () {
     RoomController::sweep();
+    $old = DB::table('daily_times')->where('created_at', '<', now()->subDays(14))->delete();
+    $this->line("Removed $old Daily Rift time(s) older than two weeks.");
     $n = Player::query()->whereDoesntHave('entry')->where('created_at', '<', now()->subDays(max(1, (int) $this->option('days'))))->delete();
     $this->info("Removed $n player(s) who joined and never sent a score.");
 
