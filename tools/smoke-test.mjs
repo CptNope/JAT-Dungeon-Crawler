@@ -31,7 +31,8 @@ await page.addInitScript(() => {
 });
 // HEARTHDEEP_API=http://127.0.0.1:8123 points the game at a running leaderboard server (server/) and adds the online checks
 const API = (process.env.HEARTHDEEP_API || '').replace(/\/+$/, '');
-if (API) await page.addInitScript((api) => { window.HEARTHDEEP_API = api; }, API);
+// with no server given, the game is told to stay offline, so the test never calls the live server named in the build
+await page.addInitScript((api) => { window.HEARTHDEEP_API = api; }, API || 'off');
 const problems = [];
 // if anything waits forever, say how far the run got and stop, so CI keeps the log
 let lastStep = 'starting';
