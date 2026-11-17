@@ -117,7 +117,8 @@ try {
   await tap(9);
   check(await page.evaluate(() => document.querySelector('#title').hidden), 'Start again resumes');
   // 7. the parts that used to need a mouse or keyboard: zoom, typing, photo mode
-  await page.evaluate(() => hearthdeep.debug.setCamMode('top'));
+  // (L3 answers an on-screen offer first: clear the challenge offer left by the rift sealed above, or a quick run presses that instead)
+  await page.evaluate(() => { document.querySelectorAll('#toasts .toast.dare').forEach((el) => el.remove()); hearthdeep.debug.setCamMode('top'); });
   await tap(10);
   check(await page.evaluate(() => hearthdeep.debug.camZoom < 0.9), 'L3 steps the camera zoom');
   await page.evaluate(() => { hearthdeep.openPanel('delve', 'rift'); const i = document.querySelector('#seedIn'); i.value = ''; i.focus(); });
