@@ -4,6 +4,8 @@ Tags: game, embed, shortcode, rpg
 Requires at least: 6.0
 Requires PHP: 7.4
 Stable tag: 1.0.0
+License: MIT
+License URI: https://opensource.org/licenses/MIT
 
 Play Hearthdeep, a free browser action RPG, on any page or post with the [hearthdeep] shortcode.
 

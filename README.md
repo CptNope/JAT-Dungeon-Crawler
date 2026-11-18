@@ -241,3 +241,7 @@ The [press kit](press/) has a fact sheet, screenshots, the gameplay GIF and the 
 ## Credits
 
 Made by [Jeremy Anderson](https://jeremyanderson.tech/) ([@JAndersonTech](https://x.com/JAndersonTech)). Built on [three.js](https://threejs.org/) (MIT, see `vendor/THREE-LICENSE`). Performance techniques from [CloudAI-X/threejs-skills](https://github.com/CloudAI-X/threejs-skills).
+
+## License
+
+MIT, see [`LICENSE`](LICENSE). three.js is also MIT (`vendor/THREE-LICENSE`).
