@@ -4,7 +4,7 @@
 
 **A free 3D action RPG that runs in your browser.** A village sits on the lip of a hole with no bottom: delve through endless procedurally generated floors, bring loot home, craft at your bench, and grow your shack into a keep.
 
-### [▶ Play now](https://cptnope.github.io/JAT-Dungeon-Crawler/)
+### [▶ Play now](https://cptnope.github.io/JAT-Dungeon-Crawler/) · [itch.io](https://cptnope.itch.io/hearthdeep)
 
 No download, no account. Keyboard and mouse, gamepad or touch. Installs to a phone's home screen and plays offline.
 
@@ -35,6 +35,8 @@ It is about 7,300 lines of plain JavaScript on [three.js](https://threejs.org/) 
 ## Play
 
 **In the browser:** <https://cptnope.github.io/JAT-Dungeon-Crawler/>
+
+**On itch.io:** <https://cptnope.itch.io/hearthdeep> (free, with an optional donation to support the game)
 
 **Challenge a friend:** seal any rift and press *Copy challenge link* when it is offered (on a phone, *Send challenge* opens the share sheet), or find your last rift and the daily seed under Rift Trials at the Delve. The link looks like `https://cptnope.github.io/JAT-Dungeon-Crawler/?rift=HD-4-SB-1A2B3C`; whoever opens it finds the same rift waiting for them. Pasting a whole message into *Play a code* works too.
 
