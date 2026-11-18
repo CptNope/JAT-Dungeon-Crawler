@@ -8,6 +8,8 @@
 
 No download, no account. Keyboard and mouse, gamepad or touch. Installs to a phone's home screen and plays offline.
 
+🎬 [Watch the trailer](https://youtu.be/8v9lQYWu2EQ) · [the Short](https://youtube.com/shorts/ocO4_51wA04)
+
 [![CI](https://github.com/CptNope/JAT-Dungeon-Crawler/actions/workflows/ci.yml/badge.svg)](https://github.com/CptNope/JAT-Dungeon-Crawler/actions/workflows/ci.yml)
 
 [![Hearthdeep gameplay: a mage holds the Pit against a wave of foes](press/hearthdeep.gif)](https://cptnope.github.io/JAT-Dungeon-Crawler/)
