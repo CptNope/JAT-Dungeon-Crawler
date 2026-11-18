@@ -7,6 +7,8 @@
  * Requires PHP:      7.4
  * Author:            Jeremy Anderson Tech
  * Author URI:        https://jeremyanderson.tech/
+ * License:           MIT
+ * License URI:       https://opensource.org/licenses/MIT
  * Text Domain:       jat-hearthdeep
  *
  * The game runs in a frame served from its own address, so WordPress never loads the game's code into your theme
