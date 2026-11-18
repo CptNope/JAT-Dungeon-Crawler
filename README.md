@@ -4,7 +4,7 @@
 
 **A free 3D action RPG that runs in your browser.** A village sits on the lip of a hole with no bottom: delve through endless procedurally generated floors, bring loot home, craft at your bench, and grow your shack into a keep.
 
-### [▶ Play now](https://cptnope.github.io/JAT-Dungeon-Crawler/) · [itch.io](https://cptnope.itch.io/hearthdeep)
+### [▶ Play now](https://cptnope.github.io/JAT-Dungeon-Crawler/) · [itch.io](https://cptnope.itch.io/hearthdeep) · [❤ Donate](https://cptnope.itch.io/hearthdeep/purchase)
 
 No download, no account. Keyboard and mouse, gamepad or touch. Installs to a phone's home screen and plays offline.
 
@@ -31,6 +31,10 @@ No download, no account. Keyboard and mouse, gamepad or touch. Installs to a pho
 - **Built for everyone.** Colour-blind palettes, four interface sizes, reduce-motion, three difficulties, full key rebinding and screen-reader roles.
 
 It is about 7,300 lines of plain JavaScript on [three.js](https://threejs.org/) r186 with no other dependencies and no build tooling beyond a shell script. Every texture, model, sound effect and piece of music is generated in code; the repository holds no art or audio files beyond the app icons.
+
+## Support Hearthdeep
+
+Hearthdeep is free, with no ads and no purchases, and always will be. If you enjoy it, **[donate on itch.io](https://cptnope.itch.io/hearthdeep/purchase)** to keep the dungeon growing. Starring the repo and sharing a challenge link help too.
 
 ## Play
 
