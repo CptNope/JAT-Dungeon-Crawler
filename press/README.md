@@ -34,6 +34,7 @@ Hearthdeep is a village on the lip of a hole with no bottom. You delve through e
 - No art or audio files: textures, creatures, sound effects and the score are all procedural.
 - Overhead, third-person and first-person views of the same game, switchable mid-fight.
 - Challenge links: every rift has a seed code, and a link drops a friend into the same floors.
+- Online with friends, no account: parties of up to eight share the village and the same rift, with Daily and Weekly Rift leaderboards and ghost races.
 - Accessibility built in: colour-blind palettes, interface scaling, reduce-motion, three difficulties, key rebinding, screen-reader roles.
 - Open source, with a headless autoplay bot that plays every class through the game as a test.
 
