@@ -11,7 +11,7 @@ Everything here is free to use in articles, videos, streams and posts about the 
 | **Genre** | Action RPG, dungeon crawler |
 | **Platform** | Any modern browser on desktop or phone; installable as a web app; plays offline |
 | **Price** | Free. No ads, no purchases, no account |
-| **Play** | <https://cptnope.github.io/JAT-Dungeon-Crawler/> |
+| **Play** | <https://cptnope.github.io/JAT-Dungeon-Crawler/> · <https://cptnope.itch.io/hearthdeep> |
 | **Source** | <https://github.com/CptNope/JAT-Dungeon-Crawler> |
 | **Engine** | three.js r186, plain JavaScript, no other dependencies |
 | **Input** | Keyboard and mouse, gamepad, touch |
@@ -45,6 +45,8 @@ Hearthdeep is a village on the lip of a hole with no bottom. You delve through e
 | --- | --- |
 | [`hearthdeep-social.jpg`](hearthdeep-social.jpg) | Share image, 1200 × 630 |
 | [`hearthdeep.gif`](hearthdeep.gif) | Gameplay loop: a mage in the Pit, 480 × 270 |
+| [`hearthdeep-cover.png`](hearthdeep-cover.png) | itch.io cover, 630 × 500 |
+| [`hearthdeep-trailer.mp4`](hearthdeep-trailer.mp4) | Trailer, 29 s, 1280 × 720, silent |
 | [`hearthdeep-clip.mp4`](hearthdeep-clip.mp4) | The same clip as video, 960 × 540, for posts that take video |
 | [`screenshots/town.jpg`](screenshots/town.jpg) | The village at golden hour, third person |
 | [`screenshots/rime.jpg`](screenshots/rime.jpg) | The Rime Halls, overhead |
